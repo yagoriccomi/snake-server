@@ -277,9 +277,18 @@ Nada disso pode ir para dentro de um arquivo do repositório.
 
 ## 📚 Documentação
 
-* [`docs/BACKEND.md`](docs/BACKEND.md) — especificação completa: arquitetura,
-  decisões de segurança e módulos previstos.
-* [`CLAUDE.md`](CLAUDE.md) — regras técnicas e padrões para quem for desenvolver.
+| Documento | Para quem | O que cobre |
+| --- | --- | --- |
+| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Quem vai desenvolver | **Por que** o sistema é assim: decisões, alternativas descartadas e o caminho completo de um comprovante |
+| [`docs/openapi.yaml`](docs/openapi.yaml) | Quem vai consumir a API | Contrato formal: schemas, respostas e todos os códigos de erro |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Quem quer contribuir | Do clone ao Pull Request aceito |
+| [`docs/BACKEND.md`](docs/BACKEND.md) | Referência | Especificação original do handoff |
+| [`REVIEW.md`](REVIEW.md) | Manutenção | Auditoria de código, segurança e LGPD, com o que já foi corrigido |
+| [`LICENSE_AUDIT.md`](LICENSE_AUDIT.md) | Jurídico | Licenças das 384 dependências e a decisão de licenciamento |
+| [`CLAUDE.md`](CLAUDE.md) | Engenharia interna | Regras e padrões do dia a dia |
+
+> A especificação OpenAPI pode ser aberta em qualquer visualizador de API
+> (Swagger UI, Redoc, Insomnia, Postman) para navegar pelos endpoints.
 
 ## 📄 Licença
 

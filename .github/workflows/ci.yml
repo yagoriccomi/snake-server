@@ -69,6 +69,12 @@ jobs:
         # Sem --passWithNoTests de propósito: suíte ausente é falha. [#49]
         run: npm run test:coverage
 
+      - name: Validar a especificação OpenAPI
+        # Documentação fora de sincronia engana mais do que documentação
+        # ausente: quem lê confia nela. O lint garante que a spec continua
+        # sendo um documento válido a cada mudança.
+        run: npx --yes @redocly/cli@latest lint docs/openapi.yaml
+
       - name: Publicar o relatório de cobertura
         if: always()
         uses: actions/upload-artifact@v4

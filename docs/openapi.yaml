@@ -1,0 +1,489 @@
+openapi: 3.1.0
+
+info:
+  title: snakethai-api
+  version: 0.1.0
+  summary: API própria do Snake Thai — segredos de servidor e integrações de terceiros.
+  description: |
+    Servidor que guarda o que o aplicativo não pode guardar.
+
+    Um app Expo publicado é um arquivo extraível: toda chave embutida nele pode ser
+    lida por quem baixar o APK. Por isso tudo que exige um segredo de verdade —
+    assinar um upload na Cloudinary, falar com um gateway, disparar um push —
+    acontece aqui, fora do celular.
+
+    ## Como a autenticação funciona
+
+    Envie o token da sessão do Supabase no cabeçalho `Authorization`. O servidor
+    **não** decodifica esse token: ele pergunta ao próprio Supabase quem é o portador
+    (`GET /auth/v1/user`). Isso é deliberado — o servidor não guarda o segredo capaz
+    de assinar tokens, logo não pode forjar nenhum.
+
+    ## Como a autorização funciona
+
+    Para saber se você pode ver um comprovante, o servidor repassa o **seu** token ao
+    banco e deixa as regras de acesso (RLS) decidirem. Ele não reimplementa permissão.
+    Há ainda uma segunda conferência do lado do servidor, descrita em
+    [ARQUITETURA.md](ARQUITETURA.md).
+
+    ## Sobre a primeira chamada demorar
+
+    No plano gratuito da Render o serviço hiberna após cerca de 15 minutos parado, e a
+    primeira requisição seguinte leva de 30 a 60 segundos para acordá-lo. Chame
+    `GET /health` assim que abrir a tela e use um tempo de espera generoso.
+
+  license:
+    name: GNU General Public License v3.0 only
+    identifier: GPL-3.0-only
+
+  contact:
+    name: Repositório do projeto
+    url: https://github.com/yagoriccomi/snake-server
+
+servers:
+  - url: https://{servico}.onrender.com
+    description: Produção (Render)
+    variables:
+      servico:
+        default: snakethai-api
+        description: Nome do serviço criado na Render.
+  - url: http://localhost:3000
+    description: Ambiente local (Docker Compose)
+
+tags:
+  - name: Saúde
+    description: Verificação de disponibilidade e pré-aquecimento do servidor.
+  - name: Comprovantes
+    description: |
+      Envio e visualização de comprovantes de pagamento PIX.
+
+      O comprovante é **dado financeiro pessoal**. Ele nunca é público: sobe como
+      asset autenticado na Cloudinary e só é visível por um endereço assinado,
+      emitido sob demanda para quem tem direito.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Saúde]
+      summary: Verifica se o servidor está no ar
+      operationId: verificarSaude
+      security: []
+      description: |
+        Pública, instantânea e sem nenhum acesso a banco ou rede.
+
+        Tem dois usos legítimos: a Render consulta para saber se o serviço está vivo,
+        e o aplicativo chama para **acordar** o servidor hibernado antes de precisar
+        dele de verdade. Por isso está fora do limite de requisições — punir esse
+        comportamento seria punir exatamente o que pedimos ao app que faça.
+      responses:
+        '200':
+          description: Servidor no ar.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Saude'
+              examples:
+                padrao:
+                  value: { ok: true }
+
+  /v1/proofs/sign-upload:
+    post:
+      tags: [Comprovantes]
+      summary: Autoriza o envio de um comprovante
+      operationId: assinarUploadDeComprovante
+      description: |
+        Devolve os dados que o aplicativo usa para enviar o arquivo **direto para a
+        Cloudinary**. O arquivo nunca passa por este servidor.
+
+        O destino é decidido aqui, a partir do usuário do token — nunca do que vem no
+        corpo da requisição. É isso que impede alguém de enviar um arquivo para a
+        pasta de outra pessoa. Campos extras no corpo são ignorados.
+
+        A assinatura devolvida vale para **um destino específico**: mudar a pasta ou o
+        nome do arquivo invalida a assinatura, e a Cloudinary recusa o envio.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorpoComPaymentId'
+            examples:
+              padrao:
+                value: { paymentId: 3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d }
+      responses:
+        '200':
+          description: Envio autorizado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadAssinado'
+        '400':
+          $ref: '#/components/responses/EntradaInvalida'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '413':
+          $ref: '#/components/responses/CorpoGrandeDemais'
+        '429':
+          $ref: '#/components/responses/RequisicoesDemais'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+        '503':
+          $ref: '#/components/responses/ServicoIndisponivel'
+
+  /v1/proofs/view-url:
+    post:
+      tags: [Comprovantes]
+      summary: Emite o endereço para visualizar um comprovante
+      operationId: obterUrlDeVisualizacao
+      description: |
+        Devolve um endereço assinado que abre o comprovante.
+
+        Quem pode ver é decidido pelas regras de acesso do banco (RLS), com o **seu**
+        token: o dono do pagamento ou um administrador. Se você não tiver direito, a
+        resposta é `403` — a mesma resposta que você receberia se o pagamento não
+        existisse. A indistinção é proposital: separar os dois casos entregaria a um
+        curioso uma forma de descobrir quais pagamentos existem.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorpoComPaymentId'
+            examples:
+              padrao:
+                value: { paymentId: 3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d }
+      responses:
+        '200':
+          description: Endereço emitido.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UrlDeVisualizacao'
+        '400':
+          $ref: '#/components/responses/EntradaInvalida'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemAcesso'
+        '413':
+          $ref: '#/components/responses/CorpoGrandeDemais'
+        '429':
+          $ref: '#/components/responses/RequisicoesDemais'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+        '503':
+          $ref: '#/components/responses/ServicoIndisponivel'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token de sessão do Supabase, no formato `Authorization: Bearer <token>`.
+
+        O servidor não valida a assinatura localmente — ele consulta o Supabase.
+        Consequência prática: um token revogado para de funcionar imediatamente,
+        sem esperar a expiração.
+
+  headers:
+    XRequestId:
+      description: |
+        Identificador desta requisição, gerado pelo servidor. Anote-o ao relatar um
+        problema: ele aparece em todos os registros daquela chamada.
+
+        O servidor sempre gera o próprio identificador. Se você enviar um
+        `X-Request-Id`, ele é registrado à parte para correlacionar com os seus
+        próprios registros, mas não substitui o do servidor.
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Saude:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          const: true
+      examples:
+        - { ok: true }
+
+    CorpoComPaymentId:
+      type: object
+      required: [paymentId]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+          description: |
+            Identificador do pagamento, no formato UUID.
+
+            Validado **antes** da autenticação: um valor malformado recebe `400` sem
+            que o servidor precise consultar nada. Além de responder mais rápido, isso
+            impede que uma entrada arbitrária alcance a consulta ao banco.
+          examples: [3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d]
+      additionalProperties: false
+
+    UploadAssinado:
+      type: object
+      description: |
+        Tudo que o aplicativo precisa para enviar o arquivo direto à Cloudinary.
+        Nenhum segredo do servidor está aqui — apenas a assinatura já calculada.
+      required: [cloudName, apiKey, signature, timestamp, folder, public_id, type, uploadUrl]
+      properties:
+        cloudName:
+          type: string
+          description: Conta da Cloudinary que receberá o arquivo.
+          examples: [snakethai]
+        apiKey:
+          type: string
+          description: Identificador público da chave. Não é o segredo.
+          examples: ['123456789012345']
+        signature:
+          type: string
+          description: |
+            Assinatura calculada pelo servidor. Vale só para os parâmetros abaixo:
+            alterar qualquer um deles faz a Cloudinary recusar o envio.
+          examples: [a3f5c9e1b7d2486e0f1a3c5b7d9e2f4a6c8b0d2e]
+        timestamp:
+          type: integer
+          description: Momento da assinatura, em segundos. A Cloudinary rejeita assinaturas antigas.
+          examples: [1700000000]
+        folder:
+          type: string
+          description: |
+            Pasta de destino, derivada do usuário do token — nunca do corpo enviado.
+          examples: [comprovantes/11111111-2222-4333-8444-555555555555]
+        public_id:
+          type: string
+          description: Nome do arquivo, igual ao `paymentId`. Reenviar substitui o anterior.
+          examples: [3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d]
+        type:
+          type: string
+          const: authenticated
+          description: |
+            Sempre `authenticated`: o arquivo fica privado e só abre por endereço
+            assinado. Comprovante nunca é público.
+        uploadUrl:
+          type: string
+          format: uri
+          description: Endereço da Cloudinary para onde enviar o arquivo.
+          examples: [https://api.cloudinary.com/v1_1/snakethai/auto/upload]
+
+    UrlDeVisualizacao:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: |
+            Endereço assinado do comprovante. Trate-o como informação sensível: quem
+            tiver o endereço consegue abrir o arquivo.
+          examples:
+            - https://res.cloudinary.com/snakethai/image/authenticated/s--AbC123--/comprovantes/1111/3f1b.jpg
+
+    Erro:
+      type: object
+      description: |
+        Formato único de erro em toda a API. O aplicativo decide o que fazer pelo
+        campo `code`; a pessoa lê o `error`; o suporte usa o `traceId`.
+      required: [error, code, traceId]
+      properties:
+        error:
+          type: string
+          description: Mensagem legível. Nunca contém detalhe interno do servidor.
+          examples: [Sem acesso]
+        code:
+          type: string
+          description: Código estável, próprio para tratamento automático.
+          enum:
+            - bad_input
+            - malformed_json
+            - no_token
+            - bad_token_format
+            - bad_token
+            - forbidden
+            - route_not_found
+            - payload_too_large
+            - rate_limited
+            - internal_error
+            - supabase_unreachable
+            - supabase_error
+          examples: [forbidden]
+        traceId:
+          type: string
+          format: uuid
+          description: Mesmo valor do cabeçalho `X-Request-Id`. Informe-o ao pedir suporte.
+
+  responses:
+    EntradaInvalida:
+      description: |
+        O corpo enviado não passou na validação.
+
+        - `bad_input` — o `paymentId` está ausente ou não é um UUID.
+        - `malformed_json` — o corpo não é um JSON válido.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            paymentIdInvalido:
+              summary: paymentId fora do formato UUID
+              value:
+                error: Dados inválidos na requisição
+                code: bad_input
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+            jsonQuebrado:
+              summary: corpo não é JSON válido
+              value:
+                error: JSON inválido
+                code: malformed_json
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    NaoAutenticado:
+      description: |
+        Faltou credencial, ou ela não é aceita.
+
+        - `no_token` — o cabeçalho `Authorization` não veio.
+        - `bad_token_format` — veio, mas não no formato `Bearer <token>`. Recusado
+          localmente, sem consultar o Supabase.
+        - `bad_token` — o Supabase não reconheceu o token (expirado, revogado ou inválido).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            semToken:
+              value:
+                error: Não autenticado
+                code: no_token
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+            formatoInvalido:
+              value:
+                error: Formato de token inválido
+                code: bad_token_format
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+            sessaoInvalida:
+              value:
+                error: Sessão inválida
+                code: bad_token
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    SemAcesso:
+      description: |
+        Autenticado, mas sem direito a este comprovante.
+
+        A mesma resposta é devolvida quando o pagamento não existe. Distinguir os dois
+        casos permitiria descobrir quais pagamentos existem apenas testando
+        identificadores.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            semAcesso:
+              value:
+                error: Sem acesso
+                code: forbidden
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    CorpoGrandeDemais:
+      description: |
+        O corpo passou de 32 kB. Arquivos não são enviados por esta API — eles vão
+        direto para a Cloudinary —, então qualquer corpo desse tamanho é abuso.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            grandeDemais:
+              value:
+                error: Corpo da requisição grande demais
+                code: payload_too_large
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    RequisicoesDemais:
+      description: |
+        Limite de requisições atingido: 60 por minuto no geral e 20 por minuto nas
+        rotas de comprovante, por endereço de origem.
+      headers:
+        RateLimit:
+          description: Cota restante e quando ela é reposta (RFC draft-7).
+          schema:
+            type: string
+        RateLimit-Policy:
+          description: Política de limite aplicada.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            limiteAtingido:
+              value:
+                error: Muitas requisições. Tente de novo em instantes.
+                code: rate_limited
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    ErroInterno:
+      description: |
+        Falha inesperada no servidor. A mensagem é sempre genérica de propósito: o
+        detalhe técnico fica no registro do servidor, identificado pelo `traceId`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            erroInterno:
+              value:
+                error: Erro interno
+                code: internal_error
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    ServicoIndisponivel:
+      description: |
+        Um serviço do qual dependemos não respondeu a tempo. Vale tentar de novo.
+
+        - `supabase_unreachable` — não foi possível alcançar o Supabase.
+        - `supabase_error` — o Supabase respondeu com erro próprio.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            inalcancavel:
+              value:
+                error: Não foi possível falar com o servidor de dados
+                code: supabase_unreachable
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+            erroDoUpstream:
+              value:
+                error: Servidor de dados indisponível
+                code: supabase_error
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
