@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Valida a mensagem contra Conventional Commits. [#32]
+npx --no-install commitlint --edit "$1"
