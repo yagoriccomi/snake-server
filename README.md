@@ -308,6 +308,7 @@ Nada disso pode ir para dentro de um arquivo do repositório.
 | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Quem vai desenvolver | **Por que** o sistema é assim: decisões, alternativas descartadas e o caminho completo de um comprovante |
 | [`docs/openapi.yaml`](docs/openapi.yaml) | Quem vai consumir a API | Contrato formal: schemas, respostas e todos os códigos de erro |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Quem quer contribuir | Do clone ao Pull Request aceito |
+| [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md) | **Quem vai tocar o projeto** | O que ainda falta, por que não foi feito e como resolver |
 | [`docs/BACKEND.md`](docs/BACKEND.md) | Referência | Especificação original do handoff |
 | [`REVIEW.md`](REVIEW.md) | Manutenção | Auditoria de código, segurança e LGPD, com o que já foi corrigido |
 | [`LICENSE_AUDIT.md`](LICENSE_AUDIT.md) | Jurídico | Licenças das 384 dependências e a decisão de licenciamento |

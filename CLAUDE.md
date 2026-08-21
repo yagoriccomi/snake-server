@@ -201,6 +201,17 @@ com `sync: false` no arquivo (nunca valores no Git). [#37]
 enxuto, mas o serviço continua hibernando após ~15 min. A mitigação é do lado do
 app (pré-aquecimento via `/health`, timeout longo, 1 retry).
 
+## 📋 Pendências
+
+[`docs/PENDENCIAS.md`](docs/PENDENCIAS.md) é o registro do que **não pôde ser executado
+ou decidido**, com o motivo de cada item.
+
+**Regra:** sempre que algo depender de um acesso, de uma informação ou de uma decisão
+que não estão ao alcance de quem está trabalhando, **registre lá em vez de adivinhar**.
+Um palpite plausível que falha depois custa mais caro do que uma pendência anotada.
+
+Ao resolver um item, risque-o do documento no mesmo ciclo de trabalho.
+
 ## 🔄 Protocolo de Atualização do README.md (CRÍTICO)
 
 O `README.md` é a documentação pública deste projeto. **Sempre que ocorrer uma das
