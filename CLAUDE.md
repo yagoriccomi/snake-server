@@ -246,11 +246,124 @@ O hook `pre-commit` roda, nesta ordem:
 
 1. `lint-staged` — ESLint com `--fix` e Prettier nos arquivos em stage
 2. `npm run typecheck` — tipos do projeto inteiro
-3. `vitest run --passWithNoTests` — a suíte
+3. `vitest run` — a suíte inteira
 
-> **Dívida registrada:** a flag `--passWithNoTests` está ali porque a suíte ainda
-> não existe. Ao concluir a etapa de testes, **remova a flag** — a partir daí,
-> "nenhum teste encontrado" é sintoma, não estado aceitável.
+> A flag `--passWithNoTests` foi **removida** quando a suíte passou a existir:
+> a partir daqui, "nenhum teste encontrado" é sintoma de suíte sumida, não
+> estado aceitável.
+
+## 🧪 Testes
+
+```
+tests/
+├── ajudantes/dependencias-falsas.ts   # dublês que respeitam os contratos reais [#45]
+├── unit/                              # regra isolada, sem rede
+│   ├── env.test.ts                    # fail-fast e bloqueio do JWT_SECRET
+│   ├── error-handler.test.ts          # classificarErro: nunca vaza detalhe interno
+│   ├── logger.test.ts                 # mascarar: a barreira de PII
+│   ├── proofs.cloudinary.test.ts      # adaptador REAL (assina local, sem rede)
+│   ├── proofs.service.test.ts         # os invariantes de segurança da regra
+│   └── supabase.test.ts               # montagem da URL = defesa contra injeção
+└── integracao/api.test.ts             # criarApp(depsFalsas) + supertest [#42]
+```
+
+**Como testar sem rede:**  aceita as dependências por parâmetro,
+então a API inteira sobe com dublês — nada de  de módulo. [#45]
+
+**Regras da suíte:**
+- A maior parte dos casos ataca **falha**, não o caminho feliz. [Regra de Ouro]
+- Nome de teste diz condição e resultado (). [#46]
+- Cada teste prepara o próprio estado; a ordem não importa. [#48]
+- Credenciais dos testes são **fictícias**, definidas em . [#37]
+
+**Comandos:** 
+> snakethai-api@0.1.0 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/USER/Desktop/GIT/snake-server[39m
+
+ [32m✓[39m tests/unit/error-handler.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/proofs.service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/unit/logger.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m tests/unit/supabase.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m tests/unit/env.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 165[2mms[22m[39m
+ [32m✓[39m tests/unit/proofs.cloudinary.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m tests/integracao/api.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 176[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m173 passed[39m[22m[90m (173)[39m
+[2m   Start at [22m 13:45:46
+[2m   Duration [22m 959ms[2m (transform 366ms, setup 0ms, collect 1.14s, tests 420ms, environment 1ms, prepare 833ms)[22m · 
+> snakethai-api@0.1.0 test:watch
+> vitest
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/USER/Desktop/GIT/snake-server[39m
+
+ [32m✓[39m tests/unit/proofs.service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/error-handler.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/unit/logger.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m tests/unit/supabase.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m tests/unit/env.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 161[2mms[22m[39m
+ [32m✓[39m tests/unit/proofs.cloudinary.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m tests/integracao/api.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 182[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m173 passed[39m[22m[90m (173)[39m
+[2m   Start at [22m 13:45:47
+[2m   Duration [22m 954ms[2m (transform 333ms, setup 0ms, collect 1.04s, tests 418ms, environment 1ms, prepare 948ms)[22m · 
+> snakethai-api@0.1.0 test:coverage
+> vitest run --coverage
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/USER/Desktop/GIT/snake-server[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+ [32m✓[39m tests/unit/proofs.service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/unit/logger.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m tests/unit/error-handler.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/unit/supabase.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m tests/unit/proofs.cloudinary.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m tests/unit/env.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 173[2mms[22m[39m
+ [32m✓[39m tests/integracao/api.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 196[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m173 passed[39m[22m[90m (173)[39m
+[2m   Start at [22m 13:45:50
+[2m   Duration [22m 1.11s[2m (transform 316ms, setup 0ms, collect 1.05s, tests 445ms, environment 1ms, prepare 1.01s)[22m
+
+[34m % [39m[2mCoverage report from [22m[33mv8[39m
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-------------------|---------|----------|---------|---------|-------------------
+All files          |   95.02 |    95.29 |   96.07 |   95.02 |                   
+ src               |   81.03 |    66.66 |      50 |   81.03 |                   
+  app.ts           |     100 |    66.66 |     100 |     100 | 43                
+  ...ition-root.ts |   31.25 |      100 |       0 |   31.25 | 24-35             
+ src/config        |     100 |    93.75 |     100 |     100 |                   
+  constants.ts     |     100 |      100 |     100 |     100 |                   
+  env.ts           |     100 |    93.75 |     100 |     100 | 97                
+ src/lib           |   98.41 |    95.12 |     100 |   98.41 |                   
+  http-error.ts    |     100 |      100 |     100 |     100 |                   
+  logger.ts        |   96.93 |     92.3 |     100 |   96.93 | 123-124,153       
+  supabase.ts      |     100 |      100 |     100 |     100 |                   
+ src/middleware    |   96.37 |    95.74 |     100 |   96.37 |                   
+  error-handler.ts |   95.94 |    95.83 |     100 |   95.94 | 124-126           
+  ...st-context.ts |     100 |      100 |     100 |     100 |                   
+  require-user.ts  |   93.75 |       90 |     100 |   93.75 | 60-61             
+  validate.ts      |     100 |      100 |     100 |     100 |                   
+ ...modules/proofs |   91.89 |      100 |   91.66 |   91.89 |                   
+  ...cloudinary.ts |     100 |      100 |     100 |     100 |                   
+  ....constants.ts |     100 |      100 |     100 |     100 |                   
+  ...controller.ts |     100 |      100 |     100 |     100 |                   
+  ...repository.ts |   14.28 |      100 |       0 |   14.28 | 17-29             
+  proofs.routes.ts |     100 |      100 |     100 |     100 |                   
+  proofs.schema.ts |     100 |      100 |     100 |     100 |                   
+  ...fs.service.ts |     100 |      100 |     100 |     100 |                   
+ src/routes        |     100 |      100 |     100 |     100 |                   
+  v1.ts            |     100 |      100 |     100 |     100 |                   
+-------------------|---------|----------|---------|---------|-------------------
 
 ### Regras invioláveis
 

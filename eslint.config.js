@@ -54,8 +54,14 @@ export default tseslint.config(
   },
 
   {
-    files: ['**/*.test.ts', '**/*.spec.ts', 'tests/**/*.ts'],
+    files: ['tests/**/*.ts'],
     rules: {
+      /*
+       * Um dublê precisa ser `async` para casar com o contrato que promete
+       * `Promise` — mesmo quando a resposta é imediata. Exigir `await` num
+       * mock faria o teste mentir sobre a interface real. [#45]
+       */
+      '@typescript-eslint/require-await': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
     },

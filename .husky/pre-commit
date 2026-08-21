@@ -13,8 +13,7 @@ echo "-> verificando tipos..."
 npm run typecheck || exit 1
 
 # 3. Suite de testes. [#49]
-#    A flag --passWithNoTests existe porque a suite ainda sera criada
-#    (etapa testes-projeto). REMOVA a flag assim que houver testes:
-#    a partir dai, "nenhum teste" e sintoma, nao estado aceitavel.
+#    Sem --passWithNoTests: a suite existe, e "nenhum teste encontrado"
+#    passa a ser sintoma de suite sumida, nao estado aceitavel.
 echo "-> rodando testes..."
-npx --no-install vitest run --passWithNoTests || exit 1
+npx --no-install vitest run || exit 1
