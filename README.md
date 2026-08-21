@@ -106,6 +106,32 @@ O código é recarregado sozinho ao salvar um arquivo em `src/`.
 > Use `prod` sempre que quiser reproduzir um problema que só aparece publicado:
 > ela roda o mesmo build enxuto, sem TypeScript e sem ferramentas de desenvolvimento.
 
+#### Se o `/health` não responder
+
+O servidor **se recusa a iniciar** sem as credenciais obrigatórias — de propósito,
+para a falha aparecer agora e não no meio de uma requisição de usuário. A mensagem diz
+exatamente o que falta:
+
+```
+[config] Variáveis de ambiente inválidas ou ausentes:
+  • SUPABASE_ANON_KEY: obrigatória
+  • CLOUDINARY_CLOUD_NAME: obrigatória
+  ...
+Copie o .env.example para .env e preencha os valores.
+```
+
+**Atenção a um detalhe do modo de desenvolvimento:** nesse cenário o contêiner continua
+aparecendo como *running*, porque o recarregador automático segue vivo esperando você
+salvar um arquivo. Ele fica marcado como *unhealthy*, e é o `logs` que conta a
+história:
+
+```bash
+scripts\dev.bat logs      # Windows
+./scripts/dev.sh logs      # Linux/Mac
+```
+
+Preencha o `.env` e rode `restart`.
+
 ### Alternativa: rodar sem Docker
 
 ```bash

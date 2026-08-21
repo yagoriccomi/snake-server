@@ -185,6 +185,12 @@ O mesmo `Dockerfile` roda local e na Render: paridade real. [#79][#81]
 * **`prod`** sobe localmente a imagem `runtime` — a mesma que vai para a Render.
 * **Healthcheck** do container bate em `/health`. [#82]
 
+> **Observado ao rodar:** com o `.env` incompleto, o `fail-fast` derruba o processo do
+> servidor, mas em modo `dev` o contêiner permanece `running` — o `tsx watch` segue
+> vivo aguardando uma alteração de arquivo. O healthcheck marca `unhealthy`
+> corretamente, e o diagnóstico está no `logs`. Em produção (`node dist/server.js`) o
+> contêiner morre de fato, como esperado.
+
 ## ☁️ Deploy (Render)
 
 `render.yaml` com `runtime: docker` — a Render constrói a mesma imagem. [#78]
