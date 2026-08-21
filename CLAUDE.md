@@ -267,16 +267,16 @@ tests/
 └── integracao/api.test.ts             # criarApp(depsFalsas) + supertest [#42]
 ```
 
-**Como testar sem rede:**  aceita as dependências por parâmetro,
-então a API inteira sobe com dublês — nada de  de módulo. [#45]
+**Como testar sem rede:** `criarApp(deps)` aceita as dependências por
+parâmetro, então a API inteira sobe com dublês — nada de `vi.mock` de módulo. [#45]
 
 **Regras da suíte:**
 - A maior parte dos casos ataca **falha**, não o caminho feliz. [Regra de Ouro]
-- Nome de teste diz condição e resultado (). [#46]
+- Nome de teste diz condição e resultado (`deveNegarComForbiddenQuando...`). [#46]
 - Cada teste prepara o próprio estado; a ordem não importa. [#48]
-- Credenciais dos testes são **fictícias**, definidas em . [#37]
+- Credenciais dos testes são **fictícias**, definidas em `vitest.config.ts`. [#37]
 
-**Comandos:** 
+**Comandos:** `npm test` · `npm run test:watch` · `npm run test:coverage` 
 > snakethai-api@0.1.0 test
 > vitest run
 
