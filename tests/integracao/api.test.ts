@@ -63,10 +63,23 @@ describe('GET /health', () => {
     expect(resposta.headers['x-request-id']).toBeDefined();
   });
 
-  it('deveReaproveitarOIdDeCorrelacaoEnviadoPeloCliente', async () => {
+  it('naoDeveEcoarOIdDeCorrelacaoEnviadoPeloClienteComoSeFosseOProprio', async () => {
+    // O servidor SEMPRE gera o próprio id. Aceitar o do cliente permitiria a
+    // dois chamadores usarem o mesmo valor e embaralhar a investigação de um
+    // incidente — justamente quando ela mais importa. [#94]
     const resposta = await request(app).get('/health').set('X-Request-Id', 'id-vindo-do-app');
 
-    expect(resposta.headers['x-request-id']).toBe('id-vindo-do-app');
+    expect(resposta.headers['x-request-id']).not.toBe('id-vindo-do-app');
+    expect(resposta.headers['x-request-id']).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+  });
+
+  it('deveGerarIdsDiferentesParaChamadoresQueEnviaramOMesmoValor', async () => {
+    const a = await request(app).get('/health').set('X-Request-Id', 'id-forjado');
+    const b = await request(app).get('/health').set('X-Request-Id', 'id-forjado');
+
+    expect(a.headers['x-request-id']).not.toBe(b.headers['x-request-id']);
   });
 
   it('naoDeveAnunciarOFrameworkNoHeader', async () => {

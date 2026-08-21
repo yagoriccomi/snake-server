@@ -6,12 +6,16 @@
 #  O MESMO Dockerfile roda local (compose) e na Render — paridade. [#79][#81]
 # =============================================================
 
-ARG NODE_VERSION=22.14-alpine
+# Imagem fixada por DIGEST, não por tag.
+# Uma tag pode ser reapontada para outra imagem sem que este arquivo mude —
+# o digest torna o build reproduzível e impede troca silenciosa da base. [#62]
+# Para atualizar: docker pull node:<tag> && docker inspect node:<tag> --format '{{index .RepoDigests 0}}'
+ARG NODE_IMAGE=node:22.14-alpine@sha256:9bef0ef1e268f60627da9ba7d7605e8831d5b56ad07487d24d1aa386336d1944
 
 # ─────────────────────────────────────────────────────────────
 #  Stage: base — versão do Node fixada, uma única fonte de verdade
 # ─────────────────────────────────────────────────────────────
-FROM node:${NODE_VERSION} AS base
+FROM ${NODE_IMAGE} AS base
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false
@@ -23,6 +27,9 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
 # ─────────────────────────────────────────────────────────────
 FROM base AS deps
 COPY package.json package-lock.json* ./
+# Sem --ignore-scripts aqui de propósito: esbuild (via vitest/tsx) precisa do
+# script de instalação para baixar o binário da plataforma. Este stage NÃO vai
+# para a imagem final — só o dist compilado por ele viaja adiante.
 RUN npm ci
 
 # ─────────────────────────────────────────────────────────────
@@ -49,7 +56,11 @@ RUN npm run build
 # ─────────────────────────────────────────────────────────────
 FROM base AS prod-deps
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev && npm cache clean --force
+# --ignore-scripts: nenhuma dependência de PRODUÇÃO (cloudinary, cors, express,
+# express-rate-limit, helmet, zod) declara install script — verificado no
+# package-lock. Com isso, nada de terceiros executa código arbitrário durante o
+# build da árvore que efetivamente vai para a imagem. [#62][#55]
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # ─────────────────────────────────────────────────────────────
 #  Stage: runtime — o que efetivamente vai para produção

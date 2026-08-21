@@ -2,6 +2,7 @@ import type { DependenciasDaApi } from '../../src/composition-root.js';
 import type { ClienteSupabase, UsuarioAutenticado } from '../../src/lib/supabase.js';
 import type {
   AssinadorDeMidia,
+  PoliticaDeAcesso,
   RegistroDePagamento,
 } from '../../src/modules/proofs/proofs.service.js';
 
@@ -85,6 +86,9 @@ export interface OpcoesDasDependencias {
     paymentId: string,
     authorization: string,
   ) => Promise<RegistroDePagamento | null>;
+
+  /** Segunda barreira de autorização. Padrão: `rls`, como em produção. */
+  politicaDeAcesso?: PoliticaDeAcesso;
 }
 
 export function criarDependenciasFalsas(
@@ -116,6 +120,7 @@ export function criarDependenciasFalsas(
         },
       },
       agoraEmSegundos: () => AGORA_EM_SEGUNDOS,
+      politicaDeAcesso: opcoes.politicaDeAcesso ?? 'rls',
     },
   };
 }

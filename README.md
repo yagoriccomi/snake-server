@@ -138,12 +138,24 @@ Copie o `.env.example` e preencha. Nenhuma delas deve ser enviada ao repositóri
 | `ALLOWED_ORIGIN` | Endereços de sites autorizados a chamar a API, separados por vírgula. O app de celular não precisa disso; deixe vazio se não houver site. | Não |
 | `SUPABASE_URL` | Endereço do seu projeto no Supabase. | **Sim** |
 | `SUPABASE_ANON_KEY` | Chave pública do Supabase, usada para confirmar a identidade de quem chama. | **Sim** |
+| `POLITICA_ACESSO_COMPROVANTE` | Segunda camada de proteção ao abrir um comprovante. Veja a explicação abaixo. | Não (padrão `rls`) |
 | `CLOUDINARY_CLOUD_NAME` | Nome da sua conta na Cloudinary. | **Sim** |
 | `CLOUDINARY_API_KEY` | Identificador da chave da Cloudinary. | **Sim** |
 | `CLOUDINARY_API_SECRET` | Segredo da Cloudinary. **Nunca** coloque este valor no aplicativo. | **Sim** |
 
 Se faltar alguma obrigatória, o servidor não sobe e diz exatamente qual está
 faltando — em vez de falhar mais tarde, no meio de uma requisição de usuário.
+
+### Sobre a `POLITICA_ACESSO_COMPROVANTE`
+
+Quem decide se você pode ver um comprovante é o próprio banco de dados, pelas regras
+de acesso do Supabase. Esta variável define o que o servidor faz caso o banco libere
+um comprovante que **não** pertence a quem pediu:
+
+| Valor | Comportamento |
+| --- | --- |
+| `rls` *(padrão)* | Permite, porque pode ser um administrador legítimo — mas registra um **alerta** no log. Se esse alerta aparecer sem que haja um administrador trabalhando, é sinal de que as regras de acesso do banco quebraram. |
+| `somente-dono` | Recusa, sempre, qualquer comprovante que não seja do próprio dono. Mais rígido; use se nenhum administrador precisar abrir comprovante de aluno. |
 
 > **Duas variáveis ficaram de fora de propósito.** `SUPABASE_JWT_SECRET` permitiria
 > criar tokens de qualquer usuário, e o servidor se recusa a iniciar se ela estiver

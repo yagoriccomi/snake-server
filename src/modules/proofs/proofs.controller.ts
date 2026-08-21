@@ -36,7 +36,11 @@ export function criarProofsController(service: ProofsService) {
     const { paymentId } = req.body;
     const { id: userId, authorization } = usuarioDaRequisicao(req);
 
-    const url = await service.obterUrlDeVisualizacao(paymentId, authorization);
+    const url = await service.obterUrlDeVisualizacao(paymentId, {
+      userId,
+      authorization,
+      traceId: req.traceId,
+    });
 
     logger.info('url de comprovante emitida', {
       traceId: req.traceId,

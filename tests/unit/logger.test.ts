@@ -82,6 +82,21 @@ describe('mascarar', () => {
         expect(resultado[chave]).toBe('abcdefgh…');
       },
     );
+
+    it.each(['dono_user_id', 'turma_id', 'aluno_id', 'plano_id', 'qualquer_coisa_id'])(
+      'deveTruncarQualquerChaveTerminadaEmUnderscoreId_%s',
+      (chave) => {
+        // Regressão: uma lista fechada de nomes falha em silêncio quando
+        // alguém loga um campo novo. O padrão precisa cobrir a FORMA da chave.
+        const resultado = mascarar({ [chave]: '11111111-2222-4333-8444-555555555555' });
+        expect(resultado[chave]).toBe('11111111…');
+      },
+    );
+
+    it('naoDeveTruncarChaveQueApenasTerminaComAsLetrasIdSemSerIdentificador', () => {
+      // `valid` termina em "id" mas não é identificador — não pode ser mascarado.
+      expect(mascarar({ valid: 'texto normal' }).valid).toBe('texto normal');
+    });
   });
 
   describe('padrões em texto livre — o vazamento acidental', () => {
@@ -165,6 +180,30 @@ describe('mascarar', () => {
       expect(resultado.ok).toBe(true);
       expect(resultado.nada).toBeNull();
       expect(resultado.ausente).toBeUndefined();
+    });
+
+    it('deveTruncarTextoAcimaDoLimiteParaNaoEncherOColetorDeLogs', () => {
+      const gigante = 'x'.repeat(5_000);
+
+      const resultado = mascarar({ detalhe: gigante }).detalhe as string;
+
+      expect(resultado.length).toBeLessThan(gigante.length);
+      expect(resultado).toContain('[truncado]');
+    });
+
+    it('deveTruncarDEPOISDeLimparParaNaoPartirUmSegredoAoMeio', () => {
+      // Se o corte viesse antes da limpeza, metade de um JWT sobreviveria.
+      const jwt =
+        'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+      const resultado = mascarar({ detalhe: `${'a'.repeat(2_000)} ${jwt}` }).detalhe as string;
+
+      expect(resultado).not.toContain('eyJhbGciOiJIUzI1NiJ9');
+    });
+
+    it('naoDeveTruncarTextoDentroDoLimite', () => {
+      const curto = 'mensagem normal de log';
+
+      expect(mascarar({ detalhe: curto }).detalhe).toBe(curto);
     });
 
     it('deveSerializarDataComoIso', () => {

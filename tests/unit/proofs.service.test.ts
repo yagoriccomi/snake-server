@@ -5,6 +5,7 @@ import {
   criarProofsService,
   type AssinadorDeMidia,
   type LeitorDePagamentos,
+  type PoliticaDeAcesso,
   type ProofsService,
   type RegistroDePagamento,
 } from '../../src/modules/proofs/proofs.service.js';
@@ -32,7 +33,16 @@ interface Registro {
   buscas: { paymentId: string; authorization: string }[];
 }
 
-function criarCenario(pagamento: RegistroDePagamento | null) {
+const CHAMADOR = {
+  userId: USUARIO_DO_TOKEN,
+  authorization: AUTORIZACAO,
+  traceId: 'trace-de-teste',
+};
+
+function criarCenario(
+  pagamento: RegistroDePagamento | null,
+  politicaDeAcesso: PoliticaDeAcesso = 'rls',
+) {
   const registro: Registro = {
     chamadasDeAssinatura: [],
     publicIdsExtraidos: [],
@@ -72,6 +82,7 @@ function criarCenario(pagamento: RegistroDePagamento | null) {
     midia,
     pagamentos,
     agoraEmSegundos: () => AGORA,
+    politicaDeAcesso,
   });
 
   return { service, registro };
@@ -120,11 +131,9 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
     // "não é seu" entrega um oráculo de enumeração ao atacante. [#55]
     const { service } = criarCenario(null);
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, AUTORIZACAO)).rejects.toThrow(
-      HttpError,
-    );
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toThrow(HttpError);
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, AUTORIZACAO)).rejects.toMatchObject({
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
       status: 403,
       code: 'forbidden',
     });
@@ -133,7 +142,7 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   it('deveNegarComForbiddenQuandoOPagamentoExisteMasNaoTemComprovante', async () => {
     const { service } = criarCenario({ user_id: USUARIO_DO_TOKEN, proof_url: null });
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, AUTORIZACAO)).rejects.toMatchObject({
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
       status: 403,
     });
   });
@@ -141,7 +150,7 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   it('deveNegarComForbiddenQuandoOComprovanteEhStringVazia', async () => {
     const { service } = criarCenario({ user_id: USUARIO_DO_TOKEN, proof_url: '' });
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, AUTORIZACAO)).rejects.toMatchObject({
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
       status: 403,
     });
   });
@@ -154,7 +163,7 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
       proof_url: 'comprovantes/x/y',
     });
 
-    await service.obterUrlDeVisualizacao(PAYMENT_ID, AUTORIZACAO);
+    await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
 
     expect(registro.buscas).toHaveLength(1);
     expect(registro.buscas[0]?.authorization).toBe(AUTORIZACAO);
@@ -167,7 +176,7 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
       proof_url: 'comprovantes/x/y',
     });
 
-    const url = await service.obterUrlDeVisualizacao(PAYMENT_ID, AUTORIZACAO);
+    const url = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
 
     expect(registro.publicIdsExtraidos).toEqual(['comprovantes/x/y']);
     expect(registro.publicIdsVisualizados).toEqual(['comprovantes/x/y']);
@@ -178,7 +187,7 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
     // Falha cedo: nada de gastar chamada ao provedor de mídia por um 403. [#9]
     const { service, registro } = criarCenario(null);
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, AUTORIZACAO)).rejects.toThrow();
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toThrow();
 
     expect(registro.publicIdsVisualizados).toHaveLength(0);
   });

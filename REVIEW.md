@@ -46,6 +46,26 @@ defesa em profundidade que custaria três linhas.
 
 ---
 
+## 🔧 Status das correções (etapa `seguranca-projeto`)
+
+Aplicado logo após esta auditoria, na mesma sessão de trabalho:
+
+| Achado | Estado | O que foi feito |
+| --- | --- | --- |
+| **C-1** LGPD — ciclo de vida | ⏸️ **Aguardando decisão** | Criar a rota de exclusão é escopo novo; pendente de aval explícito. |
+| **A-1** `user_id` ignorado | ✅ **Corrigido** | Segunda barreira em `proofs.service.ts`, com política configurável. |
+| **A-2** deploy sem CI | ➡️ **Roteado** | Será resolvido na etapa `configurar-ci-cd-projeto`. |
+| **M-1** rate limit em memória | ✅ **Mitigado** | Limitação documentada no código + limite extra por rota sensível. |
+| **M-2** `extrairPublicId` | ⏸️ **Aguardando** | Depende de confirmar o schema real com o time do app. |
+| **M-3** repositório sem cobertura | ➡️ **Pendente** | Fica para uma próxima rodada de testes. |
+| **M-4** supply chain | ✅ **Corrigido** | Digest fixado + `--ignore-scripts` no stage de produção. |
+| **B-1** spoof de correlação | ✅ **Corrigido** | Servidor sempre gera o próprio id; o do cliente vira dado à parte. |
+| **B-3** logger sem truncar | ✅ **Corrigido** | Corte em 2 kB, aplicado **depois** da limpeza de PII. |
+
+Suíte após as correções: **193 testes** (eram 173), todos passando.
+
+---
+
 ## 🚨 Risco Crítico (Segurança e LGPD)
 
 ### C-1. Ausência total de ciclo de vida do comprovante — direito de eliminação e retenção

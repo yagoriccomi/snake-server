@@ -30,6 +30,7 @@ export function montarDependencias(): DependenciasDaApi {
       midia: criarAssinadorCloudinary(env.cloudinary),
       pagamentos: criarRepositorioDePagamentos(supabase),
       agoraEmSegundos: () => Math.round(Date.now() / 1000),
+      politicaDeAcesso: env.politicaDeAcessoAComprovante,
     },
   };
 }

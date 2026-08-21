@@ -157,6 +157,10 @@ sem `vi.mock` e sem variável de ambiente de mentira. [#45]
   escrita fora da RLS — isolado nesse módulo, uso mínimo, nunca atalho geral. [#55]
 - **Destino derivado do id verificado:** o app não escolhe pasta nem nome do
   comprovante; ambos vêm do `userId` do token. [#55]
+- **Segunda barreira de autorização:** a RLS é a trava principal, mas mora em outro
+  sistema. `conferirDono` compara o `user_id` devolvido pela consulta com o do token e
+  **alarma em nível `error`** se divergirem — uma política de RLS que caia vira alerta,
+  não vazamento silencioso. Controlado por `POLITICA_ACESSO_COMPROVANTE`. [#55]
 - **Comprovante é PII financeira:** sempre `type=authenticated` (privado), visto
   só por URL assinada. Nunca em log. [#63]
 - Validação de todo input com Zod; filtros do PostgREST por `URLSearchParams`,

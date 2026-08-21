@@ -47,6 +47,16 @@ const esquemaAmbiente = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().trim().min(1, 'obrigatória'),
   CLOUDINARY_API_KEY: z.string().trim().min(1, 'obrigatória'),
   CLOUDINARY_API_SECRET: z.string().trim().min(1, 'obrigatória'),
+
+  /**
+   * Segunda barreira de autorização dos comprovantes.
+   *
+   * `rls`          confia na RLS e ALERTA quando ela libera dado alheio.
+   * `somente-dono` nega qualquer acesso que não seja do próprio dono.
+   *
+   * Ver `PoliticaDeAcesso` em modules/proofs/proofs.service.ts. [#55]
+   */
+  POLITICA_ACESSO_COMPROVANTE: z.enum(['rls', 'somente-dono']).default('rls'),
 });
 
 type AmbienteValidado = z.infer<typeof esquemaAmbiente>;
@@ -130,6 +140,8 @@ export const env = {
     apiKey: ambiente.CLOUDINARY_API_KEY,
     apiSecret: ambiente.CLOUDINARY_API_SECRET,
   },
+
+  politicaDeAcessoAComprovante: ambiente.POLITICA_ACESSO_COMPROVANTE,
 } as const;
 
 export type Env = typeof env;
