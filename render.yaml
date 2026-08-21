@@ -1,0 +1,51 @@
+# =============================================================
+#  Infraestrutura como código — Render [#78]
+#  runtime: docker → a Render constrói a MESMA imagem que você
+#  roda local, com o mesmo Dockerfile. Paridade real. [#79][#81]
+#
+#  As variáveis com `sync: false` NÃO ficam neste arquivo:
+#  são cadastradas no painel da Render (as sensíveis como secret). [#37][#80]
+# =============================================================
+
+services:
+  - type: web
+    name: snakethai-api
+    runtime: docker
+    plan: free
+    region: oregon
+
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Constrói o último stage do Dockerfile (`runtime`) — o enxuto. [#85]
+
+    # Endpoint trivial e sem I/O: acorda rápido depois da hibernação. [#82]
+    healthCheckPath: /health
+
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+
+      # ── Base: identidade e autorização ──
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+
+      # ── CORS (só se houver cliente web; o app nativo dispensa) ──
+      - key: ALLOWED_ORIGIN
+        sync: false
+
+      # ── Módulo: comprovantes ──
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+    # ATENÇÃO: não acrescente SUPABASE_JWT_SECRET (permitiria forjar
+    # tokens) nem SUPABASE_SERVICE_ROLE_KEY (ignora a RLS). O servidor
+    # se recusa a subir se a primeira estiver presente.

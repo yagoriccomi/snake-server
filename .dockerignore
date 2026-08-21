@@ -1,0 +1,34 @@
+# Segredos nunca entram na imagem — a config chega por variável de ambiente [#80]
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Ruído que engorda a imagem e invalida cache de layer à toa [#85]
+node_modules
+dist
+coverage
+.git
+.gitignore
+.github
+docs
+logs
+*.log
+tmp
+.cache
+.eslintcache
+*.tsbuildinfo
+
+# Arquivos de ambiente local que não pertencem ao runtime
+docker-compose*.yml
+Dockerfile
+.dockerignore
+scripts
+README.md
+CLAUDE.md
+REVIEW.md
+.vscode
+.idea
+.DS_Store
+Thumbs.db
