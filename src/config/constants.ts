@@ -1,6 +1,9 @@
 /**
- * Constantes de configuração do servidor.
- * Nenhum número solto no código — todo limite tem nome e justificativa. [#3]
+ * Constantes da APLICAÇÃO — o que vale para o servidor inteiro.
+ * Nenhum número solto no código: todo limite tem nome e justificativa. [#3]
+ *
+ * Constantes de um domínio específico moram no módulo dele
+ * (ex.: `modules/proofs/proofs.constants.ts`), não aqui. [#13]
  */
 
 /**
@@ -23,9 +26,3 @@ export const TIMEOUT_REQUISICAO_EXTERNA_MS = 10_000;
 
 /** Prazo para conexões em voo terminarem antes de o processo morrer (SIGTERM da Render). */
 export const TIMEOUT_SHUTDOWN_MS = 10_000;
-
-/** Raiz das pastas de comprovante na Cloudinary. O `userId` verificado é anexado a ela. */
-export const PASTA_COMPROVANTES = 'comprovantes';
-
-/** Tipo de entrega da Cloudinary: `authenticated` = privado, só por URL assinada. */
-export const TIPO_ENTREGA_PRIVADO = 'authenticated';

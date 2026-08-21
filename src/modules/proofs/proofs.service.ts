@@ -1,10 +1,13 @@
-import { PASTA_COMPROVANTES, TIPO_ENTREGA_PRIVADO } from '../../config/constants.js';
 import { semAcesso } from '../../lib/http-error.js';
+import { PASTA_COMPROVANTES, TIPO_ENTREGA_PRIVADO } from './proofs.constants.js';
 
 /**
  * Regra de negócio dos comprovantes. Camada sem Express e sem SDK: recebe
  * suas dependências prontas e devolve dados puros. É o que torna esta
  * lógica testável sem subir servidor nem tocar a rede. [#21][#30][#45]
+ *
+ * Os tipos abaixo são o CONTRATO que o domínio impõe à infraestrutura —
+ * o adaptador da Cloudinary os implementa, não o contrário. [#20]
  */
 
 export interface ParametrosDeUpload {

@@ -1,8 +1,8 @@
-import type { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { naoAutenticado } from '../lib/http-error.js';
 import { logger } from '../lib/logger.js';
-import { buscarUsuarioPeloToken } from '../lib/supabase.js';
+import type { ClienteSupabase } from '../lib/supabase.js';
 
 const PREFIXO_BEARER = /^Bearer\s+\S+$/i;
 
@@ -13,31 +13,39 @@ const PREFIXO_BEARER = /^Bearer\s+\S+$/i;
  * Nenhum controller precisa saber como a identidade é verificada — e nenhum
  * módulo novo pode esquecer de verificá-la, porque a rota não sobe sem ele. [#13]
  *
+ * Recebe o cliente do Supabase por injeção em vez de importá-lo: é isso que
+ * permite testar o middleware com um cliente falso, sem rede. [#21][#45]
+ *
  * O Express 5 propaga rejeições de handlers async para o error handler
- * automaticamente; por isso o `throw` aqui é seguro. [#93]
+ * automaticamente; por isso confiar no `throw` aqui é seguro. [#93]
  */
-export async function requireUser(req: Request, _res: Response, next: NextFunction): Promise<void> {
-  const authorization = req.header('authorization');
+export function criarRequireUser(supabase: ClienteSupabase): RequestHandler {
+  return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    const authorization = req.header('authorization');
 
-  if (!authorization) {
-    return next(naoAutenticado('Não autenticado', 'no_token'));
-  }
+    if (!authorization) {
+      next(naoAutenticado('Não autenticado', 'no_token'));
+      return;
+    }
 
-  if (!PREFIXO_BEARER.test(authorization)) {
-    return next(naoAutenticado('Formato de token inválido', 'bad_token_format'));
-  }
+    if (!PREFIXO_BEARER.test(authorization)) {
+      next(naoAutenticado('Formato de token inválido', 'bad_token_format'));
+      return;
+    }
 
-  const usuario = await buscarUsuarioPeloToken(authorization);
+    const usuario = await supabase.buscarUsuarioPeloToken(authorization);
 
-  if (!usuario) {
-    logger.warn('Token recusado pelo Supabase', { traceId: req.traceId });
-    return next(naoAutenticado('Sessão inválida', 'bad_token'));
-  }
+    if (!usuario) {
+      logger.warn('Token recusado pelo Supabase', { traceId: req.traceId });
+      next(naoAutenticado('Sessão inválida', 'bad_token'));
+      return;
+    }
 
-  req.usuario = usuario;
-  req.authorizationHeader = authorization;
+    req.usuario = usuario;
+    req.authorizationHeader = authorization;
 
-  next();
+    next();
+  };
 }
 
 /**

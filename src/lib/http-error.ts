@@ -1,8 +1,8 @@
 /**
  * Erro de aplicação com contrato HTTP explícito.
  *
- * Todo erro que o cliente pode ver nasce aqui. O handler global traduz
- * isto em `{ error, code }` com o status certo; qualquer outra exceção
+ * Todo erro que o cliente pode ver nasce aqui. `classificarErro` traduz isto
+ * em `{ error, code, traceId }` com o status certo; qualquer outra exceção
  * vira 500 genérico, sem stack trace. [#93]
  */
 export class HttpError extends Error {
@@ -19,10 +19,6 @@ export class HttpError extends Error {
     Error.captureStackTrace?.(this, HttpError);
   }
 }
-
-/** Entrada malformada ou ausente. Falha do chamador, não do servidor. [#51] */
-export const requisicaoInvalida = (mensagem: string, code = 'bad_input'): HttpError =>
-  new HttpError(400, code, mensagem);
 
 /** Sem token, ou token que o Supabase não reconhece. */
 export const naoAutenticado = (mensagem = 'Não autenticado', code = 'no_token'): HttpError =>
@@ -49,3 +45,11 @@ export const dependenciaIndisponivel = (
 export function ehHttpError(valor: unknown): valor is HttpError {
   return valor instanceof HttpError;
 }
+
+/*
+ * Nota: `requisicaoInvalida` (400) foi removida — a validação de entrada é
+ * inteiramente do Zod, que `classificarErro` já traduz em 400 `bad_input`.
+ * Um atalho sem nenhum chamador é código morto, não conveniência. [#12]
+ * Se um módulo futuro precisar de um 400 fora do Zod, `new HttpError(400, ...)`
+ * resolve sem reintroduzir a duplicata.
+ */

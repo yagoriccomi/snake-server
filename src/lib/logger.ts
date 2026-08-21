@@ -24,6 +24,9 @@ const REDIGIDO = '[REDIGIDO]';
 /** Profundidade máxima ao percorrer objetos — barreira contra ciclos e payloads absurdos. */
 const PROFUNDIDADE_MAXIMA = 6;
 
+/** Abaixo disto, um identificador não tem prefixo suficiente para valer a pena. */
+const TAMANHO_MINIMO_DO_PREFIXO = 8;
+
 /**
  * Chaves cujo VALOR nunca é logado, em nenhuma circunstância.
  * Casa com variações comuns de escrita (camelCase, snake_case, PT e EN).
@@ -44,8 +47,8 @@ const PADRAO_BEARER = /\bBearer\s+\S+/gi;
  * sem entregar o valor inteiro a quem tiver acesso ao coletor.
  */
 function mascararIdentificador(valor: string): string {
-  if (valor.length <= 8) return REDIGIDO;
-  return `${valor.slice(0, 8)}…`;
+  if (valor.length <= TAMANHO_MINIMO_DO_PREFIXO) return REDIGIDO;
+  return `${valor.slice(0, TAMANHO_MINIMO_DO_PREFIXO)}…`;
 }
 
 /** Remove de textos livres os padrões que costumam vazar sem querer. */
@@ -57,6 +60,45 @@ function limparTexto(texto: string): string {
     .replace(PADRAO_CPF, REDIGIDO);
 }
 
+/** Erro vira objeto plano: a stack fica no servidor e some em produção. [#93] */
+function mascararErro(erro: Error): Record<string, unknown> {
+  return {
+    nome: erro.name,
+    mensagem: limparTexto(erro.message),
+    stack: env.ehProducao ? undefined : erro.stack,
+  };
+}
+
+/**
+ * Aplica as regras de chave a um objeto.
+ *
+ * Separado do dispatch de tipo porque é aqui que mora a decisão de segurança
+ * — redigir, encurtar ou seguir — e ela merece ser lida (e testada) sozinha. [#2]
+ */
+function mascararObjeto(
+  objeto: Record<string, unknown>,
+  profundidade: number,
+): Record<string, unknown> {
+  const saida: Record<string, unknown> = {};
+
+  for (const [chave, conteudo] of Object.entries(objeto)) {
+    if (CHAVE_SENSIVEL.test(chave)) {
+      saida[chave] = REDIGIDO;
+      continue;
+    }
+
+    if (CHAVE_IDENTIFICADORA.test(chave) && typeof conteudo === 'string') {
+      saida[chave] = mascararIdentificador(conteudo);
+      continue;
+    }
+
+    saida[chave] = mascararValor(conteudo, profundidade + 1);
+  }
+
+  return saida;
+}
+
+/** Dispatch por tipo. Cada ramo delega; nenhum concentra regra. */
 function mascararValor(valor: unknown, profundidade: number): unknown {
   if (valor === null || valor === undefined) return valor;
 
@@ -67,15 +109,7 @@ function mascararValor(valor: unknown, profundidade: number): unknown {
 
   if (profundidade >= PROFUNDIDADE_MAXIMA) return '[PROFUNDO_DEMAIS]';
 
-  if (valor instanceof Error) {
-    return {
-      nome: valor.name,
-      mensagem: limparTexto(valor.message),
-      // A stack fica só no log do servidor — nunca vai para o cliente. [#93]
-      stack: env.ehProducao ? undefined : valor.stack,
-    };
-  }
-
+  if (valor instanceof Error) return mascararErro(valor);
   if (valor instanceof Date) return valor.toISOString();
 
   if (Array.isArray(valor)) {
@@ -83,25 +117,20 @@ function mascararValor(valor: unknown, profundidade: number): unknown {
   }
 
   if (typeof valor === 'object') {
-    const saida: Record<string, unknown> = {};
-    for (const [chave, conteudo] of Object.entries(valor as Record<string, unknown>)) {
-      if (CHAVE_SENSIVEL.test(chave)) {
-        saida[chave] = REDIGIDO;
-      } else if (CHAVE_IDENTIFICADORA.test(chave) && typeof conteudo === 'string') {
-        saida[chave] = mascararIdentificador(conteudo);
-      } else {
-        saida[chave] = mascararValor(conteudo, profundidade + 1);
-      }
-    }
-    return saida;
+    return mascararObjeto(valor as Record<string, unknown>, profundidade);
   }
 
   return REDIGIDO;
 }
 
-/** Torna qualquer contexto seguro para log. Exportado para uso em testes. */
+/**
+ * Torna qualquer contexto seguro para log.
+ *
+ * Exportada porque é a função mais crítica deste arquivo do ponto de vista de
+ * privacidade: ela precisa de teste próprio, não apenas de uso indireto. [#41]
+ */
 export function mascarar(contexto: Record<string, unknown>): Record<string, unknown> {
-  return mascararValor(contexto, 0) as Record<string, unknown>;
+  return mascararObjeto(contexto, 0);
 }
 
 function deveRegistrar(nivel: NivelDeLog): boolean {

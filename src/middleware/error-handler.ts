@@ -3,15 +3,98 @@ import { ZodError } from 'zod';
 
 import { ehHttpError, naoEncontrado } from '../lib/http-error.js';
 import { logger } from '../lib/logger.js';
+import type { NivelDeLog } from '../lib/logger.js';
 
 /**
  * Contrato de erro da API. Uma única forma, para todos os módulos:
- * o app trata `code`, o humano lê `error`.
+ * o app trata `code`, o humano lê `error`, o suporte usa `traceId`.
  */
 interface CorpoDeErro {
   error: string;
   code: string;
   traceId: string;
+}
+
+/** O que uma exceção vira, antes de qualquer efeito colateral. */
+export interface ErroClassificado {
+  status: number;
+  code: string;
+  /** Mensagem SEGURA para o cliente — nunca carrega detalhe interno. */
+  mensagem: string;
+  /**
+   * Mensagem para o log, quando ela deve dizer mais que a do cliente.
+   * "Erro interno" serve ao usuário; o operador precisa de "Erro não tratado".
+   */
+  mensagemDeLog?: string;
+  nivel: NivelDeLog;
+  /** Contexto extra só para o log do servidor. */
+  contexto?: Record<string, unknown>;
+}
+
+/** Body-parser marca seus erros com `type`; é assim que os distinguimos. */
+function tipoDoErroDeParse(erro: unknown): string | undefined {
+  if (erro instanceof Error && 'type' in erro) {
+    const { type } = erro as { type?: unknown };
+    return typeof type === 'string' ? type : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Decide o que uma exceção vira. Função PURA: sem `res`, sem log, sem efeito.
+ *
+ * Estava dissolvida em cinco blocos `if` que montavam a resposta cada um por
+ * si — cinco lugares para esquecer o `traceId` ou vazar detalhe. Isolada,
+ * a decisão é testável sem levantar Express. [#2][#6][#41]
+ */
+export function classificarErro(erro: unknown): ErroClassificado {
+  if (ehHttpError(erro)) {
+    return {
+      status: erro.status,
+      code: erro.code,
+      mensagem: erro.message,
+      // 4xx é o cliente errando: aviso, não falha nossa. [#92]
+      nivel: erro.status >= 500 ? 'error' : 'warn',
+      ...(erro.cause ? { contexto: { causa: erro.cause } } : {}),
+    };
+  }
+
+  if (erro instanceof ZodError) {
+    return {
+      status: 400,
+      code: 'bad_input',
+      mensagem: 'Dados inválidos na requisição',
+      mensagemDeLog: 'Entrada inválida',
+      nivel: 'warn',
+      contexto: { problemas: erro.issues },
+    };
+  }
+
+  const tipoDeParse = tipoDoErroDeParse(erro);
+
+  if (tipoDeParse === 'entity.parse.failed') {
+    return { status: 400, code: 'malformed_json', mensagem: 'JSON inválido', nivel: 'warn' };
+  }
+
+  // Payload acima do limite configurado. [#65]
+  if (tipoDeParse === 'entity.too.large') {
+    return {
+      status: 413,
+      code: 'payload_too_large',
+      mensagem: 'Corpo da requisição grande demais',
+      nivel: 'warn',
+    };
+  }
+
+  // Desconhecido: mensagem genérica para fora, erro inteiro para o log.
+  return {
+    status: 500,
+    code: 'internal_error',
+    mensagem: 'Erro interno',
+    mensagemDeLog: 'Erro não tratado',
+    nivel: 'error',
+    contexto: { erro },
+  };
 }
 
 /** Rota inexistente — resposta no mesmo formato dos demais erros. */
@@ -35,80 +118,22 @@ export function errorHandler(
   res: Response,
   _next: NextFunction,
 ): void {
-  // Resposta já enviada (ex: erro durante o streaming): delegar ao Express
+  // Resposta já enviada (ex.: falha durante o streaming): delegar ao Express
   // evita "headers already sent" mascarando o erro real.
   if (res.headersSent) {
     logger.error('Erro após a resposta ter começado', { traceId: req.traceId, erro });
     return;
   }
 
-  if (ehHttpError(erro)) {
-    // 4xx é o cliente errando: registrar como aviso, não como falha nossa. [#92]
-    const nivel = erro.status >= 500 ? 'error' : 'warn';
-    logger[nivel](erro.message, {
-      traceId: req.traceId,
-      code: erro.code,
-      status: erro.status,
-      ...(erro.cause ? { causa: erro.cause } : {}),
-    });
+  const { status, code, mensagem, mensagemDeLog, nivel, contexto } = classificarErro(erro);
 
-    const corpo: CorpoDeErro = {
-      error: erro.message,
-      code: erro.code,
-      traceId: req.traceId,
-    };
-    res.status(erro.status).json(corpo);
-    return;
-  }
-
-  if (erro instanceof ZodError) {
-    logger.warn('Entrada inválida', { traceId: req.traceId, problemas: erro.issues });
-    const corpo: CorpoDeErro = {
-      error: 'Dados inválidos na requisição',
-      code: 'bad_input',
-      traceId: req.traceId,
-    };
-    res.status(400).json(corpo);
-    return;
-  }
-
-  // JSON malformado: o body-parser do Express marca o erro com `type`.
-  if (
-    erro instanceof SyntaxError &&
-    'type' in erro &&
-    (erro as { type?: unknown }).type === 'entity.parse.failed'
-  ) {
-    const corpo: CorpoDeErro = {
-      error: 'JSON inválido',
-      code: 'malformed_json',
-      traceId: req.traceId,
-    };
-    res.status(400).json(corpo);
-    return;
-  }
-
-  // Payload acima do limite configurado. [#65]
-  if (
-    erro instanceof Error &&
-    'type' in erro &&
-    (erro as { type?: unknown }).type === 'entity.too.large'
-  ) {
-    const corpo: CorpoDeErro = {
-      error: 'Corpo da requisição grande demais',
-      code: 'payload_too_large',
-      traceId: req.traceId,
-    };
-    res.status(413).json(corpo);
-    return;
-  }
-
-  // Desconhecido: log completo do lado de cá, mensagem genérica do lado de lá.
-  logger.error('Erro não tratado', { traceId: req.traceId, erro });
-
-  const corpo: CorpoDeErro = {
-    error: 'Erro interno',
-    code: 'internal_error',
+  logger[nivel](mensagemDeLog ?? mensagem, {
     traceId: req.traceId,
-  };
-  res.status(500).json(corpo);
+    code,
+    status,
+    ...contexto,
+  });
+
+  const corpo: CorpoDeErro = { error: mensagem, code, traceId: req.traceId };
+  res.status(status).json(corpo);
 }

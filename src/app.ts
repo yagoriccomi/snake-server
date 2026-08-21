@@ -3,6 +3,7 @@ import express, { type Express } from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 
+import { montarDependencias, type DependenciasDaApi } from './composition-root.js';
 import {
   LIMITE_CORPO_JSON,
   RATE_LIMIT_JANELA_MS,
@@ -11,13 +12,16 @@ import {
 import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { requestContext } from './middleware/request-context.js';
-import { v1 } from './routes/v1.js';
+import { criarV1Router } from './routes/v1.js';
 
 /**
- * Monta a aplicação Express. Separado do `server.ts` de propósito: assim os
- * testes de integração levantam o app em memória, sem abrir porta. [#42]
+ * Monta a aplicação Express.
+ *
+ * Separado do `server.ts` de propósito: os testes de integração levantam o app
+ * em memória, sem abrir porta. E as dependências entram por parâmetro, então a
+ * mesma montagem roda com Supabase e Cloudinary falsos. [#21][#42][#45]
  */
-export function criarApp(): Express {
+export function criarApp(deps: DependenciasDaApi = montarDependencias()): Express {
   const app = express();
 
   // A Render fica atrás de um proxy: sem isto, todo cliente parece ter o
@@ -68,7 +72,7 @@ export function criarApp(): Express {
     }),
   );
 
-  app.use('/v1', v1);
+  app.use('/v1', criarV1Router(deps));
 
   // A ordem importa: 404 primeiro, handler de erro por último. [#93]
   app.use(notFoundHandler);

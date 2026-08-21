@@ -91,41 +91,60 @@ puniria exatamente o comportamento que pedimos ao app. [#82]
 
 ```
 src/
-├── app.ts                      # Monta o Express (separado do listen → testável) [#42]
+├── app.ts                      # criarApp(deps) — deps por parâmetro [#21][#42]
 ├── server.ts                   # Bootstrap: porta, SIGTERM, shutdown limpo
+├── composition-root.ts         # ÚNICO lugar que conhece implementações concretas [#30]
 ├── config/
-│   ├── constants.ts            # Limites e timeouts nomeados [#3]
+│   ├── constants.ts            # Limites da APLICAÇÃO (payload, rate limit, timeouts) [#3]
 │   └── env.ts                  # ÚNICO ponto que lê process.env; fail-fast [#80]
 ├── lib/
 │   ├── logger.ts               # JSON estruturado com PII mascarada [#91][#63]
 │   ├── http-error.ts           # Contrato de erro da aplicação [#93]
-│   ├── supabase.ts             # Identidade (/auth/v1/user) + leitura via RLS
-│   └── cloudinary.ts           # Assinatura de upload e URL privada
+│   └── supabase.ts             # criarClienteSupabase() — identidade + leitura via RLS
 ├── middleware/
 │   ├── request-context.ts      # traceId por requisição [#94]
 │   ├── validate.ts             # Validação Zod na borda [#51]
-│   ├── require-user.ts         # Autenticação herdada por todo módulo
-│   └── error-handler.ts        # Handler global — sem stack para o cliente [#93]
+│   ├── require-user.ts         # criarRequireUser(supabase) — auth injetável
+│   └── error-handler.ts        # classificarErro() puro + handler global [#2][#93]
 ├── modules/
 │   └── proofs/                 # Módulo 1 — comprovantes
-│       ├── proofs.routes.ts    # composition root [#21]
-│       ├── proofs.controller.ts
-│       ├── proofs.service.ts   # regra pura, testável sem rede [#45]
-│       └── proofs.schema.ts
+│       ├── proofs.constants.ts   # constantes DO DOMÍNIO (pasta, tipo, tabela) [#13]
+│       ├── proofs.cloudinary.ts  # adaptador do provedor de mídia (infra) [#20]
+│       ├── proofs.repository.ts  # única camada que fala PostgREST [#22]
+│       ├── proofs.service.ts     # a regra + os CONTRATOS que a infra implementa
+│       ├── proofs.controller.ts  # só HTTP
+│       ├── proofs.schema.ts      # validação Zod
+│       └── proofs.routes.ts      # criarProofsRouter(deps) — factory, não instância
 ├── routes/
-│   └── v1.ts                   # Registro dos módulos sob /v1 [#28]
+│   └── v1.ts                   # criarV1Router(deps) — registro dos módulos [#28]
 └── types/
     └── express.d.ts            # Campos que os middlewares anexam à Request [#11]
 ```
 
+### Regra da dependência
+
+Nada de instância pronta exportada no escopo de módulo. Cada camada expõe uma
+**factory** que recebe suas dependências, e o `composition-root.ts` é o único
+arquivo que sabe que existe Cloudinary ou Supabase de verdade. [#20][#21][#30]
+
+```
+composition-root  →  criarApp(deps)  →  criarV1Router(deps)  →  criarProofsRouter(deps)
+```
+
+É isso que permite `criarApp(depsFalsas)` levantar a API inteira sem rede,
+sem `vi.mock` e sem variável de ambiente de mentira. [#45]
+
 ### Como adicionar um módulo novo
 
 1. Crie `src/modules/<dominio>/` com `routes` / `controller` / `service` / `schema`.
-2. Reuse `validarCorpo` e `requireUser`; autorize dados pela **RLS** (repassando o
-   token) ou, se o módulo exigir, por um segredo próprio vindo do `env`.
-3. Acrescente **uma linha** em `src/routes/v1.ts`.
-4. Cadastre os segredos do módulo na Render e em `.env.example` (nunca no Git).
-5. Documente o contrato no `README.md` e em `docs/BACKEND.md`.
+2. Exponha `criar<Dominio>Router(deps)` — **factory**, nunca instância pronta.
+3. Defina no service os **contratos** (interfaces) que a infra do módulo implementa.
+4. Reuse `validarCorpo` e `criarRequireUser`; autorize dados pela **RLS** (repassando
+   o token) ou, se o módulo exigir, por um segredo próprio vindo do `env`.
+5. Acrescente as dependências dele em `composition-root.ts`.
+6. Acrescente **uma linha** em `src/routes/v1.ts`.
+7. Cadastre os segredos do módulo na Render e em `.env.example` (nunca no Git).
+8. Documente o contrato no `README.md` e em `docs/BACKEND.md`.
 
 ## 🔐 Diretrizes de Segurança Mínimas
 
