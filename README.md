@@ -4,7 +4,6 @@
 ![TypeScript](https://img.shields.io/badge/typescript-5.7-3178C6?logo=typescript&logoColor=white)
 ![Express](https://img.shields.io/badge/express-5-000000?logo=express&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-blue)
 
 API própria do **Snake Thai** — o servidor que guarda o que o aplicativo não pode
 guardar.
@@ -240,4 +239,9 @@ nos logs:
 
 ## 📄 Licença
 
-MIT — veja [LICENSE](LICENSE).
+O arquivo [LICENSE](LICENSE) deste repositório contém a **GNU General Public License v3**.
+
+> ⚠️ **Decisão pendente.** Para um backend proprietário servido como SaaS, nem a GPL-3.0
+> nem a MIT são adequadas — o indicado seria um licenciamento proprietário. A análise
+> completa, com os três caminhos possíveis e suas consequências, está em
+> [LICENSE_AUDIT.md](LICENSE_AUDIT.md).

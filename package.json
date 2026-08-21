@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "API própria do Snake Thai — segredos de servidor, integrações de terceiros e lógica server-side.",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "engines": {
     "node": ">=22"
