@@ -1,12 +1,12 @@
 # ⚖️ Mapa de Risco de Licenças
 
-**Projeto:** `snakethai-api` — backend proprietário do Snake Thai
+**Projeto:** `snakethai-api` — backend do Snake Thai (software livre, GPL-3.0)
 **Data:** 2026-08-21
 **Escopo:** 384 pacotes instalados (diretos e transitivos) + licenciamento do próprio repositório
 
-> Este documento é **apoio à decisão**, não parecer jurídico formal. As conclusões sobre
-> o licenciamento do próprio repositório (seção 🔴) recomendam validação por advogado
-> especializado em direito digital antes da publicação comercial.
+> Este documento é **apoio à decisão**, não parecer jurídico formal. O licenciamento do
+> repositório foi decidido (ver seção abaixo); a seção 🔴 fica preservada como registro
+> da análise que levou à decisão.
 
 ---
 
@@ -38,13 +38,44 @@ distinção é o que determina se uma cláusula copyleft dispara ou não. [#98]
 
 **Nenhuma GPL, AGPL, LGPL, MPL, SSPL ou BUSL em qualquer ponto da árvore.**
 
-### 🔴 O risco real está no próprio repositório, não nas dependências
+### ✅ A contradição encontrada foi resolvida
 
-O arquivo `LICENSE` da raiz é a **GNU General Public License v3** (35.823 bytes,
-cabeçalho confirmado). Ao mesmo tempo, `package.json` declara `"license": "MIT"` e o
-`README.md` afirmava MIT.
+A auditoria detectou que o `LICENSE` da raiz era a **GNU GPL v3** enquanto o
+`package.json` declarava **MIT** — duas licenças incompatíveis para a mesma obra.
+**O responsável decidiu por GPL-3.0** e os três pontos foram alinhados. Detalhe abaixo.
 
-**São duas licenças incompatíveis descrevendo a mesma obra.** Detalhe na seção abaixo.
+---
+
+## ✅ DECISÃO TOMADA — GPL-3.0
+
+**Em 2026-08-21 o responsável pelo projeto decidiu: o licenciamento é GPL-3.0.**
+
+A contradição está resolvida. Os três pontos agora dizem a mesma coisa:
+
+| Onde | Valor |
+| --- | --- |
+| `LICENSE` | GNU GPL v3 (já estava, desde o commit inicial) |
+| `package.json` | `"license": "GPL-3.0-only"` |
+| `README.md` | GPL-3.0, com explicação do alcance |
+
+**O que isso significa na prática:**
+
+- Qualquer pessoa pode usar, estudar, modificar e redistribuir este servidor.
+- Quem **distribuir** uma versão modificada deve liberar o fonte dela sob GPL-3.0.
+- Rodar como SaaS **não** obriga a publicar nada: o gatilho da GPL-3.0 é a distribuição.
+  (Se a intenção fosse fechar essa porta também, a licença seria a **AGPL-3.0**.)
+- O **app Expo não é afetado**: HTTP entre processos independentes não cria obra derivada.
+- As 384 dependências (MIT/ISC/Apache-2.0/BSD/BlueOak/Python-2.0) são **compatíveis**
+  com a GPLv3. Não há conflito de entrada.
+
+**Dois pontos que ainda pedem atenção humana:**
+
+1. **`GPL-3.0-only` vs `GPL-3.0-or-later`.** Adotei `only`, que é o mais conservador e
+   fiel ao pedido literal. O `or-later` concederia automaticamente os termos de uma
+   futura GPLv4. Trocar é um caractere, se preferir.
+2. **Cabeçalho nos arquivos-fonte.** A FSF recomenda um bloco de licença no topo de cada
+   arquivo. Não foi adicionado para não poluir 25 arquivos sem pedido explícito — o
+   `LICENSE` na raiz já é juridicamente suficiente para a obra como um todo.
 
 ---
 
@@ -55,7 +86,9 @@ cabeçalho confirmado). Ao mesmo tempo, `package.json` declara `"license": "MIT"
 > Nenhuma dependência nesta faixa. A varredura dos 384 pacotes não encontrou uma única
 > licença copyleft.
 
-### Licenciamento do próprio repositório — ⚠️ **contradição a resolver**
+### Licenciamento do próprio repositório — ✅ **RESOLVIDO (GPL-3.0)**
+
+> Registro histórico da análise. O estado abaixo é o que existia ANTES da decisão.
 
 | Onde | O que declara | Consequência |
 | --- | --- | --- |
@@ -91,12 +124,12 @@ cabeçalho confirmado). Ao mesmo tempo, `package.json` declara `"license": "MIT"
 - **Não conflita com as dependências.** MIT, ISC, BSD e Apache-2.0 são todas compatíveis
   com a GPLv3 — não há incompatibilidade de entrada.
 
-**Como resolver — três caminhos, a decisão é do negócio:**
+**Os três caminhos analisados — o caminho B foi o escolhido:**
 
 | Caminho | O que fazer | Quando escolher |
 | --- | --- | --- |
 | **A — Proprietário** *(coerente com o modelo)* | Apagar o `LICENSE` GPL, criar um `LICENSE` proprietário ("Todos os direitos reservados"), definir `"license": "UNLICENSED"` e manter o repositório **privado** | O servidor é ativo comercial e não deve ser copiável |
-| **B — Manter GPL-3.0** | Corrigir `package.json` para `"GPL-3.0-only"` e assumir o software livre conscientemente | Há intenção real de abrir o código |
+| **B — Manter GPL-3.0** ✅ **ESCOLHIDO** | Corrigir `package.json` para `"GPL-3.0-only"` e assumir o software livre conscientemente | Há intenção real de abrir o código |
 | **C — MIT de fato** | Substituir o `LICENSE` pelo texto MIT | Quer permitir uso irrestrito, inclusive por concorrentes |
 
 > **Nota de transparência:** a declaração `"license": "MIT"` no `package.json` e no
@@ -168,13 +201,12 @@ resultado gerado. Não trate peso de modelo como se fosse código MIT.
 
 ## ✅ Plano de Mitigação
 
-1. **Decidir o licenciamento do repositório** (caminho A, B ou C acima) e alinhar os três
-   pontos: `LICENSE`, `package.json` e `README.md`. Enquanto houver contradição, existe
-   insegurança jurídica sobre um ativo comercial. **Verifique antes se o repositório é
-   público** — se for, a GPL-3.0 já foi concedida a quem clonou.
+1. ✅ **Licenciamento decidido: GPL-3.0.** `LICENSE`, `package.json` e `README.md`
+   alinhados. Nada mais pendente aqui.
 
-2. **Confirmar a visibilidade do repositório no GitHub.** Se o modelo for proprietário
-   (caminho A), o repositório precisa ser privado — não basta trocar o arquivo.
+2. **Opcional — cabeçalho de licença nos arquivos-fonte.** A FSF recomenda um bloco no
+   topo de cada `.ts`. O `LICENSE` na raiz já cobre a obra; o cabeçalho ajuda quando um
+   arquivo circula isolado.
 
 3. **Automatizar a auditoria de licenças no CI**, junto com a de vulnerabilidades, para
    que uma dependência copyleft seja barrada antes do merge — e não descoberta depois do

@@ -4,6 +4,7 @@
 ![TypeScript](https://img.shields.io/badge/typescript-5.7-3178C6?logo=typescript&logoColor=white)
 ![Express](https://img.shields.io/badge/express-5-000000?logo=express&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/license-GPL--3.0-green)
 
 API própria do **Snake Thai** — o servidor que guarda o que o aplicativo não pode
 guardar.
@@ -231,6 +232,49 @@ nos logs:
 > `/health` assim que abre a tela e usando um tempo de espera generoso com uma
 > mensagem honesta de carregamento.
 
+## 🔄 Integração contínua e publicação
+
+Toda alteração passa por uma esteira automática antes de chegar ao ar
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+| Etapa | O que verifica |
+| --- | --- |
+| **Qualidade** | Formatação, análise de código, tipos e a suíte de testes com cobertura |
+| **Segurança** | Vulnerabilidades conhecidas, licenças das dependências e arquivos de segredo versionados por engano |
+| **CodeQL** | Varredura estática em busca de padrões inseguros no código |
+| **Imagem** | Constrói a imagem, **sobe um contêiner de verdade** e exige resposta do `/health` |
+| **Publicação** | Só na branch `main`, e só depois que todas as anteriores passam |
+
+> **Por que a publicação automática da Render está desligada.** Com ela ligada, cada
+> envio ia direto para produção — inclusive código que não passou por nenhuma dessas
+> verificações. Existiriam dois caminhos até o ar, e o mais rápido seria justamente o
+> sem conferência. Agora existe um só, e ele passa pela esteira.
+
+**Para reverter uma publicação:** painel da Render → o serviço → aba *Deploys* →
+botão *Rollback* na versão anterior.
+
+### 🔐 O que precisa ser cadastrado no GitHub
+
+Nada disso pode ir para dentro de um arquivo do repositório.
+
+**Settings → Secrets and variables → Actions → aba _Secrets_:**
+
+| Nome | O que é | Onde obter |
+| --- | --- | --- |
+| `RENDER_DEPLOY_HOOK_URL` | Endereço secreto que dispara a publicação | Render → serviço → *Settings* → *Deploy Hook* → copiar a URL |
+
+**Aba _Variables_** (não são segredos, ficam visíveis no log):
+
+| Nome | O que é | Exemplo |
+| --- | --- | --- |
+| `RENDER_SERVICE_URL` | Endereço público do serviço, usado para conferir a saúde após publicar | `https://snakethai-api.onrender.com` |
+
+**E no painel da Render** (*Environment*), as variáveis da tabela acima — marcando
+`CLOUDINARY_API_SECRET` como *secret*.
+
+> Recomendado: em **Settings → Environments**, criar o ambiente `producao` e exigir
+> aprovação manual. A esteira já aponta para ele, então basta ativar a exigência.
+
 ## 📚 Documentação
 
 * [`docs/BACKEND.md`](docs/BACKEND.md) — especificação completa: arquitetura,
@@ -239,9 +283,12 @@ nos logs:
 
 ## 📄 Licença
 
-O arquivo [LICENSE](LICENSE) deste repositório contém a **GNU General Public License v3**.
+**GNU General Public License v3** — veja [LICENSE](LICENSE).
 
-> ⚠️ **Decisão pendente.** Para um backend proprietário servido como SaaS, nem a GPL-3.0
-> nem a MIT são adequadas — o indicado seria um licenciamento proprietário. A análise
-> completa, com os três caminhos possíveis e suas consequências, está em
-> [LICENSE_AUDIT.md](LICENSE_AUDIT.md).
+Software livre: qualquer pessoa pode usar, estudar, modificar e redistribuir este
+servidor. Quem distribuir uma versão modificada precisa disponibilizar o código-fonte
+dela sob a mesma licença.
+
+Isso vale para **este servidor**, e não para o aplicativo: o app conversa com a API por
+HTTP, como dois programas independentes, e mantém o licenciamento próprio. A análise
+completa está em [LICENSE_AUDIT.md](LICENSE_AUDIT.md).

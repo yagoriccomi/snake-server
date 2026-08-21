@@ -21,7 +21,14 @@ services:
     # Endpoint trivial e sem I/O: acorda rápido depois da hibernação. [#82]
     healthCheckPath: /health
 
-    autoDeploy: true
+    # DESLIGADO de proposito. Com autoDeploy ligado, a Render publica a
+    # cada push - inclusive de codigo que nao passou por lint, tipo, teste,
+    # auditoria de licenca ou validacao da imagem. Existiriam dois caminhos
+    # ate producao, e o mais rapido deles seria justamente o sem gate.
+    #
+    # Agora o deploy e disparado pelo job `deploy` do .github/workflows/ci.yml,
+    # que so roda depois que todos os outros passam. [#49][#77]
+    autoDeploy: false
 
     envVars:
       - key: NODE_ENV
