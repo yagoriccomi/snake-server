@@ -201,4 +201,68 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
 
     expect(registro.publicIdsVisualizados).toHaveLength(0);
   });
+
+  it('deveRecusarComprovanteQueAindaViveNoSupabaseStorage', async () => {
+    // Durante a convivência existem comprovantes nos DOIS provedores. Assinar
+    // um path do Storage como se fosse public_id da Cloudinary devolveria um
+    // link plausível e quebrado — em silêncio, para um dado financeiro.
+    // Recusar é a única resposta honesta. [#9]
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'supabase_storage',
+      proof_public_id: 'comprovantes/x/y',
+    });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it('naoDevePedirUrlAoProvedorQuandoOComprovanteEhDeOutroSistema', async () => {
+    // Não basta responder 403: a assinatura não pode nem ser tentada. Um
+    // adaptador chamado com identificador alheio pode registrar log, gastar
+    // cota ou devolver uma URL que vaze da função por outro caminho.
+    const { service, registro } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'supabase_storage',
+      proof_public_id: 'comprovantes/x/y',
+    });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toBeInstanceOf(
+      HttpError,
+    );
+    expect(registro.publicIdsVisualizados).toHaveLength(0);
+    expect(registro.publicIdsExtraidos).toHaveLength(0);
+  });
+
+  it('deveRecusarProvedorDesconhecidoEmVezDeAssumirQueEhCloudinary', async () => {
+    // Um provedor que este servidor não conhece (acrescentado no futuro, ou
+    // dado corrompido) não pode cair no caminho da Cloudinary por omissão.
+    // O padrão seguro é negar. [#55]
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'provedor-que-nao-existe',
+      proof_public_id: 'algo',
+    });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it('deveRecusarQuandoOProvedorEhNuloMesmoComPublicIdPreenchido', async () => {
+    // Estado que a constraint do banco recusa, mas o servidor não pode contar
+    // com isso: a linha pode vir de uma réplica antiga ou de um banco onde a
+    // migration ainda não rodou. Confiar em invariante de outro sistema é
+    // como confiar na RLS sem a segunda barreira. [#55]
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: null,
+      proof_public_id: 'comprovantes/x/y',
+    });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
 });

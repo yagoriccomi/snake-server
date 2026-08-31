@@ -126,7 +126,7 @@ variável `EXPO_PUBLIC_API_URL` do app.
 
 ## 🟡 Informações que faltam e afetam o código
 
-### P-8. Confirmar o formato real gravado em `payments.proof_url`
+### ~~P-8. Confirmar o formato real gravado em `payments.proof_url`~~ ✅ RESOLVIDA em 2026-08-31
 
 **Situação:** o nome da coluna diz "url", mas a especificação a usa como `public_id`.
 Sem acesso ao schema real, `extrairPublicId` (`src/modules/proofs/proofs.cloudinary.ts`)
@@ -135,9 +135,11 @@ aceita **os dois formatos**, por segurança: passar uma URL completa para
 
 **Por que não decidi:** é uma pergunta sobre o schema do app, não sobre este código.
 
-**O que fazer:** verificar no Supabase o que o app realmente grava nessa coluna e me
-avisar. Se for sempre `public_id`, a função encolhe para `return valorGravado.trim()` e
-quatro testes de URL saem junto. Se for sempre URL, a outra metade sai.
+**Resolvido:** o formato real era um TERCEIRO, que nenhuma das duas hipóteses
+previa — um path do Supabase Storage (`<user_id>/<payment_id>_<arquivo>`). A
+migration `20260831120000_proofs_cloudinary_contract` deu à coluna um contrato
+único e o faz valer por constraint; `extrairPublicId` encolheu para
+`valorGravado.trim()` e os testes de parsing de URL saíram junto.
 
 **Referência:** achado M-2 do [`../REVIEW.md`](../REVIEW.md).
 
@@ -251,15 +253,16 @@ todo. O cabeçalho ajuda quando um arquivo circula isolado.
 
 ## ⚪ Dívidas técnicas — sem urgência, registradas para não sumirem
 
-### P-15. `proofs.repository.ts` sem teste próprio
+### ~~P-15. `proofs.repository.ts` sem teste próprio~~ ✅ RESOLVIDA em 2026-08-31
 
 Cobertura de 14%. Os testes usam um dublê que imita o comportamento, então a montagem
 real do filtro (`{ id: 'eq.<uuid>' }`) e o `linhas[0] ?? null` nunca rodam de verdade.
 Um erro de digitação no nome da coluna passaria despercebido.
 
-**Custo da correção:** um teste de ~5 linhas com um `ClienteSupabase` falso.
-**Por que não fiz:** não é bloqueador e a etapa de testes já estava extensa. Posso
-fechar quando quiser.
+**Resolvido:** `tests/unit/proofs.repository.test.ts` — 8 casos com um
+`ClienteSupabase` falso que registra os argumentos, fazendo o código real do
+repositório rodar. Cobertura do arquivo: **14% → 100%**. Inclui o caso de um
+`paymentId` malicioso que tentaria escapar do parâmetro e reescrever a consulta.
 
 **Referência:** achado M-3 do [`../REVIEW.md`](../REVIEW.md).
 
@@ -287,6 +290,30 @@ preciso montar um `NOTICE`. O custo cresce com o número de dependências.
 **Referência:** [`../LICENSE_AUDIT.md`](../LICENSE_AUDIT.md).
 
 ---
+
+
+---
+
+### P-18. Liberar a entrega de PDF na conta da Cloudinary
+
+**Situação:** o app aceita comprovante em PDF (`PagamentoScreen` tem "Enviar PDF").
+O código está correto para isso e há teste travando o comportamento: a Cloudinary
+armazena PDF sob `resource_type: image`, que é exatamente o que
+`gerarUrlDeVisualizacao` usa e onde o upload com `auto` cai.
+
+**O que o teste NÃO alcança:** por padrão, contas da Cloudinary vêm com a entrega
+de PDF e ZIP **desabilitada** — uma trava de segurança da própria plataforma. Com
+ela desligada, a URL assinada de um comprovante em PDF responde **401**, mesmo
+estando tudo certo no código.
+
+**Por que não fiz:** é configuração de conta, e não tenho acesso ao painel.
+
+**O que fazer:** Cloudinary → Settings → Security → habilitar *Allow delivery of
+PDF and ZIP files*. Depois, subir um comprovante em PDF e abri-lo pela tela do
+admin — é o único teste que prova este ponto de ponta a ponta.
+
+**Alternativa, se preferir não habilitar:** restringir o envio a imagem no app
+(remover o botão "Enviar PDF"), o que muda o produto e precisa da sua decisão.
 
 ## 🧪 O que não pude verificar de verdade
 

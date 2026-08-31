@@ -117,4 +117,39 @@ describe('gerarUrlDeVisualizacao', () => {
 
     expect(url).not.toContain(CONFIG.apiSecret);
   });
+
+  it('deveEntregarPdfPelaMesmaRotaDeImagemPorqueEhAssimQueOProvedorOClassifica', () => {
+    /*
+     * O app aceita comprovante em PDF, e a URL é montada com
+     * `resource_type: 'image'` fixo. Isso PARECE errado e não é: a Cloudinary
+     * armazena PDF sob o resource_type `image` (é o que permite renderizar
+     * páginas como imagem), e o upload com `resource_type: 'auto'` — usado
+     * pelo script de migração — cai exatamente nesse mesmo bucket.
+     *
+     * Este teste trava o alinhamento entre as duas pontas. Se alguém "corrigir"
+     * a entrega para `raw` achando que PDF não é imagem, todo comprovante em
+     * PDF passa a devolver 404 — e o teste avisa antes do usuário.
+     *
+     * ⚠️ O que este teste NÃO prova: a entrega de PDF depende também de uma
+     * chave de conta na Cloudinary ("Allow delivery of PDF and ZIP files"),
+     * desligada por padrão. Ver P-18 em `docs/PENDENCIAS.md`.
+     */
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-em-pdf');
+
+    expect(url).toContain('/image/authenticated/');
+    expect(url).not.toContain('/raw/');
+  });
+
+  it('naoDeveAnexarExtensaoAoPublicIdPorqueOContratoNaoGuardaUma', () => {
+    // `proof_public_id` é gravado sem extensão. Se a URL acrescentasse uma, o
+    // asset procurado deixaria de existir.
+    //
+    // O caminho é comparado sem a query string: o SDK anexa um `?_a=...`
+    // próprio (telemetria dele). Ancorar o regex no fim da URL inteira
+    // quebraria por causa desse parâmetro, não por causa de extensão.
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
+    const caminho = url.split('?')[0] ?? '';
+
+    expect(caminho).toMatch(/\/comprovantes\/aluno-1\/pagamento-9$/);
+  });
 });
