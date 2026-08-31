@@ -4,7 +4,12 @@ Tudo que **não pôde ser executado ou decidido** durante a construção do serv
 o motivo. Nada aqui foi esquecido — cada item está registrado porque depende de um
 acesso, de uma informação ou de uma decisão que estão fora do meu alcance.
 
-**Atualizado em:** 2026-08-21
+**Atualizado em:** 2026-08-31
+
+> **Guia operacional:** os itens que dependem de você (P-1, P-2, P-4, P-5, P-6,
+> P-7, P-18) estão consolidados, na ordem de execução, em
+> [`DEPLOY.md`](DEPLOY.md). Este documento continua sendo o registro do porquê
+> de cada pendência; aquele é o passo a passo.
 **Estado do projeto:** branch `feature/servidor-docker` · 193 testes passando ·
 cobertura 95,16% · imagem Docker validada · `npm audit` limpo.
 
