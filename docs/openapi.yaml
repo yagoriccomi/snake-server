@@ -152,6 +152,18 @@ paths:
         resposta é `403` — a mesma resposta que você receberia se o pagamento não
         existisse. A indistinção é proposital: separar os dois casos entregaria a um
         curioso uma forma de descobrir quais pagamentos existem.
+
+        **Também responde `403` quando o comprovante ainda está no Supabase Storage**
+        (`proof_provider` diferente de `cloudinary`). Durante a migração existem
+        arquivos nos dois provedores, e este endpoint só assina os da Cloudinary.
+        Assinar um identificador de outro sistema devolveria uma URL bem formada
+        apontando para um arquivo inexistente — link quebrado, em silêncio, sobre
+        dado financeiro. Nesse caso, o cliente deve usar a URL assinada do próprio
+        Storage.
+
+        O caminho do arquivo é **derivado** do pagamento (`comprovantes/<user_id>/<paymentId>`),
+        não lido da coluna: o valor gravado é editável por quem é dono da linha, e
+        confiar nele permitiria apontar para o comprovante de outro titular.
       requestBody:
         required: true
         content:
