@@ -140,7 +140,11 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   });
 
   it('deveNegarComForbiddenQuandoOPagamentoExisteMasNaoTemComprovante', async () => {
-    const { service } = criarCenario({ user_id: USUARIO_DO_TOKEN, proof_url: null });
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'cloudinary',
+      proof_public_id: null,
+    });
 
     await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
       status: 403,
@@ -148,7 +152,11 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   });
 
   it('deveNegarComForbiddenQuandoOComprovanteEhStringVazia', async () => {
-    const { service } = criarCenario({ user_id: USUARIO_DO_TOKEN, proof_url: '' });
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'cloudinary',
+      proof_public_id: '',
+    });
 
     await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
       status: 403,
@@ -160,7 +168,8 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
     // não tem como reconhecer o dono — a autorização inteira desmorona. [#20]
     const { service, registro } = criarCenario({
       user_id: USUARIO_DO_TOKEN,
-      proof_url: 'comprovantes/x/y',
+      proof_provider: 'cloudinary',
+      proof_public_id: 'comprovantes/x/y',
     });
 
     await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
@@ -173,7 +182,8 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   it('deveNormalizarOValorGravadoAntesDePedirAUrlAssinada', async () => {
     const { service, registro } = criarCenario({
       user_id: USUARIO_DO_TOKEN,
-      proof_url: 'comprovantes/x/y',
+      proof_provider: 'cloudinary',
+      proof_public_id: 'comprovantes/x/y',
     });
 
     const url = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);

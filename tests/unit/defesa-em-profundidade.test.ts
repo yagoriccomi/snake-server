@@ -69,7 +69,11 @@ afterEach(() => {
 });
 
 describe('política `somente-dono` — postura mais dura', () => {
-  const pagamentoAlheio: RegistroDePagamento = { user_id: DONO, proof_url: 'comprovantes/a/b' };
+  const pagamentoAlheio: RegistroDePagamento = {
+    user_id: DONO,
+    proof_provider: 'cloudinary',
+    proof_public_id: 'comprovantes/a/b',
+  };
 
   it('deveNegarComForbiddenQuandoARlsLiberaComprovanteDeOutroUsuario', async () => {
     capturarStderr();
@@ -111,7 +115,11 @@ describe('política `somente-dono` — postura mais dura', () => {
 });
 
 describe('política `rls` — padrão, preserva o administrador previsto na spec', () => {
-  const pagamentoAlheio: RegistroDePagamento = { user_id: DONO, proof_url: 'comprovantes/a/b' };
+  const pagamentoAlheio: RegistroDePagamento = {
+    user_id: DONO,
+    proof_provider: 'cloudinary',
+    proof_public_id: 'comprovantes/a/b',
+  };
 
   it('devePermitirOAcessoQuandoARlsLiberouPorqueOChamadorPodeSerAdmin', async () => {
     // A spec (docs/BACKEND.md §6) prevê o admin vendo comprovante alheio.

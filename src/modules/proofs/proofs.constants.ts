@@ -18,4 +18,15 @@ export const TIPO_ENTREGA_PRIVADO = 'authenticated';
 
 /** Tabela e colunas lidas via PostgREST, com a RLS decidindo o acesso. */
 export const TABELA_PAGAMENTOS = 'payments';
-export const COLUNAS_DO_PAGAMENTO = 'user_id,proof_url';
+
+/**
+ * `proof_provider` entra na projeção porque o servidor precisa saber se o
+ * arquivo daquele pagamento é dele para servir. Comprovante ainda no Supabase
+ * Storage (legado, de um APK antigo) NÃO é assinável pela Cloudinary: sem esta
+ * coluna, o servidor devolveria uma URL montada sobre um identificador de
+ * outro sistema — um link quebrado, em silêncio, para um dado financeiro.
+ */
+export const COLUNAS_DO_PAGAMENTO = 'user_id,proof_provider,proof_public_id';
+
+/** Valor de `proof_provider` que este servidor sabe entregar. */
+export const PROVEDOR_CLOUDINARY = 'cloudinary';

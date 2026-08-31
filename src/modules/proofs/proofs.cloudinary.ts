@@ -23,14 +23,6 @@ export interface ConfigDeMidia {
   apiSecret: string;
 }
 
-/** Detecta se o valor gravado já é um `public_id` em vez de uma URL de entrega. */
-const EH_URL = /^https?:\/\//i;
-
-/** Formato de entrega: `/<cloud>/<resource_type>/<type>/v<versao>/<public_id>.<ext>` */
-const APOS_A_VERSAO = /\/v\d+\/(.+)$/;
-const EXTENSAO_FINAL = /\.[A-Za-z0-9]{2,5}$/;
-const SEGMENTOS_ANTES_DO_PUBLIC_ID = 4;
-
 /**
  * Cria o adaptador já configurado.
  *
@@ -77,31 +69,22 @@ export function criarAssinadorCloudinary(config: ConfigDeMidia): AssinadorDeMidi
     },
 
     /**
-     * Normaliza o que está gravado em `payments.proof_url`.
+     * Normaliza o identificador vindo do banco.
      *
-     * ⚠️ PENDENTE DE CONFIRMAÇÃO: o nome da coluna diz "url", mas a
-     * especificação a usa como `public_id`. Sem acesso ao schema real do app,
-     * aceitar os dois formatos é a escolha conservadora — passar uma URL
-     * completa para `cloudinary.url()` produziria um link quebrado em silêncio,
-     * e o dado em jogo é financeiro. Se o schema confirmar um formato único,
-     * esta função encolhe para um `return valorGravado.trim()`.
+     * A ambiguidade que esta função existia para absorver ACABOU. A migration
+     * `20260831120000_proofs_cloudinary_contract` deu à coluna um contrato
+     * único e o fez valer no banco: `proof_public_id` guarda sempre
+     * `comprovantes/<user_id>/<payment_id>` — nunca uma URL, nunca com
+     * extensão — e uma CHECK constraint recusa qualquer linha incoerente.
+     *
+     * Com o formato garantido na origem, o parser de URL virou código morto:
+     * ele só poderia agir sobre um valor que o banco não aceita mais. Mantê-lo
+     * daria a impressão falsa de que os dois formatos ainda circulam. [#12][#7]
+     *
+     * Fecha a pendência P-8 de `docs/PENDENCIAS.md`.
      */
     extrairPublicId(valorGravado: string): string {
-      const valor = valorGravado.trim();
-      if (!EH_URL.test(valor)) return valor;
-
-      let caminho: string;
-      try {
-        caminho = new URL(valor).pathname;
-      } catch {
-        return valor;
-      }
-
-      const comVersao = APOS_A_VERSAO.exec(caminho);
-      const bruto =
-        comVersao?.[1] ?? caminho.split('/').slice(SEGMENTOS_ANTES_DO_PUBLIC_ID).join('/');
-
-      return bruto.replace(EXTENSAO_FINAL, '');
+      return valorGravado.trim();
     },
   };
 }

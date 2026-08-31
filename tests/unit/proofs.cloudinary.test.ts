@@ -29,36 +29,16 @@ describe('extrairPublicId', () => {
     expect(assinador.extrairPublicId('  comprovantes/aluno-1/x  ')).toBe('comprovantes/aluno-1/x');
   });
 
-  it('deveExtrairOPublicIdDeUmaUrlCompletaComVersao', () => {
-    const url =
-      'https://res.cloudinary.com/nuvem/image/authenticated/s--AbC123--/v1700000000/comprovantes/aluno-1/pagamento-9.jpg';
-
-    expect(assinador.extrairPublicId(url)).toBe('comprovantes/aluno-1/pagamento-9');
-  });
-
-  it('deveExtrairOPublicIdDeUmaUrlSemVersao', () => {
-    const url =
-      'https://res.cloudinary.com/nuvem/image/authenticated/comprovantes/aluno-1/pagamento-9.png';
-
-    expect(assinador.extrairPublicId(url)).toBe('comprovantes/aluno-1/pagamento-9');
-  });
-
-  it('deveExtrairOPublicIdDeUmaUrlDeEntregaPublica', () => {
-    // Comprovante antigo pode ter sido gravado como `upload` antes da política
-    // de asset privado — o adaptador ainda precisa saber lê-lo.
-    const url = 'https://res.cloudinary.com/nuvem/image/upload/v123/comprovantes/aluno-1/x.jpg';
-
-    expect(assinador.extrairPublicId(url)).toBe('comprovantes/aluno-1/x');
-  });
-
   it('devePreservarPontosQueNaoSaoExtensaoDeArquivo', () => {
     expect(assinador.extrairPublicId('comprovantes/aluno.silva/pagamento-9')).toBe(
       'comprovantes/aluno.silva/pagamento-9',
     );
   });
 
-  it('deveDevolverOValorOriginalQuandoAUrlEhInvalida', () => {
-    // Não pode explodir por causa de dado torto vindo do banco.
+  it('deveDevolverOValorGravadoSemInterpretarQuandoEleNaoEhUmPublicId', () => {
+    // O contrato do banco garante o formato; o adaptador não tenta adivinhar
+    // nem "consertar" nada. Dado torto sai como entrou, e quebra na Cloudinary
+    // — visível — em vez de virar um link plausível e errado, em silêncio.
     expect(assinador.extrairPublicId('https://[url-quebrada')).toBe('https://[url-quebrada');
   });
 

@@ -57,7 +57,8 @@ export function criarSupabaseFalso(espioes: Espioes): ClienteSupabase {
       // Simula a RLS: só devolve linha para o pagamento do próprio dono.
       const linha: RegistroDePagamento = {
         user_id: USUARIO_DONO.id,
-        proof_url: PUBLIC_ID_GRAVADO,
+        proof_provider: 'cloudinary',
+        proof_public_id: PUBLIC_ID_GRAVADO,
       };
       return filtros.id === `eq.${PAGAMENTO_DO_DONO}` ? ([linha] as T[]) : [];
     },

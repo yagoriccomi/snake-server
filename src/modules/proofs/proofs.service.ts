@@ -1,6 +1,10 @@
 import { semAcesso } from '../../lib/http-error.js';
 import { logger } from '../../lib/logger.js';
-import { PASTA_COMPROVANTES, TIPO_ENTREGA_PRIVADO } from './proofs.constants.js';
+import {
+  PASTA_COMPROVANTES,
+  PROVEDOR_CLOUDINARY,
+  TIPO_ENTREGA_PRIVADO,
+} from './proofs.constants.js';
 
 /**
  * Regra de negócio dos comprovantes. Camada sem Express e sem SDK: recebe
@@ -34,7 +38,10 @@ export interface AssinadorDeMidia {
 
 export interface RegistroDePagamento {
   user_id: string;
-  proof_url: string | null;
+  /** Onde o arquivo está: `cloudinary` ou `supabase_storage` (legado). */
+  proof_provider: string | null;
+  /** Identificador na Cloudinary. Nulo quando o comprovante é legado. */
+  proof_public_id: string | null;
 }
 
 /** Contrato de leitura de pagamentos — a implementação real passa pela RLS. */
@@ -141,13 +148,20 @@ export function criarProofsService(deps: DependenciasDeProofs) {
       // Vazio ou sem comprovante: a RLS não liberou. 403 sem distinguir
       // "não existe" de "não é seu" — o contrário seria um oráculo de
       // enumeração para quem varre ids. [#55]
-      if (!pagamento?.proof_url) {
+      if (!pagamento?.proof_public_id) {
+        throw semAcesso();
+      }
+
+      // Comprovante de outro provedor não é assinável aqui. Recusar é a única
+      // resposta honesta: assinar assim mesmo devolveria um link quebrado
+      // apontando para um arquivo que não existe na Cloudinary. [#9]
+      if (pagamento.proof_provider !== PROVEDOR_CLOUDINARY) {
         throw semAcesso();
       }
 
       conferirDono(pagamento, chamador);
 
-      const publicId = deps.midia.extrairPublicId(pagamento.proof_url);
+      const publicId = deps.midia.extrairPublicId(pagamento.proof_public_id);
       return deps.midia.gerarUrlDeVisualizacao(publicId);
     },
   };
