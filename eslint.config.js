@@ -54,6 +54,17 @@ export default tseslint.config(
   },
 
   {
+    /*
+     * Scripts operacionais são CLIs: uma pessoa os roda no terminal e lê a
+     * saída enquanto eles avançam. Aqui o stdout É o produto, não um resto de
+     * depuração — o logger JSON estruturado do servidor serve a outro público
+     * (a ferramenta de observabilidade), não a este. [#91][#92]
+     */
+    files: ['scripts/**/*.ts'],
+    rules: { 'no-console': 'off' },
+  },
+
+  {
     files: ['tests/**/*.ts'],
     rules: {
       /*
