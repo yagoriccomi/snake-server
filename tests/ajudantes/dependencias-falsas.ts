@@ -77,7 +77,6 @@ export function criarMidiaFalsa(): AssinadorDeMidia {
       };
     },
     gerarUrlDeVisualizacao: () => URL_ASSINADA_FALSA,
-    extrairPublicId: (valorGravado) => valorGravado,
   };
 }
 

@@ -33,7 +33,6 @@ const midia: AssinadorDeMidia = {
     uploadUrl: 'u',
   }),
   gerarUrlDeVisualizacao: (id) => `https://url-assinada/${id}`,
-  extrairPublicId: (v) => v,
 };
 
 /** Simula uma RLS QUEBRADA: devolve o pagamento independentemente de quem pede. */

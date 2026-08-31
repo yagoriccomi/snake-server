@@ -18,35 +18,6 @@ const CONFIG = {
 
 const assinador = criarAssinadorCloudinary(CONFIG);
 
-describe('extrairPublicId', () => {
-  it('deveDevolverOValorIntactoQuandoJaEhUmPublicId', () => {
-    expect(assinador.extrairPublicId('comprovantes/aluno-1/pagamento-9')).toBe(
-      'comprovantes/aluno-1/pagamento-9',
-    );
-  });
-
-  it('deveRemoverEspacosAoRedorDoValorGravado', () => {
-    expect(assinador.extrairPublicId('  comprovantes/aluno-1/x  ')).toBe('comprovantes/aluno-1/x');
-  });
-
-  it('devePreservarPontosQueNaoSaoExtensaoDeArquivo', () => {
-    expect(assinador.extrairPublicId('comprovantes/aluno.silva/pagamento-9')).toBe(
-      'comprovantes/aluno.silva/pagamento-9',
-    );
-  });
-
-  it('deveDevolverOValorGravadoSemInterpretarQuandoEleNaoEhUmPublicId', () => {
-    // O contrato do banco garante o formato; o adaptador não tenta adivinhar
-    // nem "consertar" nada. Dado torto sai como entrou, e quebra na Cloudinary
-    // — visível — em vez de virar um link plausível e errado, em silêncio.
-    expect(assinador.extrairPublicId('https://[url-quebrada')).toBe('https://[url-quebrada');
-  });
-
-  it('deveDevolverStringVaziaSemQuebrarQuandoOValorEhVazio', () => {
-    expect(assinador.extrairPublicId('   ')).toBe('');
-  });
-});
-
 describe('assinarUpload', () => {
   const parametros = {
     folder: 'comprovantes/aluno-1',

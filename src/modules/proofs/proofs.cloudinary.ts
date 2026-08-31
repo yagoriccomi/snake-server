@@ -67,24 +67,5 @@ export function criarAssinadorCloudinary(config: ConfigDeMidia): AssinadorDeMidi
         resource_type: 'image',
       });
     },
-
-    /**
-     * Normaliza o identificador vindo do banco.
-     *
-     * A ambiguidade que esta função existia para absorver ACABOU. A migration
-     * `20260831120000_proofs_cloudinary_contract` deu à coluna um contrato
-     * único e o fez valer no banco: `proof_public_id` guarda sempre
-     * `comprovantes/<user_id>/<payment_id>` — nunca uma URL, nunca com
-     * extensão — e uma CHECK constraint recusa qualquer linha incoerente.
-     *
-     * Com o formato garantido na origem, o parser de URL virou código morto:
-     * ele só poderia agir sobre um valor que o banco não aceita mais. Mantê-lo
-     * daria a impressão falsa de que os dois formatos ainda circulam. [#12][#7]
-     *
-     * Fecha a pendência P-8 de `docs/PENDENCIAS.md`.
-     */
-    extrairPublicId(valorGravado: string): string {
-      return valorGravado.trim();
-    },
   };
 }

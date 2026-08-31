@@ -33,14 +33,17 @@ export interface UploadAssinado extends ParametrosDeUpload {
 export interface AssinadorDeMidia {
   assinarUpload(parametros: ParametrosDeUpload): UploadAssinado;
   gerarUrlDeVisualizacao(publicId: string): string;
-  extrairPublicId(valorGravado: string): string;
 }
 
 export interface RegistroDePagamento {
   user_id: string;
   /** Onde o arquivo está: `cloudinary` ou `supabase_storage` (legado). */
   proof_provider: string | null;
-  /** Identificador na Cloudinary. Nulo quando o comprovante é legado. */
+  /**
+   * Identificador na Cloudinary. Serve como FLAG de existência ("há
+   * comprovante?"), não como fonte do caminho: o caminho é derivado do par
+   * verificado. Ver C-2 no `REVIEW.md`.
+   */
   proof_public_id: string | null;
 }
 
@@ -161,7 +164,23 @@ export function criarProofsService(deps: DependenciasDeProofs) {
 
       conferirDono(pagamento, chamador);
 
-      const publicId = deps.midia.extrairPublicId(pagamento.proof_public_id);
+      /*
+       * O identificador é DERIVADO, nunca lido.
+       *
+       * `proof_public_id` é gravável pelo aluno no próprio pagamento — a RLS
+       * libera porque a linha é dele. Assinar o valor gravado deixaria ele
+       * apontar para `comprovantes/<outro_aluno>/<outro_pagamento>` e receber,
+       * com uma URL válida, o comprovante de outro titular. A consulta acima
+       * não pega isso: o pagamento É dele; o que está adulterado é o ponteiro.
+       *
+       * O caminho é determinístico e as duas metades já foram verificadas — o
+       * `user_id` vem da linha (coluna que o aluno não pode alterar) e o
+       * `paymentId` é o mesmo que a RLS acabou de autorizar. Derivando, um
+       * ponteiro adulterado no banco simplesmente não tem efeito.
+       *
+       * Achado C-2 do `REVIEW.md`. [#55]
+       */
+      const publicId = `${PASTA_COMPROVANTES}/${pagamento.user_id}/${paymentId}`;
       return deps.midia.gerarUrlDeVisualizacao(publicId);
     },
   };
