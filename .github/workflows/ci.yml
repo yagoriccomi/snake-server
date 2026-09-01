@@ -175,7 +175,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Preparar o Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Construir a imagem de produção
         uses: docker/build-push-action@v6
