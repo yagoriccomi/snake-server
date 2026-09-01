@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────
+#  Segredos — NADA daqui pode chegar ao Git, nem em repo privado
+# ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# ─────────────────────────────────────────────────────────────
+#  Dependências e build
+# ─────────────────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.npm/
+.yarn/
+.pnp.*
+
+# ─────────────────────────────────────────────────────────────
+#  Testes e cobertura
+# ─────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+
+# ─────────────────────────────────────────────────────────────
+#  Logs e temporários
+# ─────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+tmp/
+temp/
+.cache/
+
+# ─────────────────────────────────────────────────────────────
+#  Ferramentas e editores
+# ─────────────────────────────────────────────────────────────
+.eslintcache
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+*.swp
+
+# ─────────────────────────────────────────────────────────────
+#  Sistema operacional
+# ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini

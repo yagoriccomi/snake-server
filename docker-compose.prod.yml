@@ -1,0 +1,51 @@
+# =============================================================
+#  Simulação local de PRODUÇÃO — paridade de ambientes [#81]
+#  Sobe exatamente a imagem que vai para a Render (stage `runtime`):
+#  sem TypeScript, sem devDependencies, sem bind mount, como não-root.
+#
+#  Uso:  scripts\dev.bat prod     (ou)  ./scripts/dev.sh prod
+#  Cru:  docker compose -f docker-compose.prod.yml up -d --build
+# =============================================================
+
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    image: snakethai-api:prod
+    container_name: snakethai-api-prod
+    restart: unless-stopped
+
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      LOG_LEVEL: info
+
+    ports:
+      - '127.0.0.1:${PORT_PROD:-3001}:3000'
+
+    # Sem volumes: a imagem é imutável, como em produção.
+
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+    # Endurecimento básico do container — menor privilégio. [#55]
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

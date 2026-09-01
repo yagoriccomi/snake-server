@@ -1,0 +1,33 @@
+# =============================================================
+#  Normalização de fim de linha — paridade entre Windows e Linux [#81]
+#
+#  Sem isto, um `dev.sh` ou um hook do Husky salvos no Windows chegam
+#  ao container Linux com CRLF e falham com o clássico e ilegível
+#  "bad interpreter: no such file or directory".
+# =============================================================
+
+# Padrão: o Git normaliza para LF no repositório.
+* text=auto eol=lf
+
+# Scripts que PRECISAM de LF para rodar em Linux/Docker.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+
+# Scripts do Windows precisam de CRLF para o interpretador de lote.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+
+# Binários: nunca normalizar.
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.pdf           binary
+*.woff          binary
+*.woff2         binary
+
+# O lockfile é gerado: mantém o diff fora da revisão humana.
+package-lock.json  -diff linguist-generated

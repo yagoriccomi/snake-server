@@ -1,0 +1,27 @@
+# =============================================================
+#  Configuração do lint da especificação OpenAPI.
+#
+#  Duas regras da configuração recomendada são desligadas aqui —
+#  com justificativa, e não por conveniência. Warning silenciado
+#  sem explicação vira warning ignorado por hábito.
+# =============================================================
+
+apis:
+  snakethai-api:
+    root: docs/openapi.yaml
+
+extends:
+  - recommended
+
+rules:
+  # O projeto sobe de verdade em http://localhost:3000 via Docker Compose,
+  # e essa é a URL que quem desenvolve realmente usa. A regra existe para
+  # pegar especificação publicada com servidor de exemplo esquecido — não
+  # é o caso: o servidor de produção está declarado logo acima dele.
+  no-server-example.com: off
+
+  # `GET /health` não tem resposta 4xx porque não pode ter: é pública (não
+  # há 401), não recebe corpo nem parâmetro (não há 400), e está fora do
+  # limite de requisições de propósito (não há 429). Inventar um 4xx só
+  # para satisfazer a regra tornaria a documentação MENOS verdadeira.
+  operation-4xx-response: off

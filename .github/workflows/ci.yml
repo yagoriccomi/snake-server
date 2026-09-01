@@ -1,0 +1,298 @@
+# =============================================================
+#  CI — o gate que protege a branch principal
+#
+#  Antes desta esteira existir, o `autoDeploy` da Render enviava
+#  qualquer push direto para produção, sem lint, sem tipo e sem
+#  teste. Aqui está a barreira: código que não passa não é
+#  publicado. [#49][#76]
+# =============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, 'feature/**', 'bugfix/**', 'chore/**', 'refactor/**']
+  pull_request:
+    branches: [main]
+
+# Um push novo na mesma branch cancela a execução anterior:
+# não vale gastar minuto de runner validando código já substituído.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Menor privilégio: por padrão o token não escreve nada. [#55]
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # ───────────────────────────────────────────────────────────
+  #  Qualidade — o mesmo gate que o hook de pre-commit aplica
+  #  localmente. Aqui ele é obrigatório, e não opcional. [#5][#49]
+  # ───────────────────────────────────────────────────────────
+  qualidade:
+    name: Qualidade e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar o Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # Cache do npm: o pipeline precisa ser rápido o bastante
+          # para ninguém ter vontade de pulá-lo.
+          cache: npm
+
+      - name: Instalar dependências
+        # `npm ci` respeita o lockfile à risca — build reproduzível.
+        run: npm ci
+
+      - name: Verificar formatação
+        run: npm run format:check
+
+      - name: Analisar o código (ESLint)
+        run: npm run lint
+
+      - name: Verificar tipos
+        # Roda no projeto inteiro, inclusive tests/: uma mudança de tipo
+        # que quebre um teste aparece aqui, não no merge. [#11]
+        run: npm run typecheck
+
+      - name: Rodar a suíte de testes com cobertura
+        # Sem --passWithNoTests de propósito: suíte ausente é falha. [#49]
+        run: npm run test:coverage
+
+      - name: Validar a especificação OpenAPI
+        # Documentação fora de sincronia engana mais do que documentação
+        # ausente: quem lê confia nela. O lint garante que a spec continua
+        # sendo um documento válido a cada mudança.
+        run: npx --yes @redocly/cli@latest lint docs/openapi.yaml
+
+      - name: Publicar o relatório de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura
+          path: coverage/
+          retention-days: 7
+
+  # ───────────────────────────────────────────────────────────
+  #  Segurança e cadeia de suprimentos [#62][#64]
+  # ───────────────────────────────────────────────────────────
+  seguranca:
+    name: Segurança e licenças
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar o Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Auditar vulnerabilidades nas dependências de produção
+        # Só `--omit=dev`: uma falha numa ferramenta de desenvolvimento não
+        # chega ao usuário, e travar o pipeline por ela vira ruído ignorado.
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Auditar vulnerabilidades de desenvolvimento (informativo)
+        # Não bloqueia, mas fica registrado no log para acompanhamento.
+        run: npm audit --audit-level=critical || true
+
+      - name: Auditar licenças das dependências de produção
+        # Allowlist derivada do LICENSE_AUDIT.md. Uma dependência copyleft
+        # que entre pela porta dos fundos (transitiva) trava o merge aqui,
+        # em vez de ser descoberta depois do deploy. [#62]
+        run: |
+          npx --yes license-checker-rseidelsohn@4 \
+            --production \
+            --excludePrivatePackages \
+            --onlyAllow "MIT;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause;BlueOak-1.0.0;0BSD;Unlicense;CC0-1.0;Python-2.0" \
+            --summary
+
+      - name: Verificar se algum segredo escapou para o repositório
+        # Rede de segurança do .gitignore: se um .env ou chave privada for
+        # commitado, o pipeline reprova antes de o merge acontecer. [#37]
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production|development)$|\.pem$|\.key$|\.p12$|\.pfx$'; then
+            echo "::error::Arquivo de segredo versionado. Remova do índice antes de seguir."
+            exit 1
+          fi
+          echo "Nenhum arquivo de segredo versionado."
+
+  # ───────────────────────────────────────────────────────────
+  #  Análise estática de segurança do código-fonte [#64]
+  # ───────────────────────────────────────────────────────────
+  codeql:
+    name: CodeQL (SAST)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Inicializar o CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+
+      - name: Executar a análise
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
+
+  # ───────────────────────────────────────────────────────────
+  #  Imagem Docker — não basta compilar, tem que SUBIR
+  # ───────────────────────────────────────────────────────────
+  docker:
+    name: Imagem Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [qualidade]
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar o Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construir a imagem de produção
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: false
+          load: true
+          tags: snakethai-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Provar que a imagem realmente sobe e responde
+        # Uma imagem que compila mas não inicia passa despercebida num
+        # pipeline que só faz `docker build`. Aqui ela precisa atender
+        # o /health de verdade antes de a esteira aprovar. [#82]
+        run: |
+          set -euo pipefail
+
+          docker run -d --name teste-ci \
+            -e SUPABASE_URL="https://exemplo.supabase.co" \
+            -e SUPABASE_ANON_KEY="valor-ficticio-de-ci" \
+            -e CLOUDINARY_CLOUD_NAME="nuvem-de-ci" \
+            -e CLOUDINARY_API_KEY="000000000000000" \
+            -e CLOUDINARY_API_SECRET="valor-ficticio-de-ci" \
+            -p 127.0.0.1:3000:3000 \
+            snakethai-api:ci
+
+          echo "Aguardando o servidor responder..."
+          for tentativa in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/health > /tmp/health.json 2>/dev/null; then
+              echo "Resposta do /health: $(cat /tmp/health.json)"
+              grep -q '"ok":true' /tmp/health.json
+              echo "Imagem validada."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::A imagem subiu mas o /health não respondeu em 60s."
+          docker logs teste-ci
+          exit 1
+
+      - name: Conferir que o container não roda como root
+        # Menor privilégio verificado, não presumido. [#55]
+        run: |
+          set -euo pipefail
+          usuario=$(docker exec teste-ci whoami)
+          echo "Usuário do processo: $usuario"
+          if [ "$usuario" = "root" ]; then
+            echo "::error::O container está rodando como root."
+            exit 1
+          fi
+
+      - name: Recolher o container de teste
+        if: always()
+        run: docker rm -f teste-ci || true
+
+  # ───────────────────────────────────────────────────────────
+  #  Deploy — só na main, e só depois de TUDO passar [#49][#77]
+  # ───────────────────────────────────────────────────────────
+  deploy:
+    name: Publicar na Render
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [qualidade, seguranca, codeql, docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    # O ambiente permite exigir aprovação manual e restringe quem
+    # enxerga o segredo do deploy. Configure em Settings → Environments.
+    environment:
+      name: producao
+      url: ${{ vars.RENDER_SERVICE_URL }}
+
+    steps:
+      - name: Disparar o deploy
+        # O `render.yaml` tem `autoDeploy: false` de propósito: se ele
+        # estivesse ligado, existiriam DOIS caminhos até produção — e um
+        # deles ignoraria tudo que esta esteira acabou de verificar.
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_HOOK:-}" ]; then
+            echo "::error::Secret RENDER_DEPLOY_HOOK_URL não configurado. Veja o README."
+            exit 1
+          fi
+          # A URL do hook é o próprio segredo — nunca ecoada no log.
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$DEPLOY_HOOK")
+          echo "Render respondeu HTTP $codigo"
+          if [ "$codigo" != "200" ] && [ "$codigo" != "201" ]; then
+            echo "::error::A Render recusou o disparo do deploy."
+            exit 1
+          fi
+
+      - name: Verificar a saúde do serviço publicado
+        # A Render hiberna no plano free e o build leva tempo: por isso a
+        # espera é generosa e a primeira resposta pode demorar. [#82]
+        env:
+          SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SERVICE_URL:-}" ]; then
+            echo "::warning::Variável RENDER_SERVICE_URL não configurada; pulando a verificação."
+            exit 0
+          fi
+
+          echo "Aguardando o deploy ficar saudável..."
+          for tentativa in $(seq 1 40); do
+            if curl -fsS --max-time 70 "$SERVICE_URL/health" | grep -q '"ok":true'; then
+              echo "Serviço no ar e saudável."
+              exit 0
+            fi
+            echo "  tentativa $tentativa/40..."
+            sleep 15
+          done
+
+          echo "::error::O serviço não respondeu saudável após o deploy."
+          echo "Rollback: painel da Render → serviço → Deploys → 'Rollback' no deploy anterior."
+          exit 1

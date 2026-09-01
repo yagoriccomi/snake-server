@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+# ============================================================
+#  Gate de qualidade LOCAL — a mesma barreira que o CI repete.
+#  Barrar aqui custa segundos; barrar no CI custa um ciclo inteiro.
+# ============================================================
+
+# 1. Lint + format apenas nos arquivos em stage (rapido). [#5]
+npx --no-install lint-staged || exit 1
+
+# 2. Typecheck do projeto inteiro: uma mudanca em um arquivo pode
+#    quebrar o tipo de outro que nao esta em stage. [#11]
+echo "-> verificando tipos..."
+npm run typecheck || exit 1
+
+# 3. Suite de testes. [#49]
+#    Sem --passWithNoTests: a suite existe, e "nenhum teste encontrado"
+#    passa a ser sintoma de suite sumida, nao estado aceitavel.
+echo "-> rodando testes..."
+npx --no-install vitest run || exit 1

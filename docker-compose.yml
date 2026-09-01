@@ -1,0 +1,55 @@
+# =============================================================
+#  Ambiente local de DESENVOLVIMENTO — hot reload
+#  Suba com:  scripts\dev.bat start   (ou)   ./scripts/dev.sh start
+#
+#  NÃO há banco/cache aqui de propósito: os dados deste produto
+#  vivem no Supabase (remoto, com RLS) e o servidor não tem
+#  persistência própria. Subir um Postgres local seria teatro. [#8]
+# =============================================================
+
+services:
+  api:
+    build:
+      context: .
+      target: dev # stage de desenvolvimento do Dockerfile
+    image: snakethai-api:dev
+    container_name: snakethai-api-dev
+    restart: unless-stopped
+
+    # Config exclusivamente por variável de ambiente — zero segredo no compose. [#80][#37]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+
+    ports:
+      # Publica só em 127.0.0.1: nada de expor a API para a rede local. [#55]
+      - '127.0.0.1:${PORT:-3000}:3000'
+
+    volumes:
+      # Bind mount read-only: o tsx recompila ao salvar, e o container
+      # não consegue escrever de volta no seu código-fonte. [#55]
+      - ./src:/app/src:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./tsconfig.build.json:/app/tsconfig.build.json:ro
+      - ./package.json:/app/package.json:ro
+      # Volume anônimo protege o node_modules do container de ser
+      # sobrescrito pelo node_modules do host (binários de SO diferente).
+      - /app/node_modules
+
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+    # Encaminha SIGINT/SIGTERM corretamente (Ctrl+C encerra de verdade).
+    init: true

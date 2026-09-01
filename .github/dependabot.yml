@@ -1,0 +1,62 @@
+# =============================================================
+#  Dependabot — atualização e alerta contínuos de dependências
+#
+#  Uma auditoria de segurança é uma foto do dia em que rodou. O que
+#  mantém a foto atualizada é isto: um robô abrindo PR quando surge
+#  versão nova ou CVE. [#62]
+# =============================================================
+
+version: 2
+
+updates:
+  # ── Dependências npm ──
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    labels: ['dependencias']
+    commit-message:
+      # Mesmo padrão de Conventional Commits que o commitlint exige —
+      # senão o PR do robô é barrado pelo próprio hook do projeto.
+      prefix: 'build'
+      prefix-development: 'chore'
+      include: scope
+    groups:
+      # Agrupar as ferramentas de desenvolvimento evita cinco PRs por
+      # semana para bumps de patch que ninguém revisa de verdade.
+      ferramentas-de-desenvolvimento:
+        dependency-type: development
+        update-types: ['minor', 'patch']
+    ignore:
+      # Major de runtime muda comportamento: entra por decisão humana,
+      # com leitura do changelog, não por PR automático.
+      - dependency-name: 'express'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'zod'
+        update-types: ['version-update:semver-major']
+
+  # ── Actions do próprio pipeline ──
+  # Uma action desatualizada é superfície de ataque de supply chain
+  # tão real quanto uma dependência npm.
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly
+    labels: ['ci']
+    commit-message:
+      prefix: 'ci'
+
+  # ── Imagem base do Dockerfile ──
+  # A base está fixada por digest de propósito; o Dependabot é quem
+  # avisa quando esse digest ficou para trás em correção de segurança.
+  - package-ecosystem: docker
+    directory: '/'
+    schedule:
+      interval: monthly
+    labels: ['docker']
+    commit-message:
+      prefix: 'build'
