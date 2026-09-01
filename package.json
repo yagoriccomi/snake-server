@@ -43,12 +43,12 @@
     "eslint": "^9.20.0",
     "eslint-config-prettier": "^10.0.1",
     "husky": "^9.1.7",
-    "lint-staged": "^17.3.0",
+    "lint-staged": "^17.4.1",
     "prettier": "^3.4.2",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.23.0",
+    "typescript-eslint": "^8.68.0",
     "vitest": "^3.0.5"
   }
 }
