@@ -32,7 +32,17 @@ export interface UploadAssinado extends ParametrosDeUpload {
 /** Contrato do provedor de mídia. Depender da abstração, não da Cloudinary. [#20] */
 export interface AssinadorDeMidia {
   assinarUpload(parametros: ParametrosDeUpload): UploadAssinado;
-  gerarUrlDeVisualizacao(publicId: string): string;
+  gerarUrlDeVisualizacao(publicId: string, pagina?: number): string;
+  contarPaginas(publicId: string): Promise<number>;
+}
+
+/** O que o cliente recebe para exibir um comprovante. */
+export interface ComprovanteParaVisualizar {
+  url: string;
+  /** Total de páginas do documento. `1` para imagem comum. */
+  paginas: number;
+  /** Qual página esta `url` mostra. */
+  pagina: number;
 }
 
 export interface RegistroDePagamento {
@@ -145,7 +155,11 @@ export function criarProofsService(deps: DependenciasDeProofs) {
      *  2. `conferirDono`, com o `user_id` que a própria consulta devolveu —
      *     rede de segurança para o caso de a primeira falhar. [#55]
      */
-    async obterUrlDeVisualizacao(paymentId: string, chamador: Chamador): Promise<string> {
+    async obterUrlDeVisualizacao(
+      paymentId: string,
+      chamador: Chamador,
+      pagina = 1,
+    ): Promise<ComprovanteParaVisualizar> {
       const pagamento = await deps.pagamentos.buscarPorId(paymentId, chamador.authorization);
 
       // Vazio ou sem comprovante: a RLS não liberou. 403 sem distinguir
@@ -181,7 +195,18 @@ export function criarProofsService(deps: DependenciasDeProofs) {
        * Achado C-2 do `REVIEW.md`. [#55]
        */
       const publicId = `${PASTA_COMPROVANTES}/${pagamento.user_id}/${paymentId}`;
-      return deps.midia.gerarUrlDeVisualizacao(publicId);
+
+      // O total vem junto para a tela poder avisar que há mais documento além
+      // do que está sendo exibido. Um comprovante na página 2 de um extrato,
+      // sem esse aviso, é indistinguível de comprovante que não existe.
+      const paginas = await deps.midia.contarPaginas(publicId);
+      const paginaExibida = Math.min(Math.max(pagina, 1), paginas);
+
+      return {
+        url: deps.midia.gerarUrlDeVisualizacao(publicId, paginaExibida),
+        paginas,
+        pagina: paginaExibida,
+      };
     },
   };
 }

@@ -16,6 +16,24 @@ export const PASTA_COMPROVANTES = 'comprovantes';
  */
 export const TIPO_ENTREGA_PRIVADO = 'authenticated';
 
+/**
+ * Formato de ENTREGA do comprovante. O arquivo é guardado como veio (PDF, PNG,
+ * HEIC); a conversão acontece na saída.
+ *
+ * Duas razões, nesta ordem:
+ *
+ *  1. A conta da Cloudinary vem com a entrega de PDF desabilitada por padrão —
+ *     uma trava de segurança da plataforma. Sem isto, TODO comprovante enviado
+ *     em PDF responde 401, com o código inteiramente correto.
+ *  2. O app exibe uma imagem e pronto: HEIC do iPhone, PNG e PDF chegam todos
+ *     como JPG, sem caminho separado por tipo de arquivo.
+ *
+ * Converter na ENTRADA resolveria (1) também, mas destrói o documento: um PDF
+ * de várias páginas vira um JPG só, com a primeira página — em silêncio. Para
+ * comprovante de pagamento isso é perda de prova. [#63]
+ */
+export const FORMATO_ENTREGA = 'jpg';
+
 /** Tabela e colunas lidas via PostgREST, com a RLS decidindo o acesso. */
 export const TABELA_PAGAMENTOS = 'payments';
 

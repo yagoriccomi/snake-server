@@ -77,6 +77,7 @@ export function criarMidiaFalsa(): AssinadorDeMidia {
       };
     },
     gerarUrlDeVisualizacao: () => URL_ASSINADA_FALSA,
+    contarPaginas: () => Promise.resolve(1),
   };
 }
 

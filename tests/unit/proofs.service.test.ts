@@ -63,6 +63,7 @@ function criarCenario(
       registro.publicIdsVisualizados.push(publicId);
       return `https://url-assinada/${publicId}`;
     },
+    contarPaginas: () => Promise.resolve(1),
   };
 
   const pagamentos: LeitorDePagamentos = {
@@ -180,12 +181,14 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
       proof_public_id: 'comprovantes/x/y',
     });
 
-    const url = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
+    const comprovante = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
 
     // O caminho é DERIVADO do par verificado, não copiado da coluna.
     const esperado = `comprovantes/${USUARIO_DO_TOKEN}/${PAYMENT_ID}`;
     expect(registro.publicIdsVisualizados).toEqual([esperado]);
-    expect(url).toBe(`https://url-assinada/${esperado}`);
+    expect(comprovante.url).toBe(`https://url-assinada/${esperado}`);
+    expect(comprovante.paginas).toBe(1);
+    expect(comprovante.pagina).toBe(1);
   });
 
   it('naoDeveAssinarOComprovanteDeOutroAlunoQuandoOPonteiroFoiAdulterado', async () => {
@@ -207,13 +210,13 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
       proof_public_id: `comprovantes/${OUTRO_USUARIO}/pagamento-alheio`,
     });
 
-    const url = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
+    const comprovante = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
 
     expect(registro.publicIdsVisualizados).toEqual([
       `comprovantes/${USUARIO_DO_TOKEN}/${PAYMENT_ID}`,
     ]);
     expect(registro.publicIdsVisualizados[0]).not.toContain(OUTRO_USUARIO);
-    expect(url).not.toContain('pagamento-alheio');
+    expect(comprovante.url).not.toContain('pagamento-alheio');
   });
 
   it('deveDerivarOCaminhoDoDonoDaLinhaParaOAdminVerOComprovanteCerto', async () => {

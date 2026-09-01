@@ -111,16 +111,46 @@ describe('gerarUrlDeVisualizacao', () => {
     expect(url).not.toContain('/raw/');
   });
 
-  it('naoDeveAnexarExtensaoAoPublicIdPorqueOContratoNaoGuardaUma', () => {
-    // `proof_public_id` é gravado sem extensão. Se a URL acrescentasse uma, o
-    // asset procurado deixaria de existir.
-    //
-    // O caminho é comparado sem a query string: o SDK anexa um `?_a=...`
-    // próprio (telemetria dele). Ancorar o regex no fim da URL inteira
-    // quebraria por causa desse parâmetro, não por causa de extensão.
+  it('deveEntregarEmJpgParaContornarATravaDePdfDaConta', () => {
+    /*
+     * O formato de entrega não é preferência estética. A conta da Cloudinary
+     * vem com a entrega de PDF DESABILITADA por padrão, e sem esta conversão
+     * todo comprovante enviado em PDF responde 401 — verificado contra a conta
+     * real. Converter na saída contorna a trava sem tocar em configuração.
+     */
     const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
     const caminho = url.split('?')[0] ?? '';
 
-    expect(caminho).toMatch(/\/comprovantes\/aluno-1\/pagamento-9$/);
+    expect(caminho).toMatch(/\/comprovantes\/aluno-1\/pagamento-9\.jpg$/);
+  });
+
+  it('naoDeveConverterNaEntradaPorqueIssoDestroiPaginasDoDocumento', () => {
+    // A conversão vive na URL de ENTREGA. Se ela migrasse para o upload, um
+    // PDF de várias páginas viraria um JPG só, com a primeira — em silêncio,
+    // e sem volta. Comprovante é prova de pagamento. [#63]
+    const parametros = {
+      folder: 'comprovantes/aluno-1',
+      public_id: 'pagamento-9',
+      timestamp: 1_700_000_000,
+      type: 'authenticated',
+    };
+    const assinado = assinador.assinarUpload(parametros);
+
+    expect(assinado).not.toHaveProperty('format');
+    expect(JSON.stringify(assinado)).not.toContain('jpg');
+  });
+
+  it('devePedirUmaPaginaEspecificaQuandoODocumentoTemMaisDeUma', () => {
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9', 2);
+
+    expect(url).toContain('pg_2');
+  });
+
+  it('naoDeveSujarAUrlComPaginaQuandoOArquivoTemUmaSo', () => {
+    // Página não pedida é página que não entra na URL: num arquivo de página
+    // única ela é ruído, e a Cloudinary já entrega o que existe.
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
+
+    expect(url).not.toContain('pg_');
   });
 });

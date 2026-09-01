@@ -2,7 +2,7 @@ import type { RequestHandler } from 'express';
 
 import { logger } from '../../lib/logger.js';
 import { usuarioDaRequisicao } from '../../middleware/require-user.js';
-import type { CorpoComPaymentId } from './proofs.schema.js';
+import type { CorpoComPaymentId, CorpoDeVisualizacao } from './proofs.schema.js';
 import type { ProofsService } from './proofs.service.js';
 
 /**
@@ -13,6 +13,7 @@ import type { ProofsService } from './proofs.service.js';
  * `RequestHandler` carrega esse tipo até aqui, então nada de cast.
  */
 type HandlerComPaymentId = RequestHandler<Record<string, never>, unknown, CorpoComPaymentId>;
+type HandlerDeVisualizacao = RequestHandler<Record<string, never>, unknown, CorpoDeVisualizacao>;
 
 export function criarProofsController(service: ProofsService) {
   /** POST /v1/proofs/sign-upload */
@@ -32,24 +33,25 @@ export function criarProofsController(service: ProofsService) {
   };
 
   /** POST /v1/proofs/view-url */
-  const obterUrlDeVisualizacao: HandlerComPaymentId = async (req, res) => {
-    const { paymentId } = req.body;
+  const obterUrlDeVisualizacao: HandlerDeVisualizacao = async (req, res) => {
+    const { paymentId, pagina } = req.body;
     const { id: userId, authorization } = usuarioDaRequisicao(req);
 
-    const url = await service.obterUrlDeVisualizacao(paymentId, {
-      userId,
-      authorization,
-      traceId: req.traceId,
-    });
+    const comprovante = await service.obterUrlDeVisualizacao(
+      paymentId,
+      { userId, authorization, traceId: req.traceId },
+      pagina,
+    );
 
     logger.info('url de comprovante emitida', {
       traceId: req.traceId,
       user_id: userId,
       payment_id: paymentId,
+      paginas: comprovante.paginas,
     });
 
     // A URL assinada é o próprio segredo: vai na resposta, jamais no log.
-    res.json({ url });
+    res.json(comprovante);
   };
 
   return { assinarUpload, obterUrlDeVisualizacao };

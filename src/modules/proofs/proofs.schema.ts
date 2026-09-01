@@ -16,3 +16,16 @@ export const corpoComPaymentId = z.object({
 });
 
 export type CorpoComPaymentId = z.infer<typeof corpoComPaymentId>;
+
+/**
+ * Visualização: aceita a página do documento.
+ *
+ * O teto de 999 não é decoração — sem ele, `pagina: 99999999` faria a
+ * Cloudinary renderizar (e cobrar) por uma página inexistente a cada
+ * requisição. Entrada do cliente sempre com limite. [#51][#65]
+ */
+export const corpoDeVisualizacao = corpoComPaymentId.extend({
+  pagina: z.coerce.number().int().min(1).max(999).optional(),
+});
+
+export type CorpoDeVisualizacao = z.infer<typeof corpoDeVisualizacao>;
