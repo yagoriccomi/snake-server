@@ -152,6 +152,19 @@ npm run dev
 | `npm run format` | Formata o código |
 | `npm test` | Roda os testes automatizados |
 
+### Script operacional
+
+| Comando | O que faz |
+| --- | --- |
+| `npx tsx scripts/migrar-comprovantes.ts` | **Simula** a migração dos comprovantes do Supabase Storage para a Cloudinary |
+| `npx tsx scripts/migrar-comprovantes.ts --aplicar` | Executa a migração de verdade |
+
+Este script **não faz parte do servidor web**: ele exige a
+`SUPABASE_SERVICE_ROLE_KEY` para ler o bucket privado de qualquer aluno, e essa
+chave não pode entrar no processo que atende requisições. Ela vive só na sessão de
+terminal de quem roda a migração — nunca na Render, nunca no `.env`, nunca no Git.
+Passo a passo em [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
 ## 📝 Variáveis de Ambiente
 
 Copie o `.env.example` e preencha. Nenhuma delas deve ser enviada ao repositório.
@@ -221,6 +234,12 @@ decidido pelas regras de acesso do banco: o dono do pagamento ou um administrado
 **Envio:** `{ "paymentId": "<uuid>" }`
 
 **Resposta:** `{ "url": "https://res.cloudinary.com/..." }`
+
+Responde `403` também quando o comprovante ainda está no Supabase Storage — durante
+a migração existem arquivos nos dois provedores, e este endpoint só assina os da
+Cloudinary. O caminho é **derivado** do pagamento, nunca lido da coluna: quem é dono
+da linha pode editá-la, e confiar no valor gravado permitiria apontar para o
+comprovante de outra pessoa.
 
 ### Formato dos erros
 
@@ -309,7 +328,8 @@ Nada disso pode ir para dentro de um arquivo do repositório.
 | [`docs/openapi.yaml`](docs/openapi.yaml) | Quem vai consumir a API | Contrato formal: schemas, respostas e todos os códigos de erro |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Quem quer contribuir | Do clone ao Pull Request aceito |
 | [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md) | **Quem vai tocar o projeto** | O que ainda falta, por que não foi feito e como resolver |
-| [`docs/BACKEND.md`](docs/BACKEND.md) | Referência | Especificação original do handoff |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | **Quem vai publicar** | Passo a passo do que só você pode fazer: secrets, variáveis, migração dos comprovantes |
+| [`docs/BACKEND.md`](docs/BACKEND.md) | Referência | **Fonte da verdade** da especificação do servidor. O `snake-thai` aponta para cá em vez de manter cópia |
 | [`REVIEW.md`](REVIEW.md) | Manutenção | Auditoria de código, segurança e LGPD, com o que já foi corrigido |
 | [`LICENSE_AUDIT.md`](LICENSE_AUDIT.md) | Jurídico | Licenças das 384 dependências e a decisão de licenciamento |
 | [`CLAUDE.md`](CLAUDE.md) | Engenharia interna | Regras e padrões do dia a dia |

@@ -4,7 +4,7 @@ import type { ClienteSupabase } from '../../lib/supabase.js';
 import { criarRequireUser } from '../../middleware/require-user.js';
 import { validarCorpo } from '../../middleware/validate.js';
 import { criarProofsController } from './proofs.controller.js';
-import { corpoComPaymentId } from './proofs.schema.js';
+import { corpoComPaymentId, corpoDeVisualizacao } from './proofs.schema.js';
 import { criarProofsService, type DependenciasDeProofs } from './proofs.service.js';
 
 export interface DependenciasDoRouterDeProofs extends DependenciasDeProofs {
@@ -44,7 +44,7 @@ export function criarProofsRouter(deps: DependenciasDoRouterDeProofs): Router {
 
   proofs.post(
     '/view-url',
-    validarCorpo(corpoComPaymentId),
+    validarCorpo(corpoDeVisualizacao),
     requireUser,
     controller.obterUrlDeVisualizacao,
   );

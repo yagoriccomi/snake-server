@@ -33,7 +33,7 @@ const midia: AssinadorDeMidia = {
     uploadUrl: 'u',
   }),
   gerarUrlDeVisualizacao: (id) => `https://url-assinada/${id}`,
-  extrairPublicId: (v) => v,
+  contarPaginas: () => Promise.resolve(1),
 };
 
 /** Simula uma RLS QUEBRADA: devolve o pagamento independentemente de quem pede. */
@@ -69,7 +69,11 @@ afterEach(() => {
 });
 
 describe('política `somente-dono` — postura mais dura', () => {
-  const pagamentoAlheio: RegistroDePagamento = { user_id: DONO, proof_url: 'comprovantes/a/b' };
+  const pagamentoAlheio: RegistroDePagamento = {
+    user_id: DONO,
+    proof_provider: 'cloudinary',
+    proof_public_id: 'comprovantes/a/b',
+  };
 
   it('deveNegarComForbiddenQuandoARlsLiberaComprovanteDeOutroUsuario', async () => {
     capturarStderr();
@@ -90,6 +94,7 @@ describe('política `somente-dono` — postura mais dura', () => {
           urlsEmitidas.push(id);
           return 'https://nunca-deveria-chegar-aqui';
         },
+        contarPaginas: () => Promise.resolve(1),
       },
       pagamentos: rlsQuebrada(pagamentoAlheio),
       agoraEmSegundos: () => 1,
@@ -104,14 +109,18 @@ describe('política `somente-dono` — postura mais dura', () => {
   it('devePermitirNormalmenteQuandoOChamadorEhODono', async () => {
     const service = montar('somente-dono', pagamentoAlheio);
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(DONO))).resolves.toContain(
-      'url-assinada',
-    );
+    await expect(
+      service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(DONO)).then((c) => c.url),
+    ).resolves.toContain('url-assinada');
   });
 });
 
 describe('política `rls` — padrão, preserva o administrador previsto na spec', () => {
-  const pagamentoAlheio: RegistroDePagamento = { user_id: DONO, proof_url: 'comprovantes/a/b' };
+  const pagamentoAlheio: RegistroDePagamento = {
+    user_id: DONO,
+    proof_provider: 'cloudinary',
+    proof_public_id: 'comprovantes/a/b',
+  };
 
   it('devePermitirOAcessoQuandoARlsLiberouPorqueOChamadorPodeSerAdmin', async () => {
     // A spec (docs/BACKEND.md §6) prevê o admin vendo comprovante alheio.
@@ -119,9 +128,9 @@ describe('política `rls` — padrão, preserva o administrador previsto na spec
     capturarStderr();
     const service = montar('rls', pagamentoAlheio);
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR))).resolves.toContain(
-      'url-assinada',
-    );
+    await expect(
+      service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR)).then((c) => c.url),
+    ).resolves.toContain('url-assinada');
   });
 
   it('deveEmitirAlarmeEmNivelErrorQuandoOChamadorNaoEhODono', async () => {

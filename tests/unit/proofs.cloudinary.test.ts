@@ -18,55 +18,6 @@ const CONFIG = {
 
 const assinador = criarAssinadorCloudinary(CONFIG);
 
-describe('extrairPublicId', () => {
-  it('deveDevolverOValorIntactoQuandoJaEhUmPublicId', () => {
-    expect(assinador.extrairPublicId('comprovantes/aluno-1/pagamento-9')).toBe(
-      'comprovantes/aluno-1/pagamento-9',
-    );
-  });
-
-  it('deveRemoverEspacosAoRedorDoValorGravado', () => {
-    expect(assinador.extrairPublicId('  comprovantes/aluno-1/x  ')).toBe('comprovantes/aluno-1/x');
-  });
-
-  it('deveExtrairOPublicIdDeUmaUrlCompletaComVersao', () => {
-    const url =
-      'https://res.cloudinary.com/nuvem/image/authenticated/s--AbC123--/v1700000000/comprovantes/aluno-1/pagamento-9.jpg';
-
-    expect(assinador.extrairPublicId(url)).toBe('comprovantes/aluno-1/pagamento-9');
-  });
-
-  it('deveExtrairOPublicIdDeUmaUrlSemVersao', () => {
-    const url =
-      'https://res.cloudinary.com/nuvem/image/authenticated/comprovantes/aluno-1/pagamento-9.png';
-
-    expect(assinador.extrairPublicId(url)).toBe('comprovantes/aluno-1/pagamento-9');
-  });
-
-  it('deveExtrairOPublicIdDeUmaUrlDeEntregaPublica', () => {
-    // Comprovante antigo pode ter sido gravado como `upload` antes da política
-    // de asset privado — o adaptador ainda precisa saber lê-lo.
-    const url = 'https://res.cloudinary.com/nuvem/image/upload/v123/comprovantes/aluno-1/x.jpg';
-
-    expect(assinador.extrairPublicId(url)).toBe('comprovantes/aluno-1/x');
-  });
-
-  it('devePreservarPontosQueNaoSaoExtensaoDeArquivo', () => {
-    expect(assinador.extrairPublicId('comprovantes/aluno.silva/pagamento-9')).toBe(
-      'comprovantes/aluno.silva/pagamento-9',
-    );
-  });
-
-  it('deveDevolverOValorOriginalQuandoAUrlEhInvalida', () => {
-    // Não pode explodir por causa de dado torto vindo do banco.
-    expect(assinador.extrairPublicId('https://[url-quebrada')).toBe('https://[url-quebrada');
-  });
-
-  it('deveDevolverStringVaziaSemQuebrarQuandoOValorEhVazio', () => {
-    expect(assinador.extrairPublicId('   ')).toBe('');
-  });
-});
-
 describe('assinarUpload', () => {
   const parametros = {
     folder: 'comprovantes/aluno-1',
@@ -136,5 +87,70 @@ describe('gerarUrlDeVisualizacao', () => {
     const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
 
     expect(url).not.toContain(CONFIG.apiSecret);
+  });
+
+  it('deveEntregarPdfPelaMesmaRotaDeImagemPorqueEhAssimQueOProvedorOClassifica', () => {
+    /*
+     * O app aceita comprovante em PDF, e a URL é montada com
+     * `resource_type: 'image'` fixo. Isso PARECE errado e não é: a Cloudinary
+     * armazena PDF sob o resource_type `image` (é o que permite renderizar
+     * páginas como imagem), e o upload com `resource_type: 'auto'` — usado
+     * pelo script de migração — cai exatamente nesse mesmo bucket.
+     *
+     * Este teste trava o alinhamento entre as duas pontas. Se alguém "corrigir"
+     * a entrega para `raw` achando que PDF não é imagem, todo comprovante em
+     * PDF passa a devolver 404 — e o teste avisa antes do usuário.
+     *
+     * ⚠️ O que este teste NÃO prova: a entrega de PDF depende também de uma
+     * chave de conta na Cloudinary ("Allow delivery of PDF and ZIP files"),
+     * desligada por padrão. Ver P-18 em `docs/PENDENCIAS.md`.
+     */
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-em-pdf');
+
+    expect(url).toContain('/image/authenticated/');
+    expect(url).not.toContain('/raw/');
+  });
+
+  it('deveEntregarEmJpgParaContornarATravaDePdfDaConta', () => {
+    /*
+     * O formato de entrega não é preferência estética. A conta da Cloudinary
+     * vem com a entrega de PDF DESABILITADA por padrão, e sem esta conversão
+     * todo comprovante enviado em PDF responde 401 — verificado contra a conta
+     * real. Converter na saída contorna a trava sem tocar em configuração.
+     */
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
+    const caminho = url.split('?')[0] ?? '';
+
+    expect(caminho).toMatch(/\/comprovantes\/aluno-1\/pagamento-9\.jpg$/);
+  });
+
+  it('naoDeveConverterNaEntradaPorqueIssoDestroiPaginasDoDocumento', () => {
+    // A conversão vive na URL de ENTREGA. Se ela migrasse para o upload, um
+    // PDF de várias páginas viraria um JPG só, com a primeira — em silêncio,
+    // e sem volta. Comprovante é prova de pagamento. [#63]
+    const parametros = {
+      folder: 'comprovantes/aluno-1',
+      public_id: 'pagamento-9',
+      timestamp: 1_700_000_000,
+      type: 'authenticated',
+    };
+    const assinado = assinador.assinarUpload(parametros);
+
+    expect(assinado).not.toHaveProperty('format');
+    expect(JSON.stringify(assinado)).not.toContain('jpg');
+  });
+
+  it('devePedirUmaPaginaEspecificaQuandoODocumentoTemMaisDeUma', () => {
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9', 2);
+
+    expect(url).toContain('pg_2');
+  });
+
+  it('naoDeveSujarAUrlComPaginaQuandoOArquivoTemUmaSo', () => {
+    // Página não pedida é página que não entra na URL: num arquivo de página
+    // única ela é ruído, e a Cloudinary já entrega o que existe.
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
+
+    expect(url).not.toContain('pg_');
   });
 });

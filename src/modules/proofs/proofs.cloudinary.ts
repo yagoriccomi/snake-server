@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from 'cloudinary';
 
-import { TIPO_ENTREGA_PRIVADO } from './proofs.constants.js';
+import { logger } from '../../lib/logger.js';
+import { FORMATO_ENTREGA, TIPO_ENTREGA_PRIVADO } from './proofs.constants.js';
 import type { AssinadorDeMidia, ParametrosDeUpload, UploadAssinado } from './proofs.service.js';
 
 /**
@@ -22,14 +23,6 @@ export interface ConfigDeMidia {
   apiKey: string;
   apiSecret: string;
 }
-
-/** Detecta se o valor gravado já é um `public_id` em vez de uma URL de entrega. */
-const EH_URL = /^https?:\/\//i;
-
-/** Formato de entrega: `/<cloud>/<resource_type>/<type>/v<versao>/<public_id>.<ext>` */
-const APOS_A_VERSAO = /\/v\d+\/(.+)$/;
-const EXTENSAO_FINAL = /\.[A-Za-z0-9]{2,5}$/;
-const SEGMENTOS_ANTES_DO_PUBLIC_ID = 4;
 
 /**
  * Cria o adaptador já configurado.
@@ -63,45 +56,63 @@ export function criarAssinadorCloudinary(config: ConfigDeMidia): AssinadorDeMidi
     },
 
     /**
-     * URL assinada de um asset privado. Sem a assinatura a URL não entrega
-     * nada — é isso que mantém o comprovante fora do alcance de quem apenas
-     * adivinhou o caminho.
+     * URL assinada de um asset privado, entregue como imagem.
+     *
+     * Sem a assinatura a URL não entrega nada — é isso que mantém o
+     * comprovante fora do alcance de quem apenas adivinhou o caminho.
+     *
+     * `format` converte na SAÍDA: o arquivo continua guardado como veio, e é
+     * o link que sai em JPG. Ver `FORMATO_ENTREGA` para o porquê.
      */
-    gerarUrlDeVisualizacao(publicId: string): string {
+    gerarUrlDeVisualizacao(publicId: string, pagina?: number): string {
       return cloudinary.url(publicId, {
         type: TIPO_ENTREGA_PRIVADO,
         sign_url: true,
         secure: true,
         resource_type: 'image',
+        format: FORMATO_ENTREGA,
+        // `page` só entra quando pedida: num arquivo de página única ela é
+        // ruído na URL, e a Cloudinary já entrega a única página que existe.
+        ...(pagina === undefined ? {} : { page: pagina }),
       });
     },
 
     /**
-     * Normaliza o que está gravado em `payments.proof_url`.
+     * Quantas páginas o documento tem. `1` para imagem comum.
      *
-     * ⚠️ PENDENTE DE CONFIRMAÇÃO: o nome da coluna diz "url", mas a
-     * especificação a usa como `public_id`. Sem acesso ao schema real do app,
-     * aceitar os dois formatos é a escolha conservadora — passar uma URL
-     * completa para `cloudinary.url()` produziria um link quebrado em silêncio,
-     * e o dado em jogo é financeiro. Se o schema confirmar um formato único,
-     * esta função encolhe para um `return valorGravado.trim()`.
+     * Serve para a tela avisar o administrador de que existe mais documento
+     * além do que ele está vendo. Sem isso, um comprovante na página 2 de um
+     * extrato simplesmente não aparece — e ninguém fica sabendo.
+     *
+     * Nunca lança: se a consulta falhar, o comprovante ainda precisa ser
+     * exibido. Perder o aviso é ruim; perder a visualização é pior. [#9]
      */
-    extrairPublicId(valorGravado: string): string {
-      const valor = valorGravado.trim();
-      if (!EH_URL.test(valor)) return valor;
-
-      let caminho: string;
+    async contarPaginas(publicId: string): Promise<number> {
       try {
-        caminho = new URL(valor).pathname;
-      } catch {
-        return valor;
+        const recurso = (await cloudinary.api.resource(publicId, {
+          type: TIPO_ENTREGA_PRIVADO,
+          resource_type: 'image',
+          // Sem isto a resposta NÃO traz `pages` — nem para um PDF de várias
+          // páginas. A consulta parece bem-sucedida e devolve 1 em silêncio,
+          // e o administrador nunca fica sabendo que existe página 2.
+          pages: true,
+        })) as { pages?: number };
+        return typeof recurso.pages === 'number' && recurso.pages > 0 ? recurso.pages : 1;
+      } catch (causa) {
+        /*
+         * Degradar para 1 é deliberado: sem o total, o comprovante ainda
+         * precisa ser exibido. Perder o aviso é ruim; perder a visualização é
+         * pior. [#9]
+         *
+         * Mas degradar CALADO seria o mesmo que não ter o aviso — por isso o
+         * log. Se a contagem começar a falhar sempre, aparece aqui antes de
+         * alguém reclamar de um comprovante que "sumiu". [#92]
+         */
+        logger.warn('não foi possível contar as páginas do comprovante', {
+          erro: causa instanceof Error ? causa.message : 'desconhecido',
+        });
+        return 1;
       }
-
-      const comVersao = APOS_A_VERSAO.exec(caminho);
-      const bruto =
-        comVersao?.[1] ?? caminho.split('/').slice(SEGMENTOS_ANTES_DO_PUBLIC_ID).join('/');
-
-      return bruto.replace(EXTENSAO_FINAL, '');
     },
   };
 }

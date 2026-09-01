@@ -231,6 +231,7 @@ mudanças abaixo, o `README.md` DEVE ser atualizado no mesmo ciclo de trabalho:*
 | --- | --- | --- |
 | **Jira / Atlassian** | **Recusado pelo usuário** | 2026-08-21 |
 | **Remoto Git** | GitHub — `git@github.com:yagoriccomi/snake-server.git` (SSH) | pré-existente |
+| **Migração p/ Cloudinary** | branch `feature/comprovantes-cloudinary` (de `feature/servidor-docker`) | 2026-08-31 |
 
 > **Jira: não perguntar de novo.** A decisão foi tomada em 2026-08-21, ao aprovar o
 > roadmap de construção. A rastreabilidade fica por conta dos Conventional Commits.

@@ -28,7 +28,6 @@ const AGORA = 1_700_000_000;
 
 interface Registro {
   chamadasDeAssinatura: unknown[];
-  publicIdsExtraidos: string[];
   publicIdsVisualizados: string[];
   buscas: { paymentId: string; authorization: string }[];
 }
@@ -45,7 +44,6 @@ function criarCenario(
 ) {
   const registro: Registro = {
     chamadasDeAssinatura: [],
-    publicIdsExtraidos: [],
     publicIdsVisualizados: [],
     buscas: [],
   };
@@ -65,10 +63,7 @@ function criarCenario(
       registro.publicIdsVisualizados.push(publicId);
       return `https://url-assinada/${publicId}`;
     },
-    extrairPublicId(valorGravado) {
-      registro.publicIdsExtraidos.push(valorGravado);
-      return valorGravado;
-    },
+    contarPaginas: () => Promise.resolve(1),
   };
 
   const pagamentos: LeitorDePagamentos = {
@@ -140,7 +135,11 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   });
 
   it('deveNegarComForbiddenQuandoOPagamentoExisteMasNaoTemComprovante', async () => {
-    const { service } = criarCenario({ user_id: USUARIO_DO_TOKEN, proof_url: null });
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'cloudinary',
+      proof_public_id: null,
+    });
 
     await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
       status: 403,
@@ -148,7 +147,11 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   });
 
   it('deveNegarComForbiddenQuandoOComprovanteEhStringVazia', async () => {
-    const { service } = criarCenario({ user_id: USUARIO_DO_TOKEN, proof_url: '' });
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'cloudinary',
+      proof_public_id: '',
+    });
 
     await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
       status: 403,
@@ -160,7 +163,8 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
     // não tem como reconhecer o dono — a autorização inteira desmorona. [#20]
     const { service, registro } = criarCenario({
       user_id: USUARIO_DO_TOKEN,
-      proof_url: 'comprovantes/x/y',
+      proof_provider: 'cloudinary',
+      proof_public_id: 'comprovantes/x/y',
     });
 
     await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
@@ -173,14 +177,60 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   it('deveNormalizarOValorGravadoAntesDePedirAUrlAssinada', async () => {
     const { service, registro } = criarCenario({
       user_id: USUARIO_DO_TOKEN,
-      proof_url: 'comprovantes/x/y',
+      proof_provider: 'cloudinary',
+      proof_public_id: 'comprovantes/x/y',
     });
 
-    const url = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
+    const comprovante = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
 
-    expect(registro.publicIdsExtraidos).toEqual(['comprovantes/x/y']);
-    expect(registro.publicIdsVisualizados).toEqual(['comprovantes/x/y']);
-    expect(url).toBe('https://url-assinada/comprovantes/x/y');
+    // O caminho é DERIVADO do par verificado, não copiado da coluna.
+    const esperado = `comprovantes/${USUARIO_DO_TOKEN}/${PAYMENT_ID}`;
+    expect(registro.publicIdsVisualizados).toEqual([esperado]);
+    expect(comprovante.url).toBe(`https://url-assinada/${esperado}`);
+    expect(comprovante.paginas).toBe(1);
+    expect(comprovante.pagina).toBe(1);
+  });
+
+  it('naoDeveAssinarOComprovanteDeOutroAlunoQuandoOPonteiroFoiAdulterado', async () => {
+    /*
+     * REGRESSÃO DO ACHADO C-2 (`REVIEW.md`).
+     *
+     * O ataque: o aluno grava, no PRÓPRIO pagamento, um `proof_public_id`
+     * apontando para o comprovante de outra pessoa. A RLS libera a linha (ela
+     * é dele mesmo) e `conferirDono` passa — o que está adulterado não é o
+     * dono, é o ponteiro.
+     *
+     * Se este teste falhar, o servidor voltou a assinar o valor gravado e
+     * entrega PII financeira de outro titular com uma URL perfeitamente
+     * válida. [#55]
+     */
+    const { service, registro } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'cloudinary',
+      proof_public_id: `comprovantes/${OUTRO_USUARIO}/pagamento-alheio`,
+    });
+
+    const comprovante = await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
+
+    expect(registro.publicIdsVisualizados).toEqual([
+      `comprovantes/${USUARIO_DO_TOKEN}/${PAYMENT_ID}`,
+    ]);
+    expect(registro.publicIdsVisualizados[0]).not.toContain(OUTRO_USUARIO);
+    expect(comprovante.url).not.toContain('pagamento-alheio');
+  });
+
+  it('deveDerivarOCaminhoDoDonoDaLinhaParaOAdminVerOComprovanteCerto', async () => {
+    // Quando um admin abre o comprovante de um aluno, o caminho tem que ser o
+    // do ALUNO (dono da linha), não o de quem está olhando.
+    const { service, registro } = criarCenario({
+      user_id: OUTRO_USUARIO,
+      proof_provider: 'cloudinary',
+      proof_public_id: 'ignorado',
+    });
+
+    await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
+
+    expect(registro.publicIdsVisualizados).toEqual([`comprovantes/${OUTRO_USUARIO}/${PAYMENT_ID}`]);
   });
 
   it('naoDeveTentarAssinarUrlQuandoOAcessoFoiNegado', async () => {
@@ -190,5 +240,68 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
     await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toThrow();
 
     expect(registro.publicIdsVisualizados).toHaveLength(0);
+  });
+
+  it('deveRecusarComprovanteQueAindaViveNoSupabaseStorage', async () => {
+    // Durante a convivência existem comprovantes nos DOIS provedores. Assinar
+    // um path do Storage como se fosse public_id da Cloudinary devolveria um
+    // link plausível e quebrado — em silêncio, para um dado financeiro.
+    // Recusar é a única resposta honesta. [#9]
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'supabase_storage',
+      proof_public_id: 'comprovantes/x/y',
+    });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it('naoDevePedirUrlAoProvedorQuandoOComprovanteEhDeOutroSistema', async () => {
+    // Não basta responder 403: a assinatura não pode nem ser tentada. Um
+    // adaptador chamado com identificador alheio pode registrar log, gastar
+    // cota ou devolver uma URL que vaze da função por outro caminho.
+    const { service, registro } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'supabase_storage',
+      proof_public_id: 'comprovantes/x/y',
+    });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toBeInstanceOf(
+      HttpError,
+    );
+    expect(registro.publicIdsVisualizados).toHaveLength(0);
+  });
+
+  it('deveRecusarProvedorDesconhecidoEmVezDeAssumirQueEhCloudinary', async () => {
+    // Um provedor que este servidor não conhece (acrescentado no futuro, ou
+    // dado corrompido) não pode cair no caminho da Cloudinary por omissão.
+    // O padrão seguro é negar. [#55]
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'provedor-que-nao-existe',
+      proof_public_id: 'algo',
+    });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it('deveRecusarQuandoOProvedorEhNuloMesmoComPublicIdPreenchido', async () => {
+    // Estado que a constraint do banco recusa, mas o servidor não pode contar
+    // com isso: a linha pode vir de uma réplica antiga ou de um banco onde a
+    // migration ainda não rodou. Confiar em invariante de outro sistema é
+    // como confiar na RLS sem a segunda barreira. [#55]
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: null,
+      proof_public_id: 'comprovantes/x/y',
+    });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
+      status: 403,
+    });
   });
 });

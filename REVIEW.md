@@ -356,3 +356,144 @@ ausente em `/health` (confirmado), e `npm audit` em produção e desenvolvimento
 
 Nenhum achado foi inflado para preencher seção: **não há vulnerabilidade explorável identificada**
 neste código. O risco alto é regulatório (LGPD) e de dependência externa não verificada (RLS).
+
+---
+
+# 🔍 Auditoria — Rodada 2026-08-31 (migração dos comprovantes para a Cloudinary)
+
+**Escopo:** o que mudou na branch `feature/comprovantes-cloudinary` e o par dela no app
+(`snake-thai@feat/comprovantes-cloudinary`): a migration do contrato de comprovante, o
+script de migração de dados, `src/modules/proofs/`, e no app `src/lib/api.ts` e
+`src/services/proofs.service.ts`.
+
+## 📊 Resumo Executivo
+
+A migração está bem construída — contrato de dados explícito e validado por constraint,
+convivência preservada para os APKs antigos, 204 testes no servidor (96,9% de cobertura)
+e 170 no app. **Mas o deploy NÃO deve sair como está:** a troca do Supabase Storage pela
+Cloudinary removeu, sem substituto, uma barreira de autorização que existia na camada de
+armazenamento — e isso abre um IDOR sobre dado financeiro de terceiros (C-2).
+
+Há também um achado **anterior a esta rodada**, encontrado de passagem, que é mais grave
+em termos de negócio: um aluno consegue alterar o valor da própria mensalidade (C-3).
+
+**Não auditado:** as políticas de RLS **em produção**. Só foi possível ler o que está
+versionado em `supabase/migrations/`; o que efetivamente roda no projeto hospedado pode
+divergir. A pendência P-10 continua aberta.
+
+## 🔥 Top 5 Causas de Vazamento — veredicto
+
+| # | Causa | Veredicto | Evidência | Prática |
+|---|-------|-----------|-----------|---------|
+| V1 | Banco sem RLS / regras abertas | ✅ PROTEGIDO | `init_schema.sql:247-330`; `media_deletion_queue` nega `authenticated` por padrão (verificado no Postgres local) | [#55][#87] |
+| V2 | Autorização decidida no front-end | ✅ PROTEGIDO | `AuthProvider.tsx:74` só esconde botão; a decisão real é `public.is_admin()` no banco | [#51][#56] |
+| V3 | IDOR (ID sem checagem de dono) | 🚨 **VULNERÁVEL** | `src/modules/proofs/proofs.service.ts` — ver **C-2** | [#55] |
+| V4 | Segredo chumbado no código/Git | ✅ PROTEGIDO | varredura de padrões sem ocorrência; `.env` ignorado e **não rastreado** nos dois repos | [#37][#80] |
+| V5 | Input sem tratamento (XSS) | ➖ NÃO SE APLICA | React Native não renderiza HTML; zero `innerHTML`/`eval`/`dangerouslySetInnerHTML` nos dois repos. Entrada validada por Zod na borda do servidor | [#51][#53] |
+
+## 🚨 Risco Crítico (Segurança e LGPD)
+
+### C-2 — IDOR: o servidor assina o `public_id` que o próprio aluno gravou
+
+* **O problema:** `obterUrlDeVisualizacao` usa o `proof_public_id` **lido do banco** para
+  gerar a URL assinada. Essa coluna é gravável pelo aluno no próprio pagamento: a RLS
+  permite (a linha é dele) e o trigger `enforce_payment_update_rules` não a bloqueia.
+
+  Ataque, com o token de um aluno comum:
+  1. `PATCH /rest/v1/payments?id=eq.<pagamento-proprio>` com
+     `proof_public_id = "comprovantes/<user_de_outro>/<pagamento_de_outro>"` e
+     `proof_provider = "cloudinary"` — a constraint de coerência é satisfeita;
+  2. `POST /v1/proofs/view-url { paymentId: <pagamento-proprio> }`;
+  3. `conferirDono` **passa** (o pagamento é mesmo dele) e o servidor assina o
+     comprovante do outro titular.
+
+  **Por que isto não existia antes:** no Supabase Storage a defesa não era do app — era
+  da RLS de `storage.objects`, que compara `(storage.foldername(name))[1]` com
+  `auth.uid()`. Um caminho adulterado morria ali. A Cloudinary não tem RLS: ao trocar de
+  provedor, a barreira sumiu e nada ocupou o lugar dela.
+
+* **Onde está:** `src/modules/proofs/proofs.service.ts` (`obterUrlDeVisualizacao`, uso de
+  `pagamento.proof_public_id`).
+* **Impacto LGPD:** acesso não autorizado a dado pessoal financeiro de outro titular
+  (art. 46 — falha de segurança). O comprovante PIX carrega nome, banco e valor.
+* **Como corrigir:** parar de **ler** o identificador e passar a **derivá-lo**. Ele já é
+  determinístico e o servidor tem as duas metades verificadas:
+
+  ```ts
+  // Não confie no que o cliente pôde gravar: derive do que você verificou. [#55]
+  const publicId = `${PASTA_COMPROVANTES}/${pagamento.user_id}/${paymentId}`;
+  return deps.midia.gerarUrlDeVisualizacao(publicId);
+  ```
+
+  O `proof_public_id` continua útil como **flag** ("existe comprovante?"), mas deixa de
+  ser a fonte do caminho. Assim, mesmo com a linha adulterada, a URL assinada aponta
+  sempre para o comprovante correto.
+
+* **Defesa complementar (recomendada):** bloquear a escrita direta dessas colunas pelo
+  aluno no trigger, deixando-as por conta do fluxo do servidor. Ver **A-2**.
+
+### C-3 — Aluno pode alterar o valor da própria mensalidade (anterior a esta rodada)
+
+* **O problema:** `enforce_payment_update_rules` é uma **blacklist** — proíbe `id`,
+  `user_id`, `plan_id`, `due_date` e `created_at`. A coluna `amount_cents` foi
+  acrescentada **depois** e nunca entrou na lista.
+
+  Com o token de um aluno comum:
+  `PATCH /rest/v1/payments?id=eq.<pagamento-proprio>` com `{ "amount_cents": 1 }`.
+  A RLS permite (é o pagamento dele) e o trigger não reclama. A dívida cai para R$ 0,01.
+
+  O valor adulterado passa a alimentar a tela do admin e o indicador "recebido no mês"
+  (`fetchReceivedThisMonthCents` soma `amount_cents`).
+
+* **Onde está:** `snake-thai/supabase/migrations/20260727160200_system_context_triggers.sql:24-31`
+  (coluna criada em `20260819140000_plans_and_payment_amounts.sql:63`).
+* **Como corrigir:** inverter a lógica para **whitelist** — o aluno só pode tocar nas
+  colunas do fluxo de comprovante e no `status` (limitado a `pending_approval`); qualquer
+  outra diferença entre `new` e `old` é negada. Isso conserta `amount_cents` **e** impede
+  que a próxima coluna nasça desprotegida.
+
+## 🐛 Risco Alto (Bugs e Arquitetura)
+
+### A-2 — A blacklist do trigger faz toda coluna nova nascer sem proteção
+
+* **Explicação:** é a causa-raiz de C-3, e as três colunas de comprovante desta rodada
+  entraram pelo mesmo buraco (nelas o efeito é desejado, o que mascara o problema).
+  Uma lista de proibições precisa ser lembrada a cada `alter table`; uma lista de
+  permissões falha fechado. [#55]
+* **Onde está:** `20260727160200_system_context_triggers.sql:13-40`.
+* **Como refatorar:** whitelist explícita, com o conjunto de colunas do fluxo do aluno
+  declarado no próprio trigger. Toda coluna futura fica negada por padrão até que alguém
+  decida o contrário — que é a decisão certa para uma tabela financeira.
+
+## ⚠️ Risco Médio (Performance e Infraestrutura)
+
+* **`scripts/migrar-comprovantes.ts` usa `SUPABASE_SERVICE_ROLE_KEY`.** O isolamento está
+  correto (programa separado, fora do servidor web, documentado no cabeçalho), e o
+  servidor continua sem a chave. Ainda assim é o único ponto do repositório que a exige:
+  ela deve ser exportada só na sessão de terminal que roda a migração e **nunca**
+  cadastrada na Render. [#55]
+* **Fila de exclusão sem consumidor.** `media_deletion_queue` é alimentada por gatilho,
+  mas nada a processa ainda — os arquivos continuam no provedor até que o worker exista.
+  A obrigação de eliminar (art. 16, I) só se cumpre quando ele rodar.
+
+## 💡 Risco Baixo (Clean Code e Dívida Técnica)
+
+* **Mensagem de erro do trigger desatualizada:** diz "aluno só pode alterar proof_url e
+  status", mas agora são quatro colunas de comprovante. Mensagem que descreve errado o
+  sistema atrapalha o diagnóstico. [#1]
+* **`Linking.openURL(signedUrl)`** (`ComprovanteScreen.tsx:154`) abre uma URL vinda do
+  servidor. Risco baixo (origem controlada), mas vale validar o esquema `https` antes de
+  abrir, já que o valor passa por um provedor externo.
+
+## ✅ Plano de Ação Imediato
+
+1. **C-2** — derivar o `public_id` do par verificado em vez de ler o gravado.
+   Bloqueia o deploy: é vazamento de PII financeira entre titulares.
+2. **C-3 + A-2** — migration convertendo o trigger para whitelist, fechando `amount_cents`
+   e impedindo que colunas futuras nasçam abertas.
+3. **Testes de regressão** para os dois: um aluno tentando ler comprovante alheio via
+   `public_id` adulterado, e um aluno tentando baixar o próprio `amount_cents`.
+4. **Worker da fila de eliminação**, sem o qual a promessa de exclusão da LGPD não se
+   cumpre de fato.
+5. **P-10** — confirmar no Supabase de produção que as políticas realmente batem com as
+   migrations versionadas.

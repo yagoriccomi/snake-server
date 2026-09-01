@@ -1,6 +1,10 @@
 import { semAcesso } from '../../lib/http-error.js';
 import { logger } from '../../lib/logger.js';
-import { PASTA_COMPROVANTES, TIPO_ENTREGA_PRIVADO } from './proofs.constants.js';
+import {
+  PASTA_COMPROVANTES,
+  PROVEDOR_CLOUDINARY,
+  TIPO_ENTREGA_PRIVADO,
+} from './proofs.constants.js';
 
 /**
  * Regra de negócio dos comprovantes. Camada sem Express e sem SDK: recebe
@@ -28,13 +32,29 @@ export interface UploadAssinado extends ParametrosDeUpload {
 /** Contrato do provedor de mídia. Depender da abstração, não da Cloudinary. [#20] */
 export interface AssinadorDeMidia {
   assinarUpload(parametros: ParametrosDeUpload): UploadAssinado;
-  gerarUrlDeVisualizacao(publicId: string): string;
-  extrairPublicId(valorGravado: string): string;
+  gerarUrlDeVisualizacao(publicId: string, pagina?: number): string;
+  contarPaginas(publicId: string): Promise<number>;
+}
+
+/** O que o cliente recebe para exibir um comprovante. */
+export interface ComprovanteParaVisualizar {
+  url: string;
+  /** Total de páginas do documento. `1` para imagem comum. */
+  paginas: number;
+  /** Qual página esta `url` mostra. */
+  pagina: number;
 }
 
 export interface RegistroDePagamento {
   user_id: string;
-  proof_url: string | null;
+  /** Onde o arquivo está: `cloudinary` ou `supabase_storage` (legado). */
+  proof_provider: string | null;
+  /**
+   * Identificador na Cloudinary. Serve como FLAG de existência ("há
+   * comprovante?"), não como fonte do caminho: o caminho é derivado do par
+   * verificado. Ver C-2 no `REVIEW.md`.
+   */
+  proof_public_id: string | null;
 }
 
 /** Contrato de leitura de pagamentos — a implementação real passa pela RLS. */
@@ -135,20 +155,58 @@ export function criarProofsService(deps: DependenciasDeProofs) {
      *  2. `conferirDono`, com o `user_id` que a própria consulta devolveu —
      *     rede de segurança para o caso de a primeira falhar. [#55]
      */
-    async obterUrlDeVisualizacao(paymentId: string, chamador: Chamador): Promise<string> {
+    async obterUrlDeVisualizacao(
+      paymentId: string,
+      chamador: Chamador,
+      pagina = 1,
+    ): Promise<ComprovanteParaVisualizar> {
       const pagamento = await deps.pagamentos.buscarPorId(paymentId, chamador.authorization);
 
       // Vazio ou sem comprovante: a RLS não liberou. 403 sem distinguir
       // "não existe" de "não é seu" — o contrário seria um oráculo de
       // enumeração para quem varre ids. [#55]
-      if (!pagamento?.proof_url) {
+      if (!pagamento?.proof_public_id) {
+        throw semAcesso();
+      }
+
+      // Comprovante de outro provedor não é assinável aqui. Recusar é a única
+      // resposta honesta: assinar assim mesmo devolveria um link quebrado
+      // apontando para um arquivo que não existe na Cloudinary. [#9]
+      if (pagamento.proof_provider !== PROVEDOR_CLOUDINARY) {
         throw semAcesso();
       }
 
       conferirDono(pagamento, chamador);
 
-      const publicId = deps.midia.extrairPublicId(pagamento.proof_url);
-      return deps.midia.gerarUrlDeVisualizacao(publicId);
+      /*
+       * O identificador é DERIVADO, nunca lido.
+       *
+       * `proof_public_id` é gravável pelo aluno no próprio pagamento — a RLS
+       * libera porque a linha é dele. Assinar o valor gravado deixaria ele
+       * apontar para `comprovantes/<outro_aluno>/<outro_pagamento>` e receber,
+       * com uma URL válida, o comprovante de outro titular. A consulta acima
+       * não pega isso: o pagamento É dele; o que está adulterado é o ponteiro.
+       *
+       * O caminho é determinístico e as duas metades já foram verificadas — o
+       * `user_id` vem da linha (coluna que o aluno não pode alterar) e o
+       * `paymentId` é o mesmo que a RLS acabou de autorizar. Derivando, um
+       * ponteiro adulterado no banco simplesmente não tem efeito.
+       *
+       * Achado C-2 do `REVIEW.md`. [#55]
+       */
+      const publicId = `${PASTA_COMPROVANTES}/${pagamento.user_id}/${paymentId}`;
+
+      // O total vem junto para a tela poder avisar que há mais documento além
+      // do que está sendo exibido. Um comprovante na página 2 de um extrato,
+      // sem esse aviso, é indistinguível de comprovante que não existe.
+      const paginas = await deps.midia.contarPaginas(publicId);
+      const paginaExibida = Math.min(Math.max(pagina, 1), paginas);
+
+      return {
+        url: deps.midia.gerarUrlDeVisualizacao(publicId, paginaExibida),
+        paginas,
+        pagina: paginaExibida,
+      };
     },
   };
 }
