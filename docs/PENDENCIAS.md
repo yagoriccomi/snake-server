@@ -311,6 +311,17 @@ de PDF e ZIP **desabilitada** — uma trava de segurança da própria plataforma
 ela desligada, a URL assinada de um comprovante em PDF responde **401**, mesmo
 estando tudo certo no código.
 
+**CONFIRMADO na prática em 2026-09-01**, com as credenciais reais:
+
+| Etapa | Resultado |
+| --- | --- |
+| Upload do PDF | ✅ aceito — `resource_type: image`, `type: authenticated`, `format: pdf` |
+| Entrega pela URL assinada | ❌ **HTTP 401 Unauthorized** |
+
+Ou seja: o código está correto (o PDF sobe no mesmo `resource_type` que o
+adaptador usa para entregar), e mesmo assim **nenhum comprovante em PDF abre**.
+A trava é exclusivamente da conta.
+
 **Por que não fiz:** é configuração de conta, e não tenho acesso ao painel.
 
 **O que fazer:** Cloudinary → Settings → Security → habilitar *Allow delivery of
