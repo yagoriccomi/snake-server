@@ -256,6 +256,42 @@ rejeitada pela Cloudinary com 401 — o mesmo que não mandar token nenhum.
 3. Reinicie o servidor. Nenhuma mudança de código é necessária a partir daqui — a URL
    passa a expirar automaticamente.
 
+### P-12b. Alternativa sem custo à expiração — avaliada e adiada, NÃO implementar sem novo pedido
+
+**Contexto:** enquanto o plano Advanced/chave da Cloudinary (P-12) não vier, ventilamos
+uma alternativa que não dependeria do plano pago: o servidor impor a expiração por
+conta própria.
+
+**Por que não é um "toggle simples":** o app fala **direto** com a Cloudinary — a
+URL assinada vai para o navegador/app do usuário, e é a Cloudinary quem entrega os
+bytes, sem passar pelo nosso servidor. Qualquer prazo que **nós** registrássemos no
+nosso banco seria invisível para a Cloudinary: ela nunca nos consulta antes de
+entregar, só valida a própria assinatura.
+
+A única forma de ter expiração real sem o recurso pago é **mudar a arquitetura**:
+o app passaria a pedir a imagem ao **nosso servidor**, que verificaria um prazo/uso
+único numa tabela nossa e, se válido, buscaria o arquivo na Cloudinary com a
+`api_secret` e devolveria os bytes — um proxy de visualização.
+
+**Custo dessa mudança:**
+- O arquivo passa a trafegar pelo nosso servidor — o oposto do que a arquitetura
+  atual busca (upload já vai direto para a Cloudinary, sem tocar aqui).
+- Consumo de banda no plano free da Render, que tem teto mensal — hoje inexistente
+  nesse fluxo.
+- Cold start reaparece na **visualização**, não só no envio.
+- Mais um endpoint, mais uma tabela, mais superfície de teste e manutenção.
+
+**Risco real de não fazer nada:** a URL de um comprovante já obtido (print, log de
+proxy, histórico de navegador) continua válida indefinidamente. Isso não permite que
+alguém **gere** uma URL do zero — só estende o acesso de quem já era dono ou admin
+do pagamento e recebeu o link uma vez.
+
+**Decisão em 2026-09-03: não implementar agora.** O custo de engenharia não se
+justifica frente a um risco residual e limitado, quando a solução correta (upgrade
+de plano) resolve de forma mais simples. Revisitar se: (a) surgir um incidente
+concreto de vazamento de link, ou (b) o custo do plano Advanced deixar de compensar
+frente ao custo de manter o proxy.
+
 ---
 
 ### P-13. `GPL-3.0-only` vs `GPL-3.0-or-later`
