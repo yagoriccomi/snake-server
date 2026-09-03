@@ -117,6 +117,15 @@ src/
 │       └── proofs.routes.ts      # criarProofsRouter(deps) — factory, não instância
 ├── routes/
 │   └── v1.ts                   # criarV1Router(deps) — registro dos módulos [#28]
+├── jobs/
+│   └── media-cleanup/          # Cron Job SEPARADO do serviço web (LGPD)
+│       ├── media-cleanup.service.ts     # a regra: processa 1 lote da fila
+│       ├── media-cleanup.repository.ts  # fala com media_deletion_queue
+│       ├── media-cleanup.provedores.ts  # apaga na Cloudinary / no Storage
+│       └── media-cleanup.ts             # entrypoint — próprio esquema de env
+│                                # ÚNICO lugar do repo que carrega a
+│                                # SUPABASE_SERVICE_ROLE_KEY como processo
+│                                # de longa duração. Nunca no serviço web. [#55]
 └── types/
     └── express.d.ts            # Campos que os middlewares anexam à Request [#11]
 ```

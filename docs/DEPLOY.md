@@ -117,13 +117,37 @@ npx tsx scripts/migrar-comprovantes.ts --aplicar
 O script é idempotente: reexecutar não duplica nada, porque só enxerga linhas
 que ainda estão com `proof_provider = 'supabase_storage'`.
 
-### 8. Liberar a entrega de PDF na Cloudinary (P-18)
+### 8. ~~Liberar a entrega de PDF na Cloudinary~~ — não é mais necessário (P-18)
 
-Cloudinary → Settings → Security → **Allow delivery of PDF and ZIP files**.
+O servidor converte o comprovante para JPG na entrega, o que contorna a trava de
+PDF da conta sem precisar habilitar nada no painel. Nenhuma ação aqui.
 
-Vem desligado por padrão. Com ele desligado, todo comprovante enviado em PDF
-responde **401** — com o código inteiramente correto. É configuração de conta,
-não de aplicação.
+### 9. (Opcional) Habilitar a expiração da URL do comprovante (P-12)
+
+Sem este passo, a URL de visualização do comprovante **não expira** — quem obtiver
+o link (print, log de proxy) tem acesso vitalício. O código já suporta expirar em
+10 min; falta só a chave da conta.
+
+1. Cloudinary → Settings → Security → procure "Auth Token" ou "Strict
+   Transformations" (o nome exato pode variar conforme a versão do painel) →
+   gere a "Secure Delivery Key".
+2. Cadastre o valor como `CLOUDINARY_AUTH_TOKEN_KEY` no `.env` e na Render.
+3. Reinicie. Nenhuma mudança de código é necessária.
+
+### 10. (Opcional, pago) Publicar o worker de eliminação de mídia (P-11)
+
+O `render.yaml` já declara o serviço `snakethai-media-cleanup` (Cron Job, roda
+diariamente às 3h) que apaga de verdade os comprovantes cuja eliminação já foi
+decidida — conta excluída ou comprovante recusado.
+
+⚠️ **Cron Jobs na Render não têm plano gratuito.** Confirme o custo do plano
+`starter` no painel antes de publicar este serviço — ele é opcional; sem ele, os
+itens continuam se acumulando na fila `media_deletion_queue` sem serem apagados
+de fato (a exclusão fica registrada, não executada).
+
+Cadastre as mesmas variáveis do serviço web **neste serviço separado**, mais a
+`SUPABASE_SERVICE_ROLE_KEY` (marcada como secret) — ela é isolada aqui e **nunca**
+deve ir para o `snakethai-api` (o serviço web).
 
 ---
 

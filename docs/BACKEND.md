@@ -226,9 +226,17 @@ imagem do comprovante sobrevivia com eles.
   alcança — a exclusão de conta, onde os pagamentos **não** são apagados.
   A Edge Function `delete-my-account` a invoca.
 
-> ⚠️ **O consumidor da fila ainda não existe.** Enquanto ele não rodar, a fila
-> registra o que deve ser apagado, mas os arquivos permanecem no provedor. A
-> obrigação de eliminar só se cumpre de fato quando esse worker existir.
+- **`src/jobs/media-cleanup/`** consome a fila: um Cron Job separado do serviço
+  web (`snakethai-media-cleanup` no `render.yaml`), rodando diariamente. É o
+  único lugar deste repositório que carrega a `SUPABASE_SERVICE_ROLE_KEY` como
+  processo de longa duração — isolado, sem porta HTTP nenhuma exposta. [#55]
+
+> ⚠️ **Escopo do worker é deliberadamente limitado.** Ele processa o que os
+> gatilhos já enfileiraram (conta excluída, comprovante recusado, migração de
+> provedor). Ele **não** varre pagamentos por prazo de retenção — falta decidir
+> quantos dias reter um comprovante antes de apagá-lo (P-11 em
+> `docs/PENDENCIAS.md`). Sem esse número, inventar um prazo seria decisão de
+> negócio tomada por engano.
 
 ## 7. Módulos futuros prováveis (esboço — não implementar agora)
 
@@ -236,7 +244,6 @@ Registrados para o servidor já nascer com o lugar deles previsto:
 
 | Módulo | Para quê | O que precisaria |
 | --- | --- | --- |
-| `media-cleanup` | Consumir a `media_deletion_queue` (ver §6.2) | `service_role` isolado; cron |
 | `notifications` | Push de vencimento/aprovação | Expo Push (token do device) |
 | `reports` | Inadimplência/faturamento em PDF/CSV | lê via RLS; gera no servidor |
 | `webhooks` | Eventos de terceiros | verificação de assinatura do provedor |

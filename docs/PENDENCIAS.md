@@ -187,33 +187,36 @@ ela é rede de segurança, não substituta.
 
 ### P-11. Ciclo de vida do comprovante — obrigação da LGPD
 
-**Este é o item mais importante do documento.**
-
-O comprovante PIX é dado pessoal de natureza financeira. Hoje o sistema o cria e o
-disponibiliza, mas **não existe caminho para apagá-lo**, prazo de retenção definido nem
-finalidade documentada.
+**Situação em 2026-09-02 — PARCIALMENTE RESOLVIDA.**
 
 | Dispositivo | Obrigação | Estado |
 | --- | --- | --- |
-| Art. 18, VI | Eliminação a pedido do titular | ❌ |
-| Art. 15/16 | Eliminação após o fim do tratamento | ❌ |
-| Art. 18, V | Portabilidade | ❌ |
-| Art. 6º, I e III | Finalidade e necessidade declaradas | ❌ |
+| Art. 18, VI | Eliminação a pedido do titular | ✅ `eliminar_comprovantes_do_titular` (migration do contrato) |
+| Art. 15/16 | Eliminação após o fim do tratamento | ✅ **worker consumidor** (`src/jobs/media-cleanup/`) |
+| Art. 15, I (prazo) | Retenção por tempo definido | ❌ **falta o número de dias — decisão sua** |
+| Art. 18, V | Portabilidade | ❌ não iniciado |
+| Art. 6º, I e III | Finalidade e necessidade declaradas | ❌ não iniciado |
 
-Agrava: o `public_id` é determinístico (`comprovantes/<userId>/<paymentId>`), então o
-arquivo sobrevive na Cloudinary mesmo depois de o aluno ser excluído do sistema.
+**O que existe agora:** `media_deletion_queue` é alimentada automaticamente (gatilho do
+banco + a função de exclusão de conta), e um **Cron Job novo**
+(`snakethai-media-cleanup` no `render.yaml`) a consome diariamente às 3h — apaga o
+arquivo de verdade na Cloudinary ou no Storage e marca o item como processado.
+Testado contra a Cloudinary real: exclusão confirmada na API administrativa
+(fonte da verdade, não no cache do CDN), e idempotente — reprocessar um item já
+apagado não lança erro. **217 testes** cobrindo a lógica do worker.
 
-**Por que não fiz:** implementar a rota `DELETE /v1/proofs/:paymentId` é **escopo novo**
-— vai além de "construir este servidor em Docker". Precisa da sua autorização, e as
-decisões de prazo e base legal são de negócio, não técnicas.
+⚠️ **Custo:** Cron Jobs na Render não têm plano gratuito. O `render.yaml` já usa o
+mais barato (`starter`) — confirme o valor no painel antes do primeiro deploy.
 
-**O que precisa ser decidido:**
-1. Qual o prazo de retenção? (a legislação fiscal costuma orientar comprovantes de pagamento)
-2. Excluir a conta do aluno deve apagar os comprovantes dele?
-3. Qual a base legal declarada? (provavelmente execução de contrato, art. 7º, V)
+**O que ainda falta, e é decisão sua, não técnica:**
 
-**Diga a palavra e eu implemento** a rota de exclusão, o job de retenção e a
-documentação da base legal.
+1. **Prazo de retenção em dias.** Sem esse número, o worker consome só o que já foi
+   enfileirado por outro motivo (conta excluída, comprovante recusado) — ele **não**
+   varre pagamentos antigos por tempo. O motivo `retencao_expirada` existe no banco e
+   não é usado por ninguém ainda. Me diga o prazo e eu implemento a varredura.
+2. Base legal declarada (provavelmente execução de contrato, art. 7º, V) — falta
+   documentar.
+3. Portabilidade (art. 18, V) — escopo novo, não iniciado.
 
 **Referência:** achado C-1 do [`../REVIEW.md`](../REVIEW.md).
 
@@ -308,37 +311,26 @@ preciso montar um `NOTICE`. O custo cresce com o número de dependências.
 
 ---
 
-### P-18. Liberar a entrega de PDF na conta da Cloudinary
+### ~~P-18. Liberar a entrega de PDF na conta da Cloudinary~~ ✅ RESOLVIDA em 2026-09-01 (sem precisar do painel)
 
-**Situação:** o app aceita comprovante em PDF (`PagamentoScreen` tem "Enviar PDF").
-O código está correto para isso e há teste travando o comportamento: a Cloudinary
-armazena PDF sob `resource_type: image`, que é exatamente o que
-`gerarUrlDeVisualizacao` usa e onde o upload com `auto` cai.
+**Situação original:** por padrão, contas da Cloudinary vêm com a entrega de PDF e
+ZIP **desabilitada**. Confirmado na prática: PDF cru pela URL assinada respondia
+**401**, mesmo com o upload e o `resource_type` corretos.
 
-**O que o teste NÃO alcança:** por padrão, contas da Cloudinary vêm com a entrega
-de PDF e ZIP **desabilitada** — uma trava de segurança da própria plataforma. Com
-ela desligada, a URL assinada de um comprovante em PDF responde **401**, mesmo
-estando tudo certo no código.
+**Como foi resolvido:** em vez de pedir para você habilitar o recurso na conta, o
+servidor passou a **converter o comprovante para JPG na entrega**
+(`FORMATO_ENTREGA` em `proofs.constants.ts`) — o arquivo original continua guardado
+como veio (PDF, PNG, HEIC), e é a URL de saída que sai como imagem. Isso contorna a
+trava da conta por completo: a restrição é sobre entregar o **arquivo bruto** em
+PDF, não sobre a Cloudinary renderizar uma página dele como imagem.
 
-**CONFIRMADO na prática em 2026-09-01**, com as credenciais reais:
+**Reconfirmado**: PDF sobe normalmente e a URL convertida responde 200 — sem
+nenhuma mudança de configuração na conta. Documentado em `docs/BACKEND.md §6.1` e
+coberto por teste (`deveEntregarEmJpgParaContornarATravaDePdfDaConta`).
 
-| Etapa | Resultado |
-| --- | --- |
-| Upload do PDF | ✅ aceito — `resource_type: image`, `type: authenticated`, `format: pdf` |
-| Entrega pela URL assinada | ❌ **HTTP 401 Unauthorized** |
+Nenhuma ação sua é necessária para este item.
 
-Ou seja: o código está correto (o PDF sobe no mesmo `resource_type` que o
-adaptador usa para entregar), e mesmo assim **nenhum comprovante em PDF abre**.
-A trava é exclusivamente da conta.
-
-**Por que não fiz:** é configuração de conta, e não tenho acesso ao painel.
-
-**O que fazer:** Cloudinary → Settings → Security → habilitar *Allow delivery of
-PDF and ZIP files*. Depois, subir um comprovante em PDF e abri-lo pela tela do
-admin — é o único teste que prova este ponto de ponta a ponta.
-
-**Alternativa, se preferir não habilitar:** restringir o envio a imagem no app
-(remover o botão "Enviar PDF"), o que muda o produto e precisa da sua decisão.
+---
 
 ## 🧪 O que não pude verificar de verdade
 
