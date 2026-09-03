@@ -219,20 +219,29 @@ documentação da base legal.
 
 ---
 
-### P-12. URL de visualização com expiração
+### ~~P-12. URL de visualização com expiração~~ ✅ CÓDIGO PRONTO, aguardando 1 passo seu em 2026-09-02
 
-**Situação:** hoje a URL assinada do comprovante **não expira**. O asset é privado
-(`type=authenticated`), então quem não tem a URL não acessa — mas quem obtiver a URL
-(print, histórico de navegador, log de proxy) tem acesso **vitalício**.
+**Situação original:** a URL assinada do comprovante **não expirava**. O asset é
+privado (`type=authenticated`), então quem não tem a URL não acessa — mas quem
+obtiver a URL (print, histórico de navegador, log de proxy) tinha acesso **vitalício**.
 
-O `docs/BACKEND.md §6` trata isso como "opcional". Para PII financeira, recomendo
-reclassificar como requisito.
+**Resolvido do lado do código.** `gerarUrlDeVisualizacao` agora expira a URL em 10 min
+quando a variável `CLOUDINARY_AUTH_TOKEN_KEY` está presente — mesmo prazo que o
+Supabase Storage já usava. Sem ela, a URL continua exatamente como hoje (sem prazo);
+nada quebra em produção até o passo abaixo ser feito.
 
-**Por que não fiz:** exige ativar o recurso *Auth Token* na Cloudinary, que precisa de
-uma *secure delivery key* própria — configuração na conta, que não tenho.
+**Testado contra a conta real (verificado, não presumido):** uma chave inventada é
+rejeitada pela Cloudinary com 401 — o mesmo que não mandar token nenhum. A chave
+**precisa existir no painel da conta**; não dá para simplesmente gerar uma aqui.
 
-**O que fazer:** ativar o recurso na Cloudinary e me avisar; a mudança no código é
-pequena.
+**O que fazer:**
+1. Cloudinary → Settings → Security → seção de segurança de entrega — procure por
+   "Auth Token" ou "Strict Transformations" (o nome exato pode variar um pouco
+   conforme a versão do painel). Gere a "Secure Delivery Key".
+2. Cadastre o valor gerado como `CLOUDINARY_AUTH_TOKEN_KEY` no `.env` local e no
+   painel da Render.
+3. Reinicie o servidor. Nenhuma mudança de código é necessária a partir daqui — a URL
+   passa a expirar automaticamente.
 
 ---
 

@@ -1,7 +1,11 @@
 import { v2 as cloudinary } from 'cloudinary';
 
 import { logger } from '../../lib/logger.js';
-import { FORMATO_ENTREGA, TIPO_ENTREGA_PRIVADO } from './proofs.constants.js';
+import {
+  FORMATO_ENTREGA,
+  TIPO_ENTREGA_PRIVADO,
+  VALIDADE_URL_VISUALIZACAO_SEGUNDOS,
+} from './proofs.constants.js';
 import type { AssinadorDeMidia, ParametrosDeUpload, UploadAssinado } from './proofs.service.js';
 
 /**
@@ -22,6 +26,13 @@ export interface ConfigDeMidia {
   cloudName: string;
   apiKey: string;
   apiSecret: string;
+  /**
+   * Chave da "Secure Delivery Key"/"Auth Token" cadastrada na conta da
+   * Cloudinary. Presente → a URL de visualização expira. Ausente → o
+   * comportamento anterior (URL sem prazo) continua valendo. Ver P-12 em
+   * `docs/PENDENCIAS.md`.
+   */
+  authTokenKey?: string | undefined;
 }
 
 /**
@@ -74,6 +85,24 @@ export function criarAssinadorCloudinary(config: ConfigDeMidia): AssinadorDeMidi
         // `page` só entra quando pedida: num arquivo de página única ela é
         // ruído na URL, e a Cloudinary já entrega a única página que existe.
         ...(pagina === undefined ? {} : { page: pagina }),
+        /*
+         * `auth_token` só tem efeito NA PRESENÇA de `sign_url: true` — o SDK
+         * usa um para o outro: com os dois juntos, o token substitui a
+         * assinatura sem prazo pela verificação com validade. [Verificado no
+         * código-fonte do SDK: o `signature` só é calculado quando
+         * `auth_token` está vazio.]
+         *
+         * Sem `authTokenKey` configurada, este objeto fica vazio e o SDK
+         * ignora a opção — comportamento de hoje, preservado. [#9]
+         */
+        ...(config.authTokenKey === undefined
+          ? {}
+          : {
+              auth_token: {
+                key: config.authTokenKey,
+                duration: VALIDADE_URL_VISUALIZACAO_SEGUNDOS,
+              },
+            }),
       });
     },
 

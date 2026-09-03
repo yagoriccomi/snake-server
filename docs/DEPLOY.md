@@ -47,6 +47,7 @@ Render → o serviço → **Environment**:
 | `CLOUDINARY_API_KEY` | sim | Cloudinary → Dashboard → API Key |
 | `CLOUDINARY_API_SECRET` | **sim** | Cloudinary → Dashboard → API Secret |
 | `ALLOWED_ORIGIN` | não | deixe vazio enquanto não houver cliente web |
+| `CLOUDINARY_AUTH_TOKEN_KEY` | sim | **opcional** — Cloudinary → Settings → Security → Auth Token. Sem ela a URL do comprovante não expira; com ela, expira em 10 min. Ver P-12. |
 
 ⚠️ **Não cadastre** `SUPABASE_JWT_SECRET` — o servidor **se recusa a iniciar**
 se ela existir, porque quem a tem pode forjar o token de qualquer usuário.
