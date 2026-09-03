@@ -47,7 +47,7 @@ Render → o serviço → **Environment**:
 | `CLOUDINARY_API_KEY` | sim | Cloudinary → Dashboard → API Key |
 | `CLOUDINARY_API_SECRET` | **sim** | Cloudinary → Dashboard → API Secret |
 | `ALLOWED_ORIGIN` | não | deixe vazio enquanto não houver cliente web |
-| `CLOUDINARY_AUTH_TOKEN_KEY` | sim | **opcional** — Cloudinary → Settings → Security → Auth Token. Sem ela a URL do comprovante não expira; com ela, expira em 10 min. Ver P-12. |
+| `CLOUDINARY_AUTH_TOKEN_KEY` | sim | **opcional, plano Advanced+** — fornecida pelo suporte da Cloudinary, não gerada no painel. Sem ela a URL do comprovante não expira. Ver passo 9 e P-12. |
 
 ⚠️ **Não cadastre** `SUPABASE_JWT_SECRET` — o servidor **se recusa a iniciar**
 se ela existir, porque quem a tem pode forjar o token de qualquer usuário.
@@ -122,17 +122,26 @@ que ainda estão com `proof_provider = 'supabase_storage'`.
 O servidor converte o comprovante para JPG na entrega, o que contorna a trava de
 PDF da conta sem precisar habilitar nada no painel. Nenhuma ação aqui.
 
-### 9. (Opcional) Habilitar a expiração da URL do comprovante (P-12)
+### 9. (Opcional, pode exigir upgrade de plano) Habilitar a expiração da URL do comprovante (P-12)
 
 Sem este passo, a URL de visualização do comprovante **não expira** — quem obtiver
 o link (print, log de proxy) tem acesso vitalício. O código já suporta expirar em
 10 min; falta só a chave da conta.
 
-1. Cloudinary → Settings → Security → procure "Auth Token" ou "Strict
-   Transformations" (o nome exato pode variar conforme a versão do painel) →
-   gere a "Secure Delivery Key".
-2. Cadastre o valor como `CLOUDINARY_AUTH_TOKEN_KEY` no `.env` e na Render.
-3. Reinicie. Nenhuma mudança de código é necessária.
+⚠️ **Esta chave NÃO é self-service.** Confirmado na documentação oficial: é recurso
+do **plano Advanced ou superior** da Cloudinary, e a chave não é gerada no painel —
+é fornecida pelo suporte.
+
+1. Confirme seu plano em Cloudinary → Settings → Billing.
+2. Se for Advanced ou superior, abra um chamado em
+   [support.cloudinary.com](https://support.cloudinary.com/hc/en-us/requests/new)
+   informando o `cloud_name` e pedindo para habilitarem "token-based access" — eles
+   enviam a chave.
+3. Cadastre o valor recebido como `CLOUDINARY_AUTH_TOKEN_KEY` no `.env` e na Render.
+4. Reinicie. Nenhuma mudança de código é necessária.
+
+Se o plano não incluir esse recurso, a URL permanece sem expiração — decisão de
+custo/benefício, não bloqueio técnico.
 
 ### 10. (Opcional, pago) Publicar o worker de eliminação de mídia (P-11)
 

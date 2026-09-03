@@ -222,7 +222,7 @@ mais barato (`starter`) — confirme o valor no painel antes do primeiro deploy.
 
 ---
 
-### ~~P-12. URL de visualização com expiração~~ ✅ CÓDIGO PRONTO, aguardando 1 passo seu em 2026-09-02
+### ~~P-12. URL de visualização com expiração~~ ✅ CÓDIGO PRONTO, bloqueado por plano da conta em 2026-09-03
 
 **Situação original:** a URL assinada do comprovante **não expirava**. O asset é
 privado (`type=authenticated`), então quem não tem a URL não acessa — mas quem
@@ -234,14 +234,24 @@ Supabase Storage já usava. Sem ela, a URL continua exatamente como hoje (sem pr
 nada quebra em produção até o passo abaixo ser feito.
 
 **Testado contra a conta real (verificado, não presumido):** uma chave inventada é
-rejeitada pela Cloudinary com 401 — o mesmo que não mandar token nenhum. A chave
-**precisa existir no painel da conta**; não dá para simplesmente gerar uma aqui.
+rejeitada pela Cloudinary com 401 — o mesmo que não mandar token nenhum.
+
+**Correção em 2026-09-03: a chave NÃO é self-service no console.** Confirmado na
+[documentação oficial](https://cloudinary.com/documentation/control_access_to_media):
+- É recurso do **plano Advanced ou superior** — não aparece em nenhuma tela do painel
+  em planos abaixo disso (é por isso que "Strict Transformations" é a única coisa
+  visível perto de Security, e ela é um recurso diferente, não relacionado).
+- A chave **não é gerada por você**: é preciso [abrir um chamado com o suporte da
+  Cloudinary](https://support.cloudinary.com/hc/en-us/requests/new), informar o
+  `cloud_name` e pedir para habilitarem "token-based access" — eles enviam a chave
+  (uma string hexadecimal, diferente da `api_secret`).
 
 **O que fazer:**
-1. Cloudinary → Settings → Security → seção de segurança de entrega — procure por
-   "Auth Token" ou "Strict Transformations" (o nome exato pode variar um pouco
-   conforme a versão do painel). Gere a "Secure Delivery Key".
-2. Cadastre o valor gerado como `CLOUDINARY_AUTH_TOKEN_KEY` no `.env` local e no
+1. Confirmar o plano da conta (Cloudinary → Settings → Billing). Se for Advanced ou
+   superior, abrir o chamado de suporte pedindo a chave.
+2. Se o plano não incluir esse recurso, a URL permanece sem expiração até um upgrade
+   de plano — decisão sua, de custo/benefício.
+3. Quando a chave chegar, cadastre-a como `CLOUDINARY_AUTH_TOKEN_KEY` no `.env` local e no
    painel da Render.
 3. Reinicie o servidor. Nenhuma mudança de código é necessária a partir daqui — a URL
    passa a expirar automaticamente.
