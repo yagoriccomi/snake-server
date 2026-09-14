@@ -129,7 +129,12 @@ variável `EXPO_PUBLIC_API_URL` do app.
 
 ---
 
-### P-19. Publicar o módulo de justificativas (2026-09-14)
+### ~~P-19. Publicar o módulo de justificativas~~ ✅ RESOLVIDA em 2026-09-14
+
+**Resolução:** PR #14 mergeado na `main` (eed8e35) e publicado pela Render. Conferido
+em produção: `sign-upload` e `view-url` sem token respondem `401`, `classId`
+inválido responde `400`, e `/v1/proofs/sign-upload` continua `401`. O registro
+abaixo fica como histórico.
 
 **Por que não fiz:** a branch `feature/modulo-justificativas` está commitada só
 localmente. Pela regra do projeto, push só acontece com decisão explícita sua, e o
