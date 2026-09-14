@@ -47,6 +47,7 @@ Render → o serviço → **Environment**:
 | `CLOUDINARY_API_KEY` | sim | Cloudinary → Dashboard → API Key |
 | `CLOUDINARY_API_SECRET` | **sim** | Cloudinary → Dashboard → API Secret |
 | `ALLOWED_ORIGIN` | não | deixe vazio enquanto não houver cliente web |
+| `CLOUDINARY_AUTH_TOKEN_KEY` | sim | **opcional, plano Advanced+** — fornecida pelo suporte da Cloudinary, não gerada no painel. Sem ela a URL do comprovante não expira. Ver passo 9 e P-12. |
 
 ⚠️ **Não cadastre** `SUPABASE_JWT_SECRET` — o servidor **se recusa a iniciar**
 se ela existir, porque quem a tem pode forjar o token de qualquer usuário.
@@ -116,13 +117,46 @@ npx tsx scripts/migrar-comprovantes.ts --aplicar
 O script é idempotente: reexecutar não duplica nada, porque só enxerga linhas
 que ainda estão com `proof_provider = 'supabase_storage'`.
 
-### 8. Liberar a entrega de PDF na Cloudinary (P-18)
+### 8. ~~Liberar a entrega de PDF na Cloudinary~~ — não é mais necessário (P-18)
 
-Cloudinary → Settings → Security → **Allow delivery of PDF and ZIP files**.
+O servidor converte o comprovante para JPG na entrega, o que contorna a trava de
+PDF da conta sem precisar habilitar nada no painel. Nenhuma ação aqui.
 
-Vem desligado por padrão. Com ele desligado, todo comprovante enviado em PDF
-responde **401** — com o código inteiramente correto. É configuração de conta,
-não de aplicação.
+### 9. (Opcional, pode exigir upgrade de plano) Habilitar a expiração da URL do comprovante (P-12)
+
+Sem este passo, a URL de visualização do comprovante **não expira** — quem obtiver
+o link (print, log de proxy) tem acesso vitalício. O código já suporta expirar em
+10 min; falta só a chave da conta.
+
+⚠️ **Esta chave NÃO é self-service.** Confirmado na documentação oficial: é recurso
+do **plano Advanced ou superior** da Cloudinary, e a chave não é gerada no painel —
+é fornecida pelo suporte.
+
+1. Confirme seu plano em Cloudinary → Settings → Billing.
+2. Se for Advanced ou superior, abra um chamado em
+   [support.cloudinary.com](https://support.cloudinary.com/hc/en-us/requests/new)
+   informando o `cloud_name` e pedindo para habilitarem "token-based access" — eles
+   enviam a chave.
+3. Cadastre o valor recebido como `CLOUDINARY_AUTH_TOKEN_KEY` no `.env` e na Render.
+4. Reinicie. Nenhuma mudança de código é necessária.
+
+Se o plano não incluir esse recurso, a URL permanece sem expiração — decisão de
+custo/benefício, não bloqueio técnico.
+
+### 10. (Opcional, pago) Publicar o worker de eliminação de mídia (P-11)
+
+O `render.yaml` já declara o serviço `snakethai-media-cleanup` (Cron Job, roda
+diariamente às 3h) que apaga de verdade os comprovantes cuja eliminação já foi
+decidida — conta excluída ou comprovante recusado.
+
+⚠️ **Cron Jobs na Render não têm plano gratuito.** Confirme o custo do plano
+`starter` no painel antes de publicar este serviço — ele é opcional; sem ele, os
+itens continuam se acumulando na fila `media_deletion_queue` sem serem apagados
+de fato (a exclusão fica registrada, não executada).
+
+Cadastre as mesmas variáveis do serviço web **neste serviço separado**, mais a
+`SUPABASE_SERVICE_ROLE_KEY` (marcada como secret) — ela é isolada aqui e **nunca**
+deve ir para o `snakethai-api` (o serviço web).
 
 ---
 

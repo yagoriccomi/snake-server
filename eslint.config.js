@@ -65,6 +65,14 @@ export default tseslint.config(
   },
 
   {
+    // Worker de linha de comando (Render Cron Job): mesma razão dos scripts
+    // operacionais — o stdout É o produto, lido por uma pessoa nos logs do
+    // agendador, não pelo logger JSON estruturado do servidor web. [#91][#92]
+    files: ['src/jobs/**/*.ts'],
+    rules: { 'no-console': 'off' },
+  },
+
+  {
     files: ['tests/**/*.ts'],
     rules: {
       /*

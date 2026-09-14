@@ -129,6 +129,27 @@ variável `EXPO_PUBLIC_API_URL` do app.
 
 ---
 
+### P-19. Publicar o módulo de justificativas (2026-09-14)
+
+**Por que não fiz:** a branch `feature/modulo-justificativas` está commitada só
+localmente. Pela regra do projeto, push só acontece com decisão explícita sua, e o
+serviço web está com `autoDeploy: false`: o deploy é manual, no painel da Render.
+
+**O que falta:**
+1. Autorizar o push da branch (e decidir se ela entra na `main` antes).
+2. Render → serviço → **Manual Deploy** do commit com o módulo.
+3. Conferir: `POST /v1/justifications/sign-upload` sem token deve responder `401`,
+   e não `404`.
+
+**Nenhuma variável nova:** o módulo reusa as credenciais da Cloudinary dos
+comprovantes.
+
+**Efeito enquanto não sai:** no app 1.4.0, a justificativa de falta **só com
+mensagem** funciona. Com anexo, o envio falha com mensagem genérica e nada é
+gravado. O aluno não perde a declaração de falta.
+
+---
+
 ## 🟡 Informações que faltam e afetam o código
 
 ### ~~P-8. Confirmar o formato real gravado em `payments.proof_url`~~ ✅ RESOLVIDA em 2026-08-31
@@ -187,52 +208,110 @@ ela é rede de segurança, não substituta.
 
 ### P-11. Ciclo de vida do comprovante — obrigação da LGPD
 
-**Este é o item mais importante do documento.**
-
-O comprovante PIX é dado pessoal de natureza financeira. Hoje o sistema o cria e o
-disponibiliza, mas **não existe caminho para apagá-lo**, prazo de retenção definido nem
-finalidade documentada.
+**Situação em 2026-09-02 — PARCIALMENTE RESOLVIDA.**
 
 | Dispositivo | Obrigação | Estado |
 | --- | --- | --- |
-| Art. 18, VI | Eliminação a pedido do titular | ❌ |
-| Art. 15/16 | Eliminação após o fim do tratamento | ❌ |
-| Art. 18, V | Portabilidade | ❌ |
-| Art. 6º, I e III | Finalidade e necessidade declaradas | ❌ |
+| Art. 18, VI | Eliminação a pedido do titular | ✅ `eliminar_comprovantes_do_titular` (migration do contrato) |
+| Art. 15/16 | Eliminação após o fim do tratamento | ✅ **worker consumidor** (`src/jobs/media-cleanup/`) |
+| Art. 15, I (prazo) | Retenção por tempo definido | ❌ **falta o número de dias — decisão sua** |
+| Art. 18, V | Portabilidade | ❌ não iniciado |
+| Art. 6º, I e III | Finalidade e necessidade declaradas | ❌ não iniciado |
 
-Agrava: o `public_id` é determinístico (`comprovantes/<userId>/<paymentId>`), então o
-arquivo sobrevive na Cloudinary mesmo depois de o aluno ser excluído do sistema.
+**O que existe agora:** `media_deletion_queue` é alimentada automaticamente (gatilho do
+banco + a função de exclusão de conta), e um **Cron Job novo**
+(`snakethai-media-cleanup` no `render.yaml`) a consome diariamente às 3h — apaga o
+arquivo de verdade na Cloudinary ou no Storage e marca o item como processado.
+Testado contra a Cloudinary real: exclusão confirmada na API administrativa
+(fonte da verdade, não no cache do CDN), e idempotente — reprocessar um item já
+apagado não lança erro. **217 testes** cobrindo a lógica do worker.
 
-**Por que não fiz:** implementar a rota `DELETE /v1/proofs/:paymentId` é **escopo novo**
-— vai além de "construir este servidor em Docker". Precisa da sua autorização, e as
-decisões de prazo e base legal são de negócio, não técnicas.
+⚠️ **Custo:** Cron Jobs na Render não têm plano gratuito. O `render.yaml` já usa o
+mais barato (`starter`) — confirme o valor no painel antes do primeiro deploy.
 
-**O que precisa ser decidido:**
-1. Qual o prazo de retenção? (a legislação fiscal costuma orientar comprovantes de pagamento)
-2. Excluir a conta do aluno deve apagar os comprovantes dele?
-3. Qual a base legal declarada? (provavelmente execução de contrato, art. 7º, V)
+**O que ainda falta, e é decisão sua, não técnica:**
 
-**Diga a palavra e eu implemento** a rota de exclusão, o job de retenção e a
-documentação da base legal.
+1. **Prazo de retenção em dias.** Sem esse número, o worker consome só o que já foi
+   enfileirado por outro motivo (conta excluída, comprovante recusado) — ele **não**
+   varre pagamentos antigos por tempo. O motivo `retencao_expirada` existe no banco e
+   não é usado por ninguém ainda. Me diga o prazo e eu implemento a varredura.
+2. Base legal declarada (provavelmente execução de contrato, art. 7º, V) — falta
+   documentar.
+3. Portabilidade (art. 18, V) — escopo novo, não iniciado.
 
 **Referência:** achado C-1 do [`../REVIEW.md`](../REVIEW.md).
 
 ---
 
-### P-12. URL de visualização com expiração
+### ~~P-12. URL de visualização com expiração~~ ✅ CÓDIGO PRONTO, bloqueado por plano da conta em 2026-09-03
 
-**Situação:** hoje a URL assinada do comprovante **não expira**. O asset é privado
-(`type=authenticated`), então quem não tem a URL não acessa — mas quem obtiver a URL
-(print, histórico de navegador, log de proxy) tem acesso **vitalício**.
+**Situação original:** a URL assinada do comprovante **não expirava**. O asset é
+privado (`type=authenticated`), então quem não tem a URL não acessa — mas quem
+obtiver a URL (print, histórico de navegador, log de proxy) tinha acesso **vitalício**.
 
-O `docs/BACKEND.md §6` trata isso como "opcional". Para PII financeira, recomendo
-reclassificar como requisito.
+**Resolvido do lado do código.** `gerarUrlDeVisualizacao` agora expira a URL em 10 min
+quando a variável `CLOUDINARY_AUTH_TOKEN_KEY` está presente — mesmo prazo que o
+Supabase Storage já usava. Sem ela, a URL continua exatamente como hoje (sem prazo);
+nada quebra em produção até o passo abaixo ser feito.
 
-**Por que não fiz:** exige ativar o recurso *Auth Token* na Cloudinary, que precisa de
-uma *secure delivery key* própria — configuração na conta, que não tenho.
+**Testado contra a conta real (verificado, não presumido):** uma chave inventada é
+rejeitada pela Cloudinary com 401 — o mesmo que não mandar token nenhum.
 
-**O que fazer:** ativar o recurso na Cloudinary e me avisar; a mudança no código é
-pequena.
+**Correção em 2026-09-03: a chave NÃO é self-service no console.** Confirmado na
+[documentação oficial](https://cloudinary.com/documentation/control_access_to_media):
+- É recurso do **plano Advanced ou superior** — não aparece em nenhuma tela do painel
+  em planos abaixo disso (é por isso que "Strict Transformations" é a única coisa
+  visível perto de Security, e ela é um recurso diferente, não relacionado).
+- A chave **não é gerada por você**: é preciso [abrir um chamado com o suporte da
+  Cloudinary](https://support.cloudinary.com/hc/en-us/requests/new), informar o
+  `cloud_name` e pedir para habilitarem "token-based access" — eles enviam a chave
+  (uma string hexadecimal, diferente da `api_secret`).
+
+**O que fazer:**
+1. Confirmar o plano da conta (Cloudinary → Settings → Billing). Se for Advanced ou
+   superior, abrir o chamado de suporte pedindo a chave.
+2. Se o plano não incluir esse recurso, a URL permanece sem expiração até um upgrade
+   de plano — decisão sua, de custo/benefício.
+3. Quando a chave chegar, cadastre-a como `CLOUDINARY_AUTH_TOKEN_KEY` no `.env` local e no
+   painel da Render.
+3. Reinicie o servidor. Nenhuma mudança de código é necessária a partir daqui — a URL
+   passa a expirar automaticamente.
+
+### P-12b. Alternativa sem custo à expiração — avaliada e adiada, NÃO implementar sem novo pedido
+
+**Contexto:** enquanto o plano Advanced/chave da Cloudinary (P-12) não vier, ventilamos
+uma alternativa que não dependeria do plano pago: o servidor impor a expiração por
+conta própria.
+
+**Por que não é um "toggle simples":** o app fala **direto** com a Cloudinary — a
+URL assinada vai para o navegador/app do usuário, e é a Cloudinary quem entrega os
+bytes, sem passar pelo nosso servidor. Qualquer prazo que **nós** registrássemos no
+nosso banco seria invisível para a Cloudinary: ela nunca nos consulta antes de
+entregar, só valida a própria assinatura.
+
+A única forma de ter expiração real sem o recurso pago é **mudar a arquitetura**:
+o app passaria a pedir a imagem ao **nosso servidor**, que verificaria um prazo/uso
+único numa tabela nossa e, se válido, buscaria o arquivo na Cloudinary com a
+`api_secret` e devolveria os bytes — um proxy de visualização.
+
+**Custo dessa mudança:**
+- O arquivo passa a trafegar pelo nosso servidor — o oposto do que a arquitetura
+  atual busca (upload já vai direto para a Cloudinary, sem tocar aqui).
+- Consumo de banda no plano free da Render, que tem teto mensal — hoje inexistente
+  nesse fluxo.
+- Cold start reaparece na **visualização**, não só no envio.
+- Mais um endpoint, mais uma tabela, mais superfície de teste e manutenção.
+
+**Risco real de não fazer nada:** a URL de um comprovante já obtido (print, log de
+proxy, histórico de navegador) continua válida indefinidamente. Isso não permite que
+alguém **gere** uma URL do zero — só estende o acesso de quem já era dono ou admin
+do pagamento e recebeu o link uma vez.
+
+**Decisão em 2026-09-03: não implementar agora.** O custo de engenharia não se
+justifica frente a um risco residual e limitado, quando a solução correta (upgrade
+de plano) resolve de forma mais simples. Revisitar se: (a) surgir um incidente
+concreto de vazamento de link, ou (b) o custo do plano Advanced deixar de compensar
+frente ao custo de manter o proxy.
 
 ---
 
@@ -299,37 +378,26 @@ preciso montar um `NOTICE`. O custo cresce com o número de dependências.
 
 ---
 
-### P-18. Liberar a entrega de PDF na conta da Cloudinary
+### ~~P-18. Liberar a entrega de PDF na conta da Cloudinary~~ ✅ RESOLVIDA em 2026-09-01 (sem precisar do painel)
 
-**Situação:** o app aceita comprovante em PDF (`PagamentoScreen` tem "Enviar PDF").
-O código está correto para isso e há teste travando o comportamento: a Cloudinary
-armazena PDF sob `resource_type: image`, que é exatamente o que
-`gerarUrlDeVisualizacao` usa e onde o upload com `auto` cai.
+**Situação original:** por padrão, contas da Cloudinary vêm com a entrega de PDF e
+ZIP **desabilitada**. Confirmado na prática: PDF cru pela URL assinada respondia
+**401**, mesmo com o upload e o `resource_type` corretos.
 
-**O que o teste NÃO alcança:** por padrão, contas da Cloudinary vêm com a entrega
-de PDF e ZIP **desabilitada** — uma trava de segurança da própria plataforma. Com
-ela desligada, a URL assinada de um comprovante em PDF responde **401**, mesmo
-estando tudo certo no código.
+**Como foi resolvido:** em vez de pedir para você habilitar o recurso na conta, o
+servidor passou a **converter o comprovante para JPG na entrega**
+(`FORMATO_ENTREGA` em `proofs.constants.ts`) — o arquivo original continua guardado
+como veio (PDF, PNG, HEIC), e é a URL de saída que sai como imagem. Isso contorna a
+trava da conta por completo: a restrição é sobre entregar o **arquivo bruto** em
+PDF, não sobre a Cloudinary renderizar uma página dele como imagem.
 
-**CONFIRMADO na prática em 2026-09-01**, com as credenciais reais:
+**Reconfirmado**: PDF sobe normalmente e a URL convertida responde 200 — sem
+nenhuma mudança de configuração na conta. Documentado em `docs/BACKEND.md §6.1` e
+coberto por teste (`deveEntregarEmJpgParaContornarATravaDePdfDaConta`).
 
-| Etapa | Resultado |
-| --- | --- |
-| Upload do PDF | ✅ aceito — `resource_type: image`, `type: authenticated`, `format: pdf` |
-| Entrega pela URL assinada | ❌ **HTTP 401 Unauthorized** |
+Nenhuma ação sua é necessária para este item.
 
-Ou seja: o código está correto (o PDF sobe no mesmo `resource_type` que o
-adaptador usa para entregar), e mesmo assim **nenhum comprovante em PDF abre**.
-A trava é exclusivamente da conta.
-
-**Por que não fiz:** é configuração de conta, e não tenho acesso ao painel.
-
-**O que fazer:** Cloudinary → Settings → Security → habilitar *Allow delivery of
-PDF and ZIP files*. Depois, subir um comprovante em PDF e abri-lo pela tela do
-admin — é o único teste que prova este ponto de ponta a ponta.
-
-**Alternativa, se preferir não habilitar:** restringir o envio a imagem no app
-(remover o botão "Enviar PDF"), o que muda o produto e precisa da sua decisão.
+---
 
 ## 🧪 O que não pude verificar de verdade
 

@@ -49,6 +49,21 @@ const esquemaAmbiente = z.object({
   CLOUDINARY_API_SECRET: z.string().trim().min(1, 'obrigatória'),
 
   /**
+   * Chave de conta que faz a URL de visualização do comprovante EXPIRAR.
+   *
+   * Opcional de propósito: exige um passo manual no painel da Cloudinary
+   * (Settings → Security → gerar a "Secure Delivery Key" / "Auth Token")
+   * que só o dono da conta pode fazer. Testado contra a conta real: uma
+   * chave não cadastrada lá é rejeitada (401) — não dá para simplesmente
+   * inventar uma aqui.
+   *
+   * Ausente → a URL continua como hoje, sem expirar (comportamento anterior
+   * preservado; nada quebra enquanto o passo manual não é feito).
+   * Presente → toda URL nova expira em `VALIDADE_URL_VISUALIZACAO_SEGUNDOS`.
+   */
+  CLOUDINARY_AUTH_TOKEN_KEY: z.string().trim().min(1).optional(),
+
+  /**
    * Segunda barreira de autorização dos comprovantes.
    *
    * `rls`          confia na RLS e ALERTA quando ela libera dado alheio.
@@ -139,6 +154,7 @@ export const env = {
     cloudName: ambiente.CLOUDINARY_CLOUD_NAME,
     apiKey: ambiente.CLOUDINARY_API_KEY,
     apiSecret: ambiente.CLOUDINARY_API_SECRET,
+    authTokenKey: ambiente.CLOUDINARY_AUTH_TOKEN_KEY,
   },
 
   politicaDeAcessoAComprovante: ambiente.POLITICA_ACESSO_COMPROVANTE,

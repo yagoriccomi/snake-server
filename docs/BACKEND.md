@@ -226,9 +226,58 @@ imagem do comprovante sobrevivia com eles.
   alcança — a exclusão de conta, onde os pagamentos **não** são apagados.
   A Edge Function `delete-my-account` a invoca.
 
-> ⚠️ **O consumidor da fila ainda não existe.** Enquanto ele não rodar, a fila
-> registra o que deve ser apagado, mas os arquivos permanecem no provedor. A
-> obrigação de eliminar só se cumpre de fato quando esse worker existir.
+- **`src/jobs/media-cleanup/`** consome a fila: um Cron Job separado do serviço
+  web (`snakethai-media-cleanup` no `render.yaml`), rodando diariamente. É o
+  único lugar deste repositório que carrega a `SUPABASE_SERVICE_ROLE_KEY` como
+  processo de longa duração — isolado, sem porta HTTP nenhuma exposta. [#55]
+
+> ⚠️ **Escopo do worker é deliberadamente limitado.** Ele processa o que os
+> gatilhos já enfileiraram (conta excluída, comprovante recusado, migração de
+> provedor). Ele **não** varre pagamentos por prazo de retenção — falta decidir
+> quantos dias reter um comprovante antes de apagá-lo (P-11 em
+> `docs/PENDENCIAS.md`). Sem esse número, inventar um prazo seria decisão de
+> negócio tomada por engano.
+
+## 6B. Módulo 2 — Justificativas de falta (Cloudinary)
+
+Anexo (imagem ou PDF) de uma justificativa de falta do aluno. As regras de
+negócio — quem envia, quem revisa, o limite de 255 caracteres — vivem no banco
+(`absence_justifications`; ver `docs/FREQUENCIA.md` no app). Este módulo só
+assina o upload e a visualização do arquivo.
+
+Reusa o contrato `AssinadorDeMidia` dos comprovantes e a mesma instância do
+adaptador, montada uma vez no `composition-root`: duas integrações com a mesma
+conta da Cloudinary só dariam a chance de divergirem.
+
+### `POST /v1/justifications/sign-upload`
+Autenticado. Body `{ "classId": "<uuid>" }`.
+
+Destino derivado do **id verificado**: `folder = justificativas/<userId>`,
+`public_id = <classId>`. Reenviar o anexo da mesma aula substitui o anterior.
+
+### `POST /v1/justifications/view-url`
+Autenticado. Body `{ "justificationId": "<uuid>", "pagina"?: number }`.
+
+1. Lê a justificativa com o **token do chamador**; a RLS libera para o aluno
+   dono, o professor daquela aula e o admin. Vazio ou sem anexo → `403`.
+2. Se `proof_provider` **não for** `cloudinary`, responde `403`.
+3. Deriva `justificativas/<user_id>/<class_id>` e assina a URL.
+
+#### Por que não há `conferirDono` aqui
+
+Nos comprovantes, a RLS liberar a linha de outra pessoa é anomalia — só um admin
+legítimo explica. Aqui é o caminho **normal**: o professor revisa a justificativa
+do aluno. Um alarme de "não é o dono" dispararia a cada revisão e ensinaria todo
+mundo a ignorá-lo. A barreira que continua valendo é a **derivação do caminho**:
+enquanto a justificativa está pendente o aluno edita `proof_public_id`, e assinar
+o valor gravado repetiria o achado C-2.
+
+### Eliminação (LGPD)
+
+Trocar ou remover o anexo, ou apagar a justificativa, enfileira o arquivo antigo
+em `media_deletion_queue` com o motivo `justificativa_removida`. O worker
+`media-cleanup` consome a fila **sem mudança**: ele lê só
+`id, provider, asset_ref, tentativas`.
 
 ## 7. Módulos futuros prováveis (esboço — não implementar agora)
 
@@ -236,7 +285,6 @@ Registrados para o servidor já nascer com o lugar deles previsto:
 
 | Módulo | Para quê | O que precisaria |
 | --- | --- | --- |
-| `media-cleanup` | Consumir a `media_deletion_queue` (ver §6.2) | `service_role` isolado; cron |
 | `notifications` | Push de vencimento/aprovação | Expo Push (token do device) |
 | `reports` | Inadimplência/faturamento em PDF/CSV | lê via RLS; gera no servidor |
 | `webhooks` | Eventos de terceiros | verificação de assinatura do provedor |

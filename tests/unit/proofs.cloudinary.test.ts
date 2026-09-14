@@ -153,4 +153,47 @@ describe('gerarUrlDeVisualizacao', () => {
 
     expect(url).not.toContain('pg_');
   });
+
+  it('naoDeveExpirarAUrlQuandoNaoHaChaveDeAuthTokenConfigurada', () => {
+    // Comportamento anterior preservado: enquanto a conta não tiver a chave
+    // cadastrada, a URL segue funcionando exatamente como hoje. [#9]
+    const url = assinador.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
+
+    expect(url).not.toContain('__cld_token__');
+  });
+
+  it('deveExpirarAUrlQuandoAContaTemAChaveDeAuthTokenConfigurada', () => {
+    const comAuthToken = criarAssinadorCloudinary({
+      ...CONFIG,
+      authTokenKey: 'aa'.repeat(16),
+    });
+
+    const url = comAuthToken.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
+
+    expect(url).toContain('__cld_token__=');
+    expect(url).toMatch(/__cld_token__=exp=\d+~hmac=[0-9a-f]+/);
+  });
+
+  it('naoDeveVazarAChaveDeAuthTokenNaUrlGerada', () => {
+    // A chave alimenta um HMAC; ela mesma nunca pode aparecer em texto claro
+    // no link que sai para o app. [#55]
+    const chave = 'bb'.repeat(16);
+    const comAuthToken = criarAssinadorCloudinary({ ...CONFIG, authTokenKey: chave });
+
+    const url = comAuthToken.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9');
+
+    expect(url).not.toContain(chave);
+  });
+
+  it('deveGerarTokensDiferentesParaPaginasDiferentesDoMesmoDocumento', () => {
+    // Cada página é um recurso distinto entregue; o token amarra a
+    // verificação ao caminho exato — inclusive ao parâmetro de página.
+    const comAuthToken = criarAssinadorCloudinary({ ...CONFIG, authTokenKey: 'cc'.repeat(16) });
+
+    const pagina1 = comAuthToken.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9', 1);
+    const pagina2 = comAuthToken.gerarUrlDeVisualizacao('comprovantes/aluno-1/pagamento-9', 2);
+
+    const tokenDe = (url: string) => /__cld_token__=([^&]+)/.exec(url)?.[1];
+    expect(tokenDe(pagina1)).not.toBe(tokenDe(pagina2));
+  });
 });

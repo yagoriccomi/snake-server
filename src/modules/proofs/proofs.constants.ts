@@ -34,6 +34,14 @@ export const TIPO_ENTREGA_PRIVADO = 'authenticated';
  */
 export const FORMATO_ENTREGA = 'jpg';
 
+/**
+ * Validade da URL de visualização, quando a conta tem a chave de expiração
+ * configurada (`CLOUDINARY_AUTH_TOKEN_KEY`). Mesmo prazo que o Supabase
+ * Storage já usava para o comprovante legado — mantém a expectativa de UX
+ * igual nos dois provedores durante a convivência.
+ */
+export const VALIDADE_URL_VISUALIZACAO_SEGUNDOS = 600;
+
 /** Tabela e colunas lidas via PostgREST, com a RLS decidindo o acesso. */
 export const TABELA_PAGAMENTOS = 'payments';
 

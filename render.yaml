@@ -56,3 +56,48 @@ services:
     # ATENÇÃO: não acrescente SUPABASE_JWT_SECRET (permitiria forjar
     # tokens) nem SUPABASE_SERVICE_ROLE_KEY (ignora a RLS). O servidor
     # se recusa a subir se a primeira estiver presente.
+
+  # ---------------------------------------------------------------------
+  #  Worker de eliminação de mídia — LGPD art. 15, I e art. 18, VI.
+  #
+  #  Cron Job, não serviço web: não escuta porta, não recebe requisição de
+  #  fora, não tem `/health`. É essa ausência de superfície HTTP que torna
+  #  aceitável ele carregar a SUPABASE_SERVICE_ROLE_KEY — a chave que ignora
+  #  a RLS por completo NUNCA vai para o serviço `snakethai-api` acima, mas
+  #  aqui, isolada, sem endpoint algum exposto, é o módulo que o próprio
+  #  docs/BACKEND.md §7 já previa precisar dela. [#55]
+  #
+  #  ESCOPO: consome o que os gatilhos do banco JÁ enfileiraram (conta
+  #  excluída, comprovante recusado, migração de provedor). NÃO varre
+  #  pagamentos por prazo de retenção — falta você decidir o número de dias
+  #  (ver P-11 em docs/PENDENCIAS.md). Enquanto essa decisão não vier, este
+  #  job não inventa um prazo.
+  # ---------------------------------------------------------------------
+  - type: cron
+    name: snakethai-media-cleanup
+    runtime: docker
+    # ⚠️ Cron Jobs na Render NÃO têm plano gratuito — o mais barato é
+    # "starter" (pago). Diferente do serviço web acima, que é free.
+    # Confirme o custo no painel antes do primeiro deploy deste serviço.
+    plan: starter
+    region: oregon
+
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Diária, de madrugada: fora do horário de uso do app, e frequência
+    # suficiente para a fila não crescer entre execuções.
+    schedule: '0 3 * * *'
+    dockerCommand: node dist/jobs/media-cleanup/media-cleanup.js
+
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

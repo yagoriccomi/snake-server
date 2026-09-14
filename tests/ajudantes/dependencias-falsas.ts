@@ -1,5 +1,6 @@
 import type { DependenciasDaApi } from '../../src/composition-root.js';
 import type { ClienteSupabase, UsuarioAutenticado } from '../../src/lib/supabase.js';
+import type { RegistroDeJustificativa } from '../../src/modules/justifications/justifications.service.js';
 import type {
   AssinadorDeMidia,
   PoliticaDeAcesso,
@@ -28,6 +29,15 @@ export const PAGAMENTO_DO_DONO = '3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
 /** Pagamento de outra pessoa: a RLS devolve lista vazia. */
 export const PAGAMENTO_DE_OUTRO = '99999999-8888-4777-a666-555555555555';
 
+/** Justificativa que a RLS libera (dono, professor da aula ou admin). */
+export const JUSTIFICATIVA_VISIVEL = '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+
+/** Justificativa que a RLS não libera: lista vazia. */
+export const JUSTIFICATIVA_INVISIVEL = '6a5b4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d';
+
+/** Aula a que a justificativa visível pertence. */
+export const AULA_DA_JUSTIFICATIVA = '5b4c3d2e-1f0a-4b9c-8d7e-6f5a4b3c2d1e';
+
 /** Timestamp congelado — teste não espera o relógio andar. [#48] */
 export const AGORA_EM_SEGUNDOS = 1_700_000_000;
 
@@ -38,6 +48,7 @@ export const URL_ASSINADA_FALSA = `https://res.cloudinary.com/nuvem-de-teste/ima
 /** Registra o que foi chamado, para o teste afirmar sobre COMPORTAMENTO, não só saída. */
 export interface Espioes {
   buscasPorPagamento: { paymentId: string; authorization: string }[];
+  buscasPorJustificativa: { justificationId: string; authorization: string }[];
   tokensVerificados: string[];
 }
 
@@ -97,12 +108,13 @@ export function criarDependenciasFalsas(
   opcoes: OpcoesDasDependencias = {},
 ): DependenciasDaApi {
   const supabase = criarSupabaseFalso(espioes);
+  const midia = criarMidiaFalsa();
 
   return {
     supabase,
     proofs: {
       supabase,
-      midia: criarMidiaFalsa(),
+      midia,
       pagamentos: {
         async buscarPorId(paymentId, authorization) {
           espioes.buscasPorPagamento.push({ paymentId, authorization });
@@ -123,9 +135,28 @@ export function criarDependenciasFalsas(
       agoraEmSegundos: () => AGORA_EM_SEGUNDOS,
       politicaDeAcesso: opcoes.politicaDeAcesso ?? 'rls',
     },
+    justifications: {
+      supabase,
+      midia,
+      justificativas: {
+        buscarPorId(justificationId, authorization) {
+          espioes.buscasPorJustificativa.push({ justificationId, authorization });
+
+          // Simula a RLS de absence_justifications.
+          const linha: RegistroDeJustificativa = {
+            user_id: USUARIO_DONO.id,
+            class_id: AULA_DA_JUSTIFICATIVA,
+            proof_provider: 'cloudinary',
+            proof_public_id: `justificativas/${USUARIO_DONO.id}/${AULA_DA_JUSTIFICATIVA}`,
+          };
+          return Promise.resolve(justificationId === JUSTIFICATIVA_VISIVEL ? linha : null);
+        },
+      },
+      agoraEmSegundos: () => AGORA_EM_SEGUNDOS,
+    },
   };
 }
 
 export function criarEspioes(): Espioes {
-  return { buscasPorPagamento: [], tokensVerificados: [] };
+  return { buscasPorPagamento: [], buscasPorJustificativa: [], tokensVerificados: [] };
 }
