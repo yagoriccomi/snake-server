@@ -241,6 +241,30 @@ Cloudinary. O caminho é **derivado** do pagamento, nunca lido da coluna: quem �
 da linha pode editá-la, e confiar no valor gravado permitiria apontar para o
 comprovante de outra pessoa.
 
+### `POST /v1/justifications/sign-upload`
+
+Autoriza o envio do anexo (imagem ou PDF) de uma justificativa de falta. Como nos
+comprovantes, a pasta é decidida pelo servidor a partir do usuário do token.
+
+**Envio:** `{ "classId": "<uuid>" }`
+
+**Resposta:** o mesmo formato de `/v1/proofs/sign-upload`. O arquivo fica em
+`justificativas/<usuário>/<aula>`, então reenviar o anexo da mesma aula substitui o
+anterior.
+
+### `POST /v1/justifications/view-url`
+
+Devolve o endereço temporário para ver o anexo. Quem pode ver é decidido pelas regras
+de acesso do banco: o aluno dono da justificativa, o professor daquela aula ou um
+administrador.
+
+**Envio:** `{ "justificationId": "<uuid>", "pagina": 1 }` — `pagina` é opcional.
+
+**Resposta:** `{ "url": "https://res.cloudinary.com/...", "paginas": 1, "pagina": 1 }`
+
+Como nos comprovantes, o caminho do arquivo é **derivado** da justificativa (aluno e
+aula), nunca lido da coluna — que o aluno pode editar enquanto ela está pendente.
+
 ### Formato dos erros
 
 Toda falha responde no mesmo formato, com um identificador para rastrear o caso
