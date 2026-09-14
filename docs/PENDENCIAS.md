@@ -129,6 +129,27 @@ variável `EXPO_PUBLIC_API_URL` do app.
 
 ---
 
+### P-19. Publicar o módulo de justificativas (2026-09-14)
+
+**Por que não fiz:** a branch `feature/modulo-justificativas` está commitada só
+localmente. Pela regra do projeto, push só acontece com decisão explícita sua, e o
+serviço web está com `autoDeploy: false`: o deploy é manual, no painel da Render.
+
+**O que falta:**
+1. Autorizar o push da branch (e decidir se ela entra na `main` antes).
+2. Render → serviço → **Manual Deploy** do commit com o módulo.
+3. Conferir: `POST /v1/justifications/sign-upload` sem token deve responder `401`,
+   e não `404`.
+
+**Nenhuma variável nova:** o módulo reusa as credenciais da Cloudinary dos
+comprovantes.
+
+**Efeito enquanto não sai:** no app 1.4.0, a justificativa de falta **só com
+mensagem** funciona. Com anexo, o envio falha com mensagem genérica e nada é
+gravado. O aluno não perde a declaração de falta.
+
+---
+
 ## 🟡 Informações que faltam e afetam o código
 
 ### ~~P-8. Confirmar o formato real gravado em `payments.proof_url`~~ ✅ RESOLVIDA em 2026-08-31
