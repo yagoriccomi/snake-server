@@ -170,6 +170,10 @@ deve ir para o `snakethai-api` (o serviço web).
    (pendência P-10). O que o repositório descreve e o que roda em produção podem
    ter divergido.
 
+Quando a entrega merece número de versão (rota ou campo novo em `/v1`, correção
+relevante), a tag e o release seguem a seção "Versões do servidor" do
+[`CONTRIBUTING.md`](../CONTRIBUTING.md). Deploy de rotina não cria versão.
+
 ## O que ainda não existe
 
 **O consumidor da fila de eliminação.** A tabela `media_deletion_queue` é
