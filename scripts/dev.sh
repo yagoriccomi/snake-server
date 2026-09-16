@@ -3,7 +3,8 @@
 #  dev.sh - controle do ambiente local (Linux/Mac)
 #  Uso:  ./scripts/dev.sh [start|stop|restart|status|logs|shell|prod|prod-stop]
 #  Encapsula o docker compose para o dev nao decorar comandos.
-#  Toda a config vem do .env (fonte unica de verdade).
+#  Desenvolvimento le o .env.dev (Supabase local + Cloudinary de dev);
+#  so prod/prod-stop leem o .env (imagem de producao local).
 #  Torne executavel uma vez:  chmod +x scripts/dev.sh
 # ============================================================
 set -euo pipefail
@@ -13,11 +14,20 @@ cd "$(dirname "$0")/.."
 ACAO="${1:-start}"
 PROD_FILE="docker-compose.prod.yml"
 
-# O compose exige o .env; sem ele a subida falha com erro obscuro.
-if [ ! -f ".env" ]; then
-  echo "[ERRO] Arquivo .env nao encontrado."
-  echo "       Rode:  cp .env.example .env"
-  echo "       Depois preencha as credenciais do Supabase e da Cloudinary."
+# O compose exige o arquivo de ambiente; sem ele a subida falha com erro obscuro.
+case "$ACAO" in
+  prod|prod-stop) ARQUIVO_ENV=".env" ;;
+  *) ARQUIVO_ENV=".env.dev" ;;
+esac
+if [ ! -f "$ARQUIVO_ENV" ]; then
+  echo "[ERRO] Arquivo $ARQUIVO_ENV nao encontrado."
+  echo "       Rode:  cp .env.example $ARQUIVO_ENV"
+  if [ "$ARQUIVO_ENV" = ".env.dev" ]; then
+    echo "       Supabase LOCAL: a URL e a chave anon que 'npx supabase status'"
+    echo "       mostra na pasta snake-thai. Cloudinary: o ambiente de DEV."
+  else
+    echo "       Depois preencha as credenciais do Supabase e da Cloudinary."
+  fi
   exit 1
 fi
 
