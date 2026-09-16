@@ -404,6 +404,26 @@ Nenhuma ação sua é necessária para este item.
 
 ---
 
+### P-20. Upgrades major de ferramentas de desenvolvimento adiados (2026-09-16)
+
+**Por que não fiz:** os três PRs do Dependabot abaixo quebram o `npm ci` com
+`ERESOLVE`, porque cada um exige atualizar outros pacotes junto. Nenhum traz ganho
+para produção: são ferramentas de desenvolvimento. Foram fechados com
+`@dependabot ignore this major version`.
+
+| PR | Atualização | Por que quebra |
+| --- | --- | --- |
+| #3 | vitest 3 → 4 | `@vitest/coverage-v8` 3.x exige vitest 3 |
+| #4 | typescript 5.9 → 7.0 | `typescript-eslint` atual não aceita TypeScript 7; e o TypeScript é o compilador da imagem de produção (maior risco) |
+| #6 | @eslint/js 9 → 10 | exige `eslint` 10 junto |
+
+**O que um upgrade exige:** branch própria, atualizando os pacotes de cada grupo
+juntos (vitest + @vitest/coverage-v8; eslint + @eslint/js + typescript-eslint;
+TypeScript só quando o typescript-eslint suportar), com o gate completo e o build da
+imagem Docker verdes antes do merge.
+
+---
+
 ## 🧪 O que não pude verificar de verdade
 
 Honestidade sobre os limites do que foi testado. **Não verificado ≠ quebrado**, mas
