@@ -2,9 +2,13 @@
 #  Ambiente local de DESENVOLVIMENTO — hot reload
 #  Suba com:  scripts\dev.bat start   (ou)   ./scripts/dev.sh start
 #
-#  NÃO há banco/cache aqui de propósito: os dados deste produto
-#  vivem no Supabase (remoto, com RLS) e o servidor não tem
-#  persistência própria. Subir um Postgres local seria teatro. [#8]
+#  Lê o .env.dev — NUNCA as credenciais de produção. Ele aponta para:
+#    • o Supabase LOCAL do snake-thai (Supabase CLI no Docker, porta
+#      55321), alcançado por host.docker.internal;
+#    • o ambiente Cloudinary de desenvolvimento.
+#  Por isso não há banco nem cache neste compose: o servidor não tem
+#  persistência própria, e o banco local é o da Supabase CLI. [#8][#81]
+#  A imagem de produção local (docker-compose.prod.yml) segue no .env.
 # =============================================================
 
 services:
@@ -18,10 +22,15 @@ services:
 
     # Config exclusivamente por variável de ambiente — zero segredo no compose. [#80][#37]
     env_file:
-      - .env
+      - .env.dev
     environment:
       NODE_ENV: development
       PORT: 3000
+
+    # host.docker.internal = o próprio PC, visto de dentro do contêiner. No
+    # Docker Desktop já existe; a linha garante o mesmo no Linux.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
     ports:
       # Publica só em 127.0.0.1: nada de expor a API para a rede local. [#55]

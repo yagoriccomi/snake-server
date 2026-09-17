@@ -3,7 +3,8 @@ rem ============================================================
 rem  dev.bat - controle do ambiente local (Windows)
 rem  Uso:  scripts\dev.bat [start^|stop^|restart^|status^|logs^|shell^|prod^|prod-stop]
 rem  Encapsula o docker compose para o dev nao decorar comandos.
-rem  Toda a config vem do .env (fonte unica de verdade).
+rem  Desenvolvimento le o .env.dev (Supabase local + Cloudinary de dev);
+rem  so prod/prod-stop leem o .env (imagem de producao local).
 rem ============================================================
 setlocal
 cd /d "%~dp0\.."
@@ -11,11 +12,19 @@ cd /d "%~dp0\.."
 set "ACAO=%~1"
 if "%ACAO%"=="" set "ACAO=start"
 
-rem O compose exige o .env; sem ele a subida falha com erro obscuro.
-if not exist ".env" (
-  echo [ERRO] Arquivo .env nao encontrado.
-  echo        Rode:  copy .env.example .env
-  echo        Depois preencha as credenciais do Supabase e da Cloudinary.
+rem O compose exige o arquivo de ambiente; sem ele a subida falha com erro obscuro.
+set "ARQUIVO_ENV=.env.dev"
+if /i "%ACAO%"=="prod"      set "ARQUIVO_ENV=.env"
+if /i "%ACAO%"=="prod-stop" set "ARQUIVO_ENV=.env"
+if not exist "%ARQUIVO_ENV%" (
+  echo [ERRO] Arquivo %ARQUIVO_ENV% nao encontrado.
+  echo        Rode:  copy .env.example %ARQUIVO_ENV%
+  if /i "%ARQUIVO_ENV%"==".env.dev" (
+    echo        Supabase LOCAL: a URL e a chave anon que "npx supabase status"
+    echo        mostra na pasta snake-thai. Cloudinary: o ambiente de DEV.
+  ) else (
+    echo        Depois preencha as credenciais do Supabase e da Cloudinary.
+  )
   exit /b 1
 )
 

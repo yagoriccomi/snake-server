@@ -59,20 +59,34 @@ a esta API quando há um segredo, um terceiro ou uma lógica de servidor envolvi
    cd snake-server
    ```
 
-2. Crie o seu arquivo de configuração a partir do exemplo:
+2. Suba o banco local do app (na pasta `snake-thai`). O servidor de desenvolvimento
+   fala com ele, e não com o Supabase de produção:
+
+   ```bash
+   scripts\db-dev start
+   ```
+
+3. Crie o seu arquivo de configuração de desenvolvimento a partir do exemplo:
 
    ```bash
    # Windows
-   copy .env.example .env
+   copy .env.example .env.dev
 
    # Linux/Mac
-   cp .env.example .env
+   cp .env.example .env.dev
    ```
 
-3. Abra o `.env` e preencha as credenciais (veja [Variáveis de Ambiente](#-variáveis-de-ambiente)).
-   O `.env` está no `.gitignore` e nunca deve ser enviado ao repositório.
+   Preencha (veja [Variáveis de Ambiente](#-variáveis-de-ambiente)):
 
-4. Suba o ambiente com um comando:
+   | Variável | Valor no `.env.dev` |
+   | --- | --- |
+   | `SUPABASE_URL` | `http://host.docker.internal:55321` |
+   | `SUPABASE_ANON_KEY` | a chave anon que `npx supabase status` mostra na pasta `snake-thai` |
+   | `CLOUDINARY_*` | as do **ambiente de desenvolvimento** da Cloudinary, nunca as de produção |
+
+   Os arquivos `.env*` estão no `.gitignore` e nunca devem ser enviados ao repositório.
+
+4. Suba o servidor com um comando:
 
    ```bash
    # Windows
@@ -90,7 +104,10 @@ a esta API quando há um segredo, um terceiro ou uma lógica de servidor envolvi
    # {"ok":true}
    ```
 
-O código é recarregado sozinho ao salvar um arquivo em `src/`.
+O código é recarregado sozinho ao salvar um arquivo em `src/`. Para o app **DEV**
+usar este servidor, coloque `EXPO_PUBLIC_API_URL=http://127.0.0.1:3000` no
+`.env.dev` do `snake-thai`; no celular, o `menu.bat` de lá faz o `adb reverse`
+da porta 3000.
 
 | Comando | O que faz |
 | --- | --- |
@@ -100,7 +117,7 @@ O código é recarregado sozinho ao salvar um arquivo em `src/`.
 | `status` | Mostra os contêineres e a saúde deles |
 | `logs` | Acompanha os logs da API em tempo real |
 | `shell` | Abre um terminal dentro do contêiner |
-| `prod` | Sobe **a imagem de produção** localmente, igual à que roda na nuvem |
+| `prod` | Sobe **a imagem de produção** localmente, igual à que roda na nuvem (lê o `.env`) |
 | `prod-stop` | Derruba a imagem de produção local |
 
 > Use `prod` sempre que quiser reproduzir um problema que só aparece publicado:
@@ -130,13 +147,13 @@ scripts\dev.bat logs      # Windows
 ./scripts/dev.sh logs      # Linux/Mac
 ```
 
-Preencha o `.env` e rode `restart`.
+Preencha o `.env.dev` e rode `restart`.
 
 ### Alternativa: rodar sem Docker
 
 ```bash
 npm install
-cp .env.example .env    # e preencha
+cp .env.example .env    # e preencha; fora do contêiner, o Supabase local é http://127.0.0.1:55321
 npm run dev
 ```
 
@@ -167,7 +184,8 @@ Passo a passo em [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## 📝 Variáveis de Ambiente
 
-Copie o `.env.example` e preencha. Nenhuma delas deve ser enviada ao repositório.
+Copie o `.env.example` para `.env.dev` (desenvolvimento) ou `.env` (imagem de
+produção local) e preencha. Nenhum desses arquivos deve ser enviado ao repositório.
 
 | Variável | Para que serve | Obrigatória |
 | --- | --- | --- |

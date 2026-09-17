@@ -223,8 +223,16 @@ imagem do comprovante sobrevivia com eles.
   (admin recusa, pagamento apagado). A aplicação pode esquecer de chamar a API do
   provedor; o gatilho não.
 - `eliminar_comprovantes_do_titular(uuid)` cobre o caminho que o gatilho não
-  alcança — a exclusão de conta, onde os pagamentos **não** são apagados.
-  A Edge Function `delete-my-account` a invoca.
+  alcança — a exclusão de conta, onde os pagamentos **não** são apagados. Quem a
+  chama é `anonimizar_titular()`, a transação de exclusão usada pelas Edge Functions
+  `delete-my-account` e `delete-user-account` (snake-thai, 2026-09-16). *Correção:*
+  até essa data a Edge Function **não** a chamava, embora este texto dissesse que sim
+  — exclusões anteriores deixaram as imagens no provedor.
+- Arquivo já pendente na fila não entra de novo (antes cada comprovante de uma conta
+  excluída entrava duas vezes, a segunda com motivo `comprovante_recusado`).
+- `enfileirar_comprovantes_expirados()` (pg_cron, 02:30) enfileira com motivo
+  `retencao_expirada` as imagens de pagamentos pagos há mais de
+  `academy_settings.proof_retention_days` dias. **Desligada por padrão** (prazo nulo).
 
 - **`src/jobs/media-cleanup/`** consome a fila: um Cron Job separado do serviço
   web (`snakethai-media-cleanup` no `render.yaml`), rodando diariamente. É o

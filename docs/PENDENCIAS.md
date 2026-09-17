@@ -217,10 +217,10 @@ ela é rede de segurança, não substituta.
 
 | Dispositivo | Obrigação | Estado |
 | --- | --- | --- |
-| Art. 18, VI | Eliminação a pedido do titular | ✅ `eliminar_comprovantes_do_titular` (migration do contrato) |
+| Art. 18, VI | Eliminação a pedido do titular | ✅ `anonimizar_titular()` → `eliminar_comprovantes_do_titular` (corrigido em 2026-09-16: a Edge Function não chamava) |
 | Art. 15/16 | Eliminação após o fim do tratamento | ✅ **worker consumidor** (`src/jobs/media-cleanup/`) |
-| Art. 15, I (prazo) | Retenção por tempo definido | ❌ **falta o número de dias — decisão sua** |
-| Art. 18, V | Portabilidade | ❌ não iniciado |
+| Art. 15, I (prazo) | Retenção por tempo definido | 🟡 varredura pronta (`enfileirar_comprovantes_expirados`, 02:30), **desligada até o prazo ser definido** — recomendação: 90 dias após o pagamento |
+| Art. 18, V | Portabilidade | ✅ "Exportar meus dados" no app (`export_my_data`) |
 | Art. 6º, I e III | Finalidade e necessidade declaradas | ❌ não iniciado |
 
 **O que existe agora:** `media_deletion_queue` é alimentada automaticamente (gatilho do
@@ -236,13 +236,15 @@ mais barato (`starter`) — confirme o valor no painel antes do primeiro deploy.
 
 **O que ainda falta, e é decisão sua, não técnica:**
 
-1. **Prazo de retenção em dias.** Sem esse número, o worker consome só o que já foi
-   enfileirado por outro motivo (conta excluída, comprovante recusado) — ele **não**
-   varre pagamentos antigos por tempo. O motivo `retencao_expirada` existe no banco e
-   não é usado por ninguém ainda. Me diga o prazo e eu implemento a varredura.
+1. **Prazo de retenção em dias.** A varredura existe (snake-thai, migration
+   `retencao_comprovantes`) e usa o motivo `retencao_expirada`, mas nasce desligada:
+   ligar apaga arquivos de verdade. Recomendação registrada no PLANO-T7 do snake-thai:
+   **90 dias após o pagamento** (cobre a contestação de Pix pelo MED e os prazos do
+   CDC), com o registro do pagamento guardado. Para ligar, com a migration aplicada:
+   `update academy_settings set proof_retention_days = 90;` (mínimo 30).
 2. Base legal declarada (provavelmente execução de contrato, art. 7º, V) — falta
    documentar.
-3. Portabilidade (art. 18, V) — escopo novo, não iniciado.
+3. ~~Portabilidade (art. 18, V)~~ — feita no app em 2026-09-16.
 
 **Referência:** achado C-1 do [`../REVIEW.md`](../REVIEW.md).
 

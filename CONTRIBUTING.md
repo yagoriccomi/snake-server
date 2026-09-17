@@ -155,6 +155,36 @@ Além disso, a esteira verifica automaticamente:
 
 ---
 
+## Versões do servidor
+
+O servidor tem numeração **própria**, independente do app (o app segue
+`docs/VERSIONAMENTO.md` do `snake-thai`). O contrato com o app é o prefixo `/v1`; a
+versão marca entregas que valem registro, não cada deploy.
+
+| Parte | Quando |
+| --- | --- |
+| **MINOR** | A API `/v1` ganha rota ou campo que um APK novo vai usar |
+| **PATCH** | Correção relevante que foi para produção |
+| **MAJOR** | Só junto de uma `/v2` (a `/v1` continua atendendo os APKs antigos) |
+
+Dependabot, documentação, CI e ambiente local **não** sobem versão. A primeira versão
+registrada será a **1.0.0**, no próximo merge de funcionalidade na `main` — a `/v1` já
+está em produção.
+
+Na `main`, depois do merge que merece versão, e só com a decisão de publicar:
+
+```bash
+npm version minor -m "chore(release): v%s"   # atualiza package.json e lock, commita e cria a tag
+git push origin main
+git push origin v1.1.0
+gh release create v1.1.0 --generate-notes
+```
+
+A versão **não** aparece no `/health`: expor a versão ajuda quem procura uma falha
+conhecida. Tag publicada não se move; um erro vira nova PATCH.
+
+---
+
 ## Adicionando um módulo novo à API
 
 A estrutura foi feita para isso: um módulo novo não deve tocar nos existentes.
