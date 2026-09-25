@@ -15,7 +15,7 @@
  * processa o que existe e não inventa um prazo. Ver P-11 em `docs/PENDENCIAS.md`.
  */
 
-import { logger } from '../../lib/logger.js';
+import { logger } from './media-cleanup.logger.js';
 import { PASTA_COMPROVANTES } from '../../modules/proofs/proofs.constants.js';
 
 import {
