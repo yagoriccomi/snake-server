@@ -5,10 +5,8 @@
  */
 
 import { PASTA_JUSTIFICATIVAS } from '../../modules/justifications/justifications.constants.js';
+import { PASTA_MOTIVOS } from '../../modules/motivos/motivos.constants.js';
 import { PASTA_COMPROVANTES } from '../../modules/proofs/proofs.constants.js';
-
-/** Raiz das pastas de anexo de motivo na Cloudinary (contrato § 13.1). */
-export const PASTA_MOTIVOS = 'motivos';
 
 /** Valores de `media_deletion_reason` que este worker sabe tratar. */
 export const MOTIVOS_DA_FILA = [

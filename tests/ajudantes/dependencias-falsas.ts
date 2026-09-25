@@ -1,6 +1,7 @@
 import type { DependenciasDaApi } from '../../src/composition-root.js';
 import type { ClienteSupabase, UsuarioAutenticado } from '../../src/lib/supabase.js';
 import type { RegistroDeJustificativa } from '../../src/modules/justifications/justifications.service.js';
+import type { RegistroDeAnexoDeMotivo } from '../../src/modules/motivos/motivos.service.js';
 import type {
   AssinadorDeMidia,
   PoliticaDeAcesso,
@@ -38,6 +39,21 @@ export const JUSTIFICATIVA_INVISIVEL = '6a5b4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d';
 /** Aula a que a justificativa visível pertence. */
 export const AULA_DA_JUSTIFICATIVA = '5b4c3d2e-1f0a-4b9c-8d7e-6f5a4b3c2d1e';
 
+/** Motivo a que o dono pode anexar: `pode_anexar_ao_motivo` responde `true`. */
+export const MOTIVO_PERMITIDO = '4c3d2e1f-0a9b-4c8d-9e7f-6a5b4c3d2e1f';
+
+/** Motivo de outra pessoa (ou já usado): a RPC responde `false`. */
+export const MOTIVO_NEGADO = '3d2e1f0a-9b8c-4d7e-8f6a-5b4c3d2e1f0a';
+
+/** Anexo de motivo que a RLS libera. */
+export const ANEXO_DE_MOTIVO_VISIVEL = '1f0a9b8c-7d6e-4f5a-8b4c-3d2e1f0a9b8c';
+
+/** Anexo de motivo que a RLS não libera: lista vazia. */
+export const ANEXO_DE_MOTIVO_INVISIVEL = '0a9b8c7d-6e5f-4a4b-9c3d-2e1f0a9b8c7d';
+
+/** Quem enviou o anexo visível — não é o usuário do token (ex.: professor lendo o atestado). */
+export const AUTOR_DO_ANEXO = '8c7d6e5f-4a3b-4c2d-8e1f-0a9b8c7d6e5f';
+
 /** Timestamp congelado — teste não espera o relógio andar. [#48] */
 export const AGORA_EM_SEGUNDOS = 1_700_000_000;
 
@@ -49,6 +65,8 @@ export const URL_ASSINADA_FALSA = `https://res.cloudinary.com/nuvem-de-teste/ima
 export interface Espioes {
   buscasPorPagamento: { paymentId: string; authorization: string }[];
   buscasPorJustificativa: { justificationId: string; authorization: string }[];
+  perguntasDePermissao: { motivoId: string; authorization: string }[];
+  buscasPorAnexoDeMotivo: { anexoId: string; authorization: string }[];
   tokensVerificados: string[];
 }
 
@@ -158,9 +176,41 @@ export function criarDependenciasFalsas(
       },
       agoraEmSegundos: () => AGORA_EM_SEGUNDOS,
     },
+    motivos: {
+      supabase,
+      midia,
+      motivos: {
+        podeAnexar(motivoId, authorization) {
+          espioes.perguntasDePermissao.push({ motivoId, authorization });
+          // Simula `pode_anexar_ao_motivo`: só o motivo permitido responde
+          // `true`. O banco antigo sem a função é provado no teste do
+          // repositório, onde a recusa 4xx acontece de fato.
+          return Promise.resolve(motivoId === MOTIVO_PERMITIDO);
+        },
+        buscarAnexo(anexoId, authorization) {
+          espioes.buscasPorAnexoDeMotivo.push({ anexoId, authorization });
+
+          // Simula a RLS de action_reason_attachments.
+          const linha: RegistroDeAnexoDeMotivo = {
+            id: ANEXO_DE_MOTIVO_VISIVEL,
+            uploaded_by: AUTOR_DO_ANEXO,
+            provider: 'cloudinary',
+            public_id: `motivos/${AUTOR_DO_ANEXO}/${ANEXO_DE_MOTIVO_VISIVEL}`,
+          };
+          return Promise.resolve(anexoId === ANEXO_DE_MOTIVO_VISIVEL ? linha : null);
+        },
+      },
+      agoraEmSegundos: () => AGORA_EM_SEGUNDOS,
+    },
   };
 }
 
 export function criarEspioes(): Espioes {
-  return { buscasPorPagamento: [], buscasPorJustificativa: [], tokensVerificados: [] };
+  return {
+    buscasPorPagamento: [],
+    buscasPorJustificativa: [],
+    perguntasDePermissao: [],
+    buscasPorAnexoDeMotivo: [],
+    tokensVerificados: [],
+  };
 }
