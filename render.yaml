@@ -67,11 +67,11 @@ services:
   #  aqui, isolada, sem endpoint algum exposto, é o módulo que o próprio
   #  docs/BACKEND.md §7 já previa precisar dela. [#55]
   #
-  #  ESCOPO: consome o que os gatilhos do banco JÁ enfileiraram (conta
-  #  excluída, comprovante recusado, migração de provedor). NÃO varre
-  #  pagamentos por prazo de retenção — falta você decidir o número de dias
-  #  (ver P-11 em docs/PENDENCIAS.md). Enquanto essa decisão não vier, este
-  #  job não inventa um prazo.
+  #  ESCOPO: consome o que o banco JÁ enfileirou (conta excluída, comprovante
+  #  recusado, migração de provedor, prazo de guarda vencido, anexo removido)
+  #  e, na mesma execução, apaga os anexos de justificativas/ e motivos/ que
+  #  ficaram sem linha no banco há mais de 24 h (contrato § 13.3). Os prazos
+  #  de guarda são decididos no banco; este job não inventa nenhum.
   # ---------------------------------------------------------------------
   - type: cron
     name: snakethai-media-cleanup

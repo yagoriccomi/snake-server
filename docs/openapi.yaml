@@ -60,6 +60,14 @@ tags:
       O comprovante é **dado financeiro pessoal**. Ele nunca é público: sobe como
       asset autenticado na Cloudinary e só é visível por um endereço assinado,
       emitido sob demanda para quem tem direito.
+  - name: Justificativas
+    description: |
+      Anexo (imagem ou PDF) de uma justificativa de falta. Pode ser atestado médico:
+      privado como o comprovante, e visto só por endereço assinado.
+  - name: Motivos
+    description: |
+      Anexos do motivo de uma ação (cancelamento, retificação, solicitação, troca
+      permanente de aula). Quem anexa e quem lê é decidido pelo banco.
 
 security:
   - bearerAuth: []
@@ -169,10 +177,209 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CorpoComPaymentId'
+              $ref: '#/components/schemas/CorpoDeVisualizacaoDeComprovante'
             examples:
               padrao:
                 value: { paymentId: 3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d }
+      responses:
+        '200':
+          description: Endereço emitido.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UrlDeVisualizacao'
+        '400':
+          $ref: '#/components/responses/EntradaInvalida'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemAcesso'
+        '413':
+          $ref: '#/components/responses/CorpoGrandeDemais'
+        '429':
+          $ref: '#/components/responses/RequisicoesDemais'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+        '503':
+          $ref: '#/components/responses/ServicoIndisponivel'
+
+  /v1/justifications/sign-upload:
+    post:
+      tags: [Justificativas]
+      summary: Autoriza o envio do anexo de uma justificativa de falta
+      operationId: assinarUploadDeJustificativa
+      description: |
+        Aceita **exatamente uma** de duas formas. As duas juntas, ou nenhuma, dão `400`.
+
+        - **`{ classId }` (legado)** — a forma do app 1.8 e da web atual, válida até
+          todos os aparelhos atualizarem. Assina `justificativas/<usuário do token>/<classId>`
+          sem consultar o banco, com os mesmos campos de sempre.
+        - **`{ justificationId }`** — lê a justificativa com o **seu** token e só assina se
+          ela for sua, estiver pendente e ainda não tiver anexo; senão, `403`. O nome do
+          arquivo é o `justificationId` na primeira tentativa e `<justificationId>-2` no
+          reenvio. A assinatura inclui `overwrite=false` e `allowed_formats`: envie os dois
+          à Cloudinary exatamente como vieram, ou o envio é recusado.
+
+        A pasta vem sempre do usuário do token, nunca do corpo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorpoDeAssinaturaDeJustificativa'
+            examples:
+              novo:
+                summary: Forma nova
+                value: { justificationId: 7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d }
+              legado:
+                summary: Forma legada
+                value: { classId: 5b4c3d2e-1f0a-4b9c-8d7e-6f5a4b3c2d1e }
+      responses:
+        '200':
+          description: Envio autorizado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadAssinado'
+        '400':
+          $ref: '#/components/responses/EntradaInvalida'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemAcesso'
+        '413':
+          $ref: '#/components/responses/CorpoGrandeDemais'
+        '429':
+          $ref: '#/components/responses/RequisicoesDemais'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+        '503':
+          $ref: '#/components/responses/ServicoIndisponivel'
+
+  /v1/justifications/view-url:
+    post:
+      tags: [Justificativas]
+      summary: Emite o endereço para visualizar o anexo de uma justificativa
+      operationId: obterUrlDeJustificativa
+      description: |
+        Quem pode ver é decidido pelas regras de acesso do banco (RLS), com o **seu**
+        token: o dono, quem pode decidir a justificativa enquanto ela está pendente, e o
+        administrador. Sem direito, sem anexo ou com anexo fora da Cloudinary: `403`.
+
+        O endereço é assinado sobre um dos caminhos **derivados** da justificativa
+        (`justificativas/<user_id>/<id>`, `…/<id>-2` ou, na justificativa de aula,
+        `…/<class_id>`): o que for igual ao anexo gravado. Se nenhum for, `403`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorpoDeVisualizacaoDeJustificativa'
+            examples:
+              padrao:
+                value: { justificationId: 7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d }
+      responses:
+        '200':
+          description: Endereço emitido.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UrlDeVisualizacao'
+        '400':
+          $ref: '#/components/responses/EntradaInvalida'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemAcesso'
+        '413':
+          $ref: '#/components/responses/CorpoGrandeDemais'
+        '429':
+          $ref: '#/components/responses/RequisicoesDemais'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+        '503':
+          $ref: '#/components/responses/ServicoIndisponivel'
+
+  /v1/motivos/sign-upload:
+    post:
+      tags: [Motivos]
+      summary: Autoriza o envio de um anexo de motivo
+      operationId: assinarUploadDeMotivo
+      description: |
+        Anexo do motivo de um cancelamento, de uma retificação, de uma solicitação ou da
+        troca permanente de aula.
+
+        **Antes de assinar**, pergunta ao banco, com o **seu** token, se você pode anexar
+        a esse motivo (`pode_anexar_ao_motivo`). Sem o `true`, `403`.
+
+        Assina `motivos/<usuário do token>/<anexoId>`, com `overwrite=false` e
+        `allowed_formats` (imagem ou PDF): envie os dois à Cloudinary exatamente como
+        vieram, ou o envio é recusado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorpoDeAssinaturaDeMotivo'
+            examples:
+              padrao:
+                value:
+                  motivoId: 4c3d2e1f-0a9b-4c8d-9e7f-6a5b4c3d2e1f
+                  anexoId: 1f0a9b8c-7d6e-4f5a-8b4c-3d2e1f0a9b8c
+      responses:
+        '200':
+          description: Envio autorizado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadAssinado'
+        '400':
+          $ref: '#/components/responses/EntradaInvalida'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemAcesso'
+        '413':
+          $ref: '#/components/responses/CorpoGrandeDemais'
+        '429':
+          $ref: '#/components/responses/RequisicoesDemais'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+        '503':
+          $ref: '#/components/responses/ServicoIndisponivel'
+
+  /v1/motivos/view-url:
+    post:
+      tags: [Motivos]
+      summary: Emite o endereço para visualizar um anexo de motivo
+      operationId: obterUrlDeMotivo
+      description: |
+        Quem pode ver é decidido pelas regras de acesso do banco (RLS) sobre o anexo, com
+        o **seu** token. Anexo invisível para você, ou fora da Cloudinary: `403`.
+
+        O caminho é **derivado** de quem enviou e do identificador do anexo
+        (`motivos/<uploaded_by>/<anexoId>`), nunca lido da coluna gravada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorpoDeVisualizacaoDeMotivo'
+            examples:
+              padrao:
+                value: { anexoId: 1f0a9b8c-7d6e-4f5a-8b4c-3d2e1f0a9b8c }
       responses:
         '200':
           description: Endereço emitido.
@@ -251,6 +458,83 @@ components:
           examples: [3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d]
       additionalProperties: false
 
+    CorpoDeVisualizacaoDeComprovante:
+      type: object
+      required: [paymentId]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+          examples: [3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d]
+        pagina:
+          $ref: '#/components/schemas/Pagina'
+
+    Pagina:
+      type: integer
+      minimum: 1
+      maximum: 999
+      description: |
+        Página do documento a exibir (padrão 1). Acima do total, volta a última. O teto
+        existe porque cada página pedida é renderizada — e cobrada — pela Cloudinary.
+      examples: [2]
+
+    CorpoDeAssinaturaDeJustificativa:
+      description: Exatamente um dos dois campos.
+      oneOf:
+        - type: object
+          title: Forma nova
+          required: [justificationId]
+          properties:
+            justificationId:
+              type: string
+              format: uuid
+              examples: [7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d]
+        - type: object
+          title: Forma legada
+          required: [classId]
+          properties:
+            classId:
+              type: string
+              format: uuid
+              examples: [5b4c3d2e-1f0a-4b9c-8d7e-6f5a4b3c2d1e]
+
+    CorpoDeVisualizacaoDeJustificativa:
+      type: object
+      required: [justificationId]
+      properties:
+        justificationId:
+          type: string
+          format: uuid
+          examples: [7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d]
+        pagina:
+          $ref: '#/components/schemas/Pagina'
+
+    CorpoDeAssinaturaDeMotivo:
+      type: object
+      required: [motivoId, anexoId]
+      properties:
+        motivoId:
+          type: string
+          format: uuid
+          description: O motivo criado antes por `criar_motivo`.
+          examples: [4c3d2e1f-0a9b-4c8d-9e7f-6a5b4c3d2e1f]
+        anexoId:
+          type: string
+          format: uuid
+          description: Gerado pelo cliente (UUID v4). Vira o nome do arquivo.
+          examples: [1f0a9b8c-7d6e-4f5a-8b4c-3d2e1f0a9b8c]
+
+    CorpoDeVisualizacaoDeMotivo:
+      type: object
+      required: [anexoId]
+      properties:
+        anexoId:
+          type: string
+          format: uuid
+          examples: [1f0a9b8c-7d6e-4f5a-8b4c-3d2e1f0a9b8c]
+        pagina:
+          $ref: '#/components/schemas/Pagina'
+
     UploadAssinado:
       type: object
       description: |
@@ -283,7 +567,9 @@ components:
           examples: [comprovantes/11111111-2222-4333-8444-555555555555]
         public_id:
           type: string
-          description: Nome do arquivo, igual ao `paymentId`. Reenviar substitui o anterior.
+          description: |
+            Nome do arquivo: o `paymentId` no comprovante, o `classId` ou o
+            `justificationId` (com `-2` no reenvio) na justificativa, o `anexoId` no motivo.
           examples: [3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d]
         type:
           type: string
@@ -296,16 +582,38 @@ components:
           format: uri
           description: Endereço da Cloudinary para onde enviar o arquivo.
           examples: [https://api.cloudinary.com/v1_1/snakethai/auto/upload]
+        overwrite:
+          type: boolean
+          const: false
+          description: |
+            Só nos anexos de motivo e na justificativa por `justificationId`. Está DENTRO da
+            assinatura: envie como veio. Impede que um segundo envio troque o anexo já feito.
+        allowed_formats:
+          type: string
+          const: jpg,png,webp,heic,pdf
+          description: |
+            Só nos anexos de motivo e na justificativa por `justificationId`. Está DENTRO da
+            assinatura: envie como veio. A Cloudinary recusa qualquer outro formato.
 
     UrlDeVisualizacao:
       type: object
-      required: [url]
+      required: [url, paginas, pagina]
       properties:
+        paginas:
+          type: integer
+          minimum: 1
+          description: Total de páginas do documento; `1` para imagem.
+          examples: [3]
+        pagina:
+          type: integer
+          minimum: 1
+          description: A página que este endereço mostra.
+          examples: [1]
         url:
           type: string
           format: uri
           description: |
-            Endereço assinado do comprovante. Trate-o como informação sensível: quem
+            Endereço assinado do arquivo. Trate-o como informação sensível: quem
             tiver o endereço consegue abrir o arquivo.
           examples:
             - https://res.cloudinary.com/snakethai/image/authenticated/s--AbC123--/comprovantes/1111/3f1b.jpg
@@ -348,7 +656,9 @@ components:
       description: |
         O corpo enviado não passou na validação.
 
-        - `bad_input` — o `paymentId` está ausente ou não é um UUID.
+        - `bad_input` — um identificador está ausente ou não é um UUID, a página
+          está fora de 1 a 999, ou (na justificativa) vieram `classId` e
+          `justificationId` juntos ou nenhum dos dois.
         - `malformed_json` — o corpo não é um JSON válido.
       headers:
         X-Request-Id:
@@ -405,10 +715,11 @@ components:
 
     SemAcesso:
       description: |
-        Autenticado, mas sem direito a este comprovante.
+        Autenticado, mas sem direito a este arquivo (ou, na assinatura, sem direito de
+        anexar).
 
-        A mesma resposta é devolvida quando o pagamento não existe. Distinguir os dois
-        casos permitiria descobrir quais pagamentos existem apenas testando
+        A mesma resposta é devolvida quando o registro não existe. Distinguir os dois
+        casos permitiria descobrir quais registros existem apenas testando
         identificadores.
       headers:
         X-Request-Id:
@@ -441,8 +752,9 @@ components:
 
     RequisicoesDemais:
       description: |
-        Limite de requisições atingido: 60 por minuto no geral e 20 por minuto nas
-        rotas de comprovante, por endereço de origem.
+        Limite de requisições atingido, por endereço de origem: 60 por minuto no geral
+        e 20 por minuto nas rotas de arquivo — comprovantes, justificativas e motivos
+        somadas, num contador só.
       headers:
         RateLimit:
           description: Cota restante e quando ela é reposta (RFC draft-7).
