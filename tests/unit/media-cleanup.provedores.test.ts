@@ -1,3 +1,4 @@
+import { v2 as cloudinary } from 'cloudinary';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { criarExclusorDeMidia } from '../../src/jobs/media-cleanup/media-cleanup.provedores.js';
@@ -54,5 +55,51 @@ describe('criarExclusorDeMidia — Storage', () => {
     substituirFetch(403);
 
     await expect(criarExclusor().apagarDoStorage('aluno-1/recibo.jpg')).rejects.toThrow('HTTP 403');
+  });
+});
+
+describe('criarExclusorDeMidia — Cloudinary', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function substituirDestroy(result: string) {
+    return vi.spyOn(cloudinary.uploader, 'destroy').mockResolvedValue({ result });
+  }
+
+  it('devePedirOTipoDeRecursoRecebidoSempreComoAuthenticated', async () => {
+    const destroy = substituirDestroy('ok');
+
+    await criarExclusor().apagarDaCloudinary('motivos/a/b', 'raw');
+
+    expect(destroy).toHaveBeenCalledWith('motivos/a/b', {
+      type: 'authenticated',
+      resource_type: 'raw',
+      invalidate: true,
+    });
+  });
+
+  it('deveDevolverApagadoQuandoACloudinaryRespondeOk', async () => {
+    substituirDestroy('ok');
+
+    await expect(criarExclusor().apagarDaCloudinary('motivos/a/b', 'image')).resolves.toBe(
+      'apagado',
+    );
+  });
+
+  it('deveDevolverInexistenteQuandoACloudinaryRespondeNotFound', async () => {
+    substituirDestroy('not found');
+
+    await expect(criarExclusor().apagarDaCloudinary('motivos/a/b', 'video')).resolves.toBe(
+      'inexistente',
+    );
+  });
+
+  it('deveLancarQuandoACloudinaryRespondeOutraCoisa', async () => {
+    substituirDestroy('error');
+
+    await expect(criarExclusor().apagarDaCloudinary('motivos/a/b', 'image')).rejects.toThrow(
+      'Cloudinary recusou a exclusão: error',
+    );
   });
 });

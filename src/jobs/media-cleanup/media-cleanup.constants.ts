@@ -53,3 +53,16 @@ export const PASTAS_ACEITAS_POR_MOTIVO: Record<MotivoDaFila, readonly string[]> 
  * forjado não o torna legítimo.
  */
 export const ERRO_PREFIXO_INVALIDO = 'prefixo_invalido';
+
+/** Tipos de recurso da Cloudinary (identificadores do protocolo, não traduzidos). */
+export type TipoDeRecurso = 'image' | 'raw' | 'video';
+
+/**
+ * O comprovante sempre foi enviado como imagem e continua como está. Os
+ * anexos de motivo e de justificativa aceitam PDF, que a Cloudinary pode
+ * guardar como `raw`; o `destroy` no tipo errado responde "not found", igual a
+ * um arquivo que não existe. Por isso os anexos tentam os três, nesta ordem,
+ * e só o "not found" nos três prova que não há o que apagar (contrato § 13.3).
+ */
+export const TIPOS_DE_RECURSO_DO_COMPROVANTE: readonly TipoDeRecurso[] = ['image'];
+export const TIPOS_DE_RECURSO_DOS_ANEXOS: readonly TipoDeRecurso[] = ['image', 'raw', 'video'];

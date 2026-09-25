@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MotivoDaFila } from '../../src/jobs/media-cleanup/media-cleanup.constants.js';
+import type {
+  MotivoDaFila,
+  TipoDeRecurso,
+} from '../../src/jobs/media-cleanup/media-cleanup.constants.js';
 import {
   processarLote,
   type DependenciasDoWorker,
   type ExclusorDeMidia,
   type ItemDaFila,
   type RepositorioDaFila,
+  type ResultadoDaExclusao,
 } from '../../src/jobs/media-cleanup/media-cleanup.service.js';
 import { logger } from '../../src/lib/logger.js';
 
@@ -49,6 +53,7 @@ function itemStorage(overrides: Partial<ItemDaFila> = {}): ItemDaFila {
 
 function criarCenario(itens: ItemDaFila[]) {
   const chamadasCloudinary: string[] = [];
+  const tiposPedidos: TipoDeRecurso[] = [];
   const chamadasStorage: string[] = [];
   const processados: string[] = [];
   const falhas: { id: string; tentativas: number; erro: string }[] = [];
@@ -57,9 +62,13 @@ function criarCenario(itens: ItemDaFila[]) {
   // porque o lint não permite extrair referência de método de um objeto
   // literal — poderia perder o `this` se fosse um método de verdade em vez
   // de um dublê. [@typescript-eslint/unbound-method]
-  const apagarDaCloudinaryMock = vi.fn(async (publicId: string) => {
-    chamadasCloudinary.push(publicId);
-  });
+  const apagarDaCloudinaryMock = vi.fn(
+    async (publicId: string, tipo: TipoDeRecurso): Promise<ResultadoDaExclusao> => {
+      chamadasCloudinary.push(publicId);
+      tiposPedidos.push(tipo);
+      return 'apagado';
+    },
+  );
   const apagarDoStorageMock = vi.fn(async (caminhoNoStorage: string) => {
     chamadasStorage.push(caminhoNoStorage);
   });
@@ -88,6 +97,7 @@ function criarCenario(itens: ItemDaFila[]) {
   return {
     deps,
     chamadasCloudinary,
+    tiposPedidos,
     chamadasStorage,
     processados,
     falhas,
@@ -155,6 +165,7 @@ describe('processarLote', () => {
       if (publicId === caminhoRuim) {
         throw new Error('Cloudinary indisponível');
       }
+      return 'apagado';
     });
 
     const resultado = await processarLote(deps, 100);
@@ -376,5 +387,107 @@ describe('processarLote — validação do caminho antes de apagar', () => {
 
     expect(erroNoLog).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(erroNoLog.mock.calls)).not.toContain(TITULAR);
+  });
+});
+
+/**
+ * Item 4.8 do ROADMAP (contrato § 13.3, v3): o `destroy` num tipo de recurso
+ * errado responde "not found", e antes isso contava como sucesso — um anexo
+ * guardado como `raw` saía da fila sem ter sido apagado.
+ */
+describe('processarLote — os três tipos de recurso da Cloudinary', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Os tipos pedidos, na ordem, lidos das chamadas do próprio dublê. */
+  function tiposPedidos(mock: { mock: { calls: [string, TipoDeRecurso][] } }): TipoDeRecurso[] {
+    return mock.mock.calls.map(([, tipo]) => tipo);
+  }
+
+  function responderPorTipo(
+    respostas: Partial<Record<TipoDeRecurso, ResultadoDaExclusao | Error>>,
+  ) {
+    return async (_publicId: string, tipo: TipoDeRecurso): Promise<ResultadoDaExclusao> => {
+      const resposta = respostas[tipo] ?? 'inexistente';
+      if (resposta instanceof Error) throw resposta;
+      return resposta;
+    };
+  }
+
+  it.each(['motivos', 'justificativas'])(
+    'deveConcluirQuandoOArquivoDe %s/ estaGuardadoComoRaw',
+    async (pasta) => {
+      const item = itemCloudinary({ motivo: 'conta_excluida', asset_ref: caminho(pasta) });
+      const { deps, apagarDaCloudinaryMock, processados } = criarCenario([item]);
+      apagarDaCloudinaryMock.mockImplementation(responderPorTipo({ raw: 'apagado' }));
+
+      await processarLote(deps, 100);
+
+      expect(tiposPedidos(apagarDaCloudinaryMock)).toEqual(['image', 'raw']);
+      expect(processados).toEqual([item.id]);
+    },
+  );
+
+  it('deveConcluirQuandoOsTresTiposRespondemQueNaoHaArquivo', async () => {
+    // Reprocessar um item já apagado (crash entre apagar e marcar) tem que
+    // continuar seguro: nada existe em nenhum tipo, e o item conclui.
+    const item = itemCloudinary({ motivo: 'anexo_expirado', asset_ref: caminho('motivos') });
+    const { deps, apagarDaCloudinaryMock, processados } = criarCenario([item]);
+    apagarDaCloudinaryMock.mockImplementation(responderPorTipo({}));
+
+    await processarLote(deps, 100);
+
+    expect(tiposPedidos(apagarDaCloudinaryMock)).toEqual(['image', 'raw', 'video']);
+    expect(processados).toEqual([item.id]);
+  });
+
+  it('devePararNoPrimeiroTipoQueApaga', async () => {
+    const item = itemCloudinary({
+      motivo: 'justificativa_removida',
+      asset_ref: caminho('justificativas'),
+    });
+    const { deps, tiposPedidos: tipos } = criarCenario([item]);
+
+    await processarLote(deps, 100);
+
+    expect(tipos).toEqual(['image']);
+  });
+
+  it.each<TipoDeRecurso>(['image', 'raw', 'video'])(
+    'deveVoltarParaNovaTentativaQuandoOTipo %s falha',
+    async (tipoQueFalha) => {
+      const item = itemCloudinary({
+        motivo: 'anexo_de_motivo_removido',
+        asset_ref: caminho('motivos'),
+      });
+      const { deps, apagarDaCloudinaryMock, marcarProcessadoMock, marcarFalhaMock } = criarCenario([
+        item,
+      ]);
+      apagarDaCloudinaryMock.mockImplementation(
+        responderPorTipo({ [tipoQueFalha]: new Error('Cloudinary indisponível') }),
+      );
+
+      await processarLote(deps, 100);
+
+      expect(marcarProcessadoMock).not.toHaveBeenCalled();
+      expect(marcarFalhaMock).toHaveBeenCalledWith(item.id, 1, 'Cloudinary indisponível');
+    },
+  );
+
+  it('deveChamarSoImageQuandoOItemEhDeComprovantes', async () => {
+    // `comprovantes/` continua como estava (contrato § 13.3): o comprovante
+    // sempre foi imagem, e o "not found" em image conclui o item.
+    const item = itemCloudinary({
+      motivo: 'comprovante_recusado',
+      asset_ref: caminho('comprovantes'),
+    });
+    const { deps, apagarDaCloudinaryMock, processados } = criarCenario([item]);
+    apagarDaCloudinaryMock.mockImplementation(responderPorTipo({}));
+
+    await processarLote(deps, 100);
+
+    expect(tiposPedidos(apagarDaCloudinaryMock)).toEqual(['image']);
+    expect(processados).toEqual([item.id]);
   });
 });

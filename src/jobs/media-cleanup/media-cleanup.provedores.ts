@@ -42,16 +42,16 @@ export function criarExclusorDeMidia(config: ConfigDosProvedores): ExclusorDeMid
   });
 
   return {
-    async apagarDaCloudinary(publicId) {
+    async apagarDaCloudinary(publicId, tipo) {
       const resultado = (await cloudinary.uploader.destroy(publicId, {
         type: 'authenticated',
-        resource_type: 'image',
+        resource_type: tipo,
         invalidate: true,
       })) as { result?: string };
 
-      if (resultado.result !== 'ok' && resultado.result !== 'not found') {
-        throw new Error(`Cloudinary recusou a exclusão: ${resultado.result ?? 'desconhecido'}`);
-      }
+      if (resultado.result === 'ok') return 'apagado';
+      if (resultado.result === 'not found') return 'inexistente';
+      throw new Error(`Cloudinary recusou a exclusão: ${resultado.result ?? 'desconhecido'}`);
     },
 
     async apagarDoStorage(caminho) {

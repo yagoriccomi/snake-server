@@ -16,12 +16,16 @@
  */
 
 import { logger } from '../../lib/logger.js';
+import { PASTA_COMPROVANTES } from '../../modules/proofs/proofs.constants.js';
 
 import {
   ERRO_PREFIXO_INVALIDO,
   FORMATO_DO_ASSET_NA_CLOUDINARY,
   PASTAS_ACEITAS_POR_MOTIVO,
+  TIPOS_DE_RECURSO_DO_COMPROVANTE,
+  TIPOS_DE_RECURSO_DOS_ANEXOS,
   type MotivoDaFila,
+  type TipoDeRecurso,
 } from './media-cleanup.constants.js';
 
 export interface ItemDaFila {
@@ -32,9 +36,15 @@ export interface ItemDaFila {
   tentativas: number;
 }
 
+/**
+ * O que a Cloudinary respondeu a um `destroy` bem-sucedido. Qualquer outra
+ * resposta é falha, e o adaptador lança.
+ */
+export type ResultadoDaExclusao = 'apagado' | 'inexistente';
+
 /** Contrato de quem sabe apagar um asset em cada provedor. */
 export interface ExclusorDeMidia {
-  apagarDaCloudinary(publicId: string): Promise<void>;
+  apagarDaCloudinary(publicId: string, tipo: TipoDeRecurso): Promise<ResultadoDaExclusao>;
   apagarDoStorage(caminho: string): Promise<void>;
 }
 
@@ -108,6 +118,23 @@ async function recusarItem(item: ItemDaFila, deps: DependenciasDoWorker): Promis
 }
 
 /**
+ * Um "não encontrado" num tipo só não prova nada: o arquivo pode estar
+ * guardado como outro tipo. O item só conclui quando um tipo apaga ou quando
+ * todos os tipos da pasta respondem que não há arquivo. Falha em qualquer um
+ * sobe como exceção, e o item volta para nova tentativa. [#9]
+ */
+async function apagarNaCloudinary(assetRef: string, deps: DependenciasDoWorker): Promise<void> {
+  const tipos = assetRef.startsWith(`${PASTA_COMPROVANTES}/`)
+    ? TIPOS_DE_RECURSO_DO_COMPROVANTE
+    : TIPOS_DE_RECURSO_DOS_ANEXOS;
+
+  for (const tipo of tipos) {
+    const resultado = await deps.midia.apagarDaCloudinary(assetRef, tipo);
+    if (resultado === 'apagado') return;
+  }
+}
+
+/**
  * Apaga UM item, seja qual for o provedor. Nunca lança: o chamador precisa
  * seguir para o próximo item do lote mesmo se este falhar — um asset preso
  * não pode travar a fila inteira. [#9]
@@ -123,7 +150,7 @@ async function processarItem(
     }
 
     if (item.provider === 'cloudinary') {
-      await deps.midia.apagarDaCloudinary(item.asset_ref);
+      await apagarNaCloudinary(item.asset_ref, deps);
     } else {
       await deps.midia.apagarDoStorage(item.asset_ref);
     }
