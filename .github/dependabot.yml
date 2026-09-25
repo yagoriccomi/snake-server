@@ -17,7 +17,9 @@ updates:
       day: monday
       time: '09:00'
       timezone: America/Sao_Paulo
-    open-pull-requests-limit: 5
+    # Com 5, o limite enchia e o robô retinha PRs em silêncio (express-rate-limit,
+    # typescript e @vitest/coverage-v8 ficaram de fora em 21/09).
+    open-pull-requests-limit: 10
     labels: ['dependencias']
     commit-message:
       # Mesmo padrão de Conventional Commits que o commitlint exige —
@@ -26,6 +28,15 @@ updates:
       prefix-development: 'chore'
       include: scope
     groups:
+      # Majors que só funcionam em par: sozinhos quebram o npm ci (ERESOLVE) ou
+      # deixam a configuração pela metade. Vêm antes do grupo semanal porque o
+      # Dependabot põe cada pacote no primeiro grupo que casa.
+      vitest:
+        patterns: ['vitest', '@vitest/*']
+        update-types: ['major']
+      eslint:
+        patterns: ['eslint', '@eslint/js']
+        update-types: ['major']
       # Agrupar as ferramentas de desenvolvimento evita cinco PRs por
       # semana para bumps de patch que ninguém revisa de verdade.
       ferramentas-de-desenvolvimento:
@@ -37,6 +48,13 @@ updates:
       - dependency-name: 'express'
         update-types: ['version-update:semver-major']
       - dependency-name: 'zod'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'express-rate-limit'
+        update-types: ['version-update:semver-major']
+      # Os tipos acompanham o Node da imagem (Dockerfile e ci.yml), não o último
+      # Node lançado: tipos mais novos aceitam APIs que o runtime não tem. O major
+      # sobe à mão, junto com a imagem base.
+      - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
 
   # ── Actions do próprio pipeline ──
