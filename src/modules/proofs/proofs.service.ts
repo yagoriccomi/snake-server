@@ -20,6 +20,13 @@ export interface ParametrosDeUpload {
   public_id: string;
   timestamp: number;
   type: string;
+  /**
+   * Só nos anexos novos (motivos e `{justificationId}`, contrato § 13.1 e
+   * § 13.2). Ficam AUSENTES no comprovante e no `{classId}` legado: o APK
+   * instalado não envia estes campos, e a assinatura deixaria de bater.
+   */
+  overwrite?: boolean;
+  allowed_formats?: string;
 }
 
 export interface UploadAssinado extends ParametrosDeUpload {

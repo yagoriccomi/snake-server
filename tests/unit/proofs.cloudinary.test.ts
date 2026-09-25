@@ -1,3 +1,4 @@
+import { v2 as cloudinary } from 'cloudinary';
 import { describe, expect, it } from 'vitest';
 
 import { criarAssinadorCloudinary } from '../../src/modules/proofs/proofs.cloudinary.js';
@@ -70,6 +71,47 @@ describe('assinarUpload', () => {
     expect(resultado.apiKey).toBe(CONFIG.apiKey);
     expect(resultado.uploadUrl).toContain(CONFIG.cloudName);
     expect(resultado.folder).toBe(parametros.folder);
+  });
+});
+
+describe('assinarUpload — campos dos anexos novos (contrato § 13.1)', () => {
+  const parametros = {
+    folder: 'motivos/aluno-1',
+    public_id: 'anexo-9',
+    timestamp: 1_700_000_000,
+    type: 'authenticated',
+  };
+  const doAnexo = { ...parametros, overwrite: false, allowed_formats: 'jpg,png,webp,heic,pdf' };
+
+  it('deveAssinarOsMesmosCamposQueVoltamAoCliente', () => {
+    // O cliente reenvia à Cloudinary exatamente o que recebeu. Se a
+    // assinatura cobrisse outro conjunto de campos, o upload seria recusado.
+    const { cloudName, apiKey, signature, uploadUrl, ...camposEnviados } =
+      assinador.assinarUpload(doAnexo);
+    void cloudName;
+    void apiKey;
+    void uploadUrl;
+
+    expect(camposEnviados).toEqual(doAnexo);
+    expect(signature).toBe(cloudinary.utils.api_sign_request(camposEnviados, CONFIG.apiSecret));
+  });
+
+  it('deveMudarAAssinaturaQuandoOverwriteEAllowedFormatsEntram', () => {
+    // Prova que os dois campos estão DENTRO da assinatura: um cliente que os
+    // retirasse (para sobrescrever um anexo ou mandar um .docx) invalidaria
+    // o upload.
+    expect(assinador.assinarUpload(doAnexo).signature).not.toBe(
+      assinador.assinarUpload(parametros).signature,
+    );
+  });
+
+  it('naoDeveAcrescentarOsCamposQuandoNaoForamPedidos', () => {
+    // O comprovante e o `{classId}` legado continuam assinando o que o APK
+    // instalado envia — nada a mais.
+    const resultado = assinador.assinarUpload(parametros);
+
+    expect(resultado).not.toHaveProperty('overwrite');
+    expect(resultado).not.toHaveProperty('allowed_formats');
   });
 });
 
