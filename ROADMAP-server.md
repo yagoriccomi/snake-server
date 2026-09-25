@@ -256,7 +256,8 @@ do que **já está** em produção, vêm **primeiro**, antes do resto da Fase 4.
 **Ordem de execução:** 4.1 → 4.8 → 4.9 → 4.2 → 4.3 → 4.4 → 4.5 → 4.6 → 4.7. O 4.7 fica por
 último: depende de todos.
 
-**4.1 — Worker valida o caminho antes de apagar.**
+**4.1 — Worker valida o caminho antes de apagar.** Código pronto em 25/09 no **PR #28** (junto do
+4.8), aguardando o merge (⚠️ publica).
 
 - **É correção de segurança do que já está em produção**, independente da nova direção. Hoje o
   worker apaga `asset_ref` sem conferir nada. Um valor forjado no banco faria apagar o arquivo de
@@ -325,7 +326,8 @@ e `/v1/motivos`.
   de `absence_justifications` ou nas tentativas, `absence_justification_attempts`);
 - usa a service role que o worker já tem.
 
-**4.8 — (v3) Worker apaga nos três tipos de recurso.**
+**4.8 — (v3) Worker apaga nos três tipos de recurso.** Código pronto em 25/09 no **PR #28** (junto do
+4.1), aguardando o merge (⚠️ publica).
 
 - **O problema de hoje:** `apagarDaCloudinary` usa só `resource_type: 'image'`, e `"not found"`
   conta como sucesso. Um arquivo guardado como `raw` ou `video` nunca seria apagado, e o item
@@ -502,3 +504,4 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | 2026-09-25 | **Rotação da `service_role` adiada pelo dono** até o app ser usado de verdade (os dados de hoje são fictícios): item 5.1, na fase "Antes do primeiro aluno real". |
 | 2026-09-25 | **Fase 4 atualizada para o contrato v3** (revisão de 25/09, § 13 e § 14): itens novos 4.8 (worker nos três tipos de recurso) e 4.9 (`allowed_formats`, `FORMATOS_DE_ANEXO`); o 4.5 lista os três tipos; o que não muda (`class_swap_evidence` pelo módulo `motivos`, `{classId}` sem `allowed_formats`); G0 como portão de entrada; o servidor como passo 1 da ordem de publicação; G2 com as conferências do § 14. |
 | 2026-09-25 | **G0 aberto** (registrado no ROADMAP do `snake-thai`). O dono decidiu que o **4.1** (worker confere o caminho antes de apagar) e o **4.8** (worker apaga nos três tipos de recurso) vêm primeiro, porque corrigem a produção de hoje. |
+| 2026-09-25 | **4.1 e 4.8 implementados** na branch `bugfix/worker-valida-caminho-e-tipos-de-recurso`, **PR #28** (plano em `docs/planos/PLANO-worker-4.1-4.8.md`). O worker lê `motivo`, exige o formato e a pasta do § 13.3 (Storage: sem `..`, `encodeURIComponent` por segmento) e apaga `motivos/` e `justificativas/` em `image`, `raw` e `video`. **Decisão de implementação:** a fila não tem coluna de estado, então a recusa terminal fecha o item com `processado_em` + `ultimo_erro = 'prefixo_invalido'`, sem somar `tentativas`. Gate local verde (56 casos no worker). **Falta o merge, com a confirmação do dono** (publica), e conferir no painel que o Cron Job recebeu o commit. |
