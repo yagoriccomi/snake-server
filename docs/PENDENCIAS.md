@@ -4,20 +4,25 @@ Tudo que **não pôde ser executado ou decidido** durante a construção do serv
 o motivo. Nada aqui foi esquecido — cada item está registrado porque depende de um
 acesso, de uma informação ou de uma decisão que estão fora do meu alcance.
 
-**Atualizado em:** 2026-08-31
+**Atualizado em:** 2026-09-25
 
-> **Guia operacional:** os itens que dependem de você (P-1, P-2, P-4, P-5, P-6,
-> P-7, P-18) estão consolidados, na ordem de execução, em
-> [`DEPLOY.md`](DEPLOY.md). Este documento continua sendo o registro do porquê
-> de cada pendência; aquele é o passo a passo.
-**Estado do projeto:** branch `feature/servidor-docker` · 193 testes passando ·
-cobertura 95,16% · imagem Docker validada · `npm audit` limpo.
+> **Ordem de execução:** o [`ROADMAP-server.md`](../ROADMAP-server.md) diz **em que
+> ordem** resolver; este documento registra **por que** cada item ficou pendente. O
+> passo a passo dos painéis está em [`DEPLOY.md`](DEPLOY.md).
+
+**Estado do projeto:** em produção na Render desde setembro, a partir da `main` · 282
+testes na `main` (377 com a Fase 4, PR #29) · CI no GitHub (qualidade, segurança,
+CodeQL e imagem Docker) verde; o job de publicação falha por falta do secret (P-4).
 
 ---
 
 ## 🔴 Bloqueadores — o servidor não funciona de verdade sem isto
 
-### P-1. Preencher o `.env` com credenciais reais
+### ~~P-1. Preencher o `.env` com credenciais reais~~ ✅ RESOLVIDA na prática (conferida em 2026-09-25)
+
+**Resolução:** a API está em produção com as credenciais do painel da Render (P-6), e
+o app a usa. Localmente, o `.env` e o `.env.dev` (o de desenvolvimento, desde o PR #16)
+não têm mais nenhum marcador `<<<`. O registro abaixo fica como histórico.
 
 **Situação:** o `.env` existe, mas está com **valores fictícios** que criei apenas para
 demonstrar que o servidor sobe. Com eles, `/health` responde, mas `/v1/proofs/*` não
@@ -78,6 +83,10 @@ algum momento você quiser fechar o código, saiba que isso só vale daí para f
 
 ### P-4. Cadastrar os segredos e variáveis no GitHub
 
+> **2026-09-25:** continua aberta. É a opção A da Fase 1 do `ROADMAP-server.md`
+> ("quem publica em produção"), que o dono decidiu escolher depois. Até lá, todo merge
+> na `main` fica com o job "Publicar na Render" vermelho.
+
 **Por que não fiz:** exige acesso ao painel do repositório.
 
 **Settings → Secrets and variables → Actions → aba _Secrets_:**
@@ -99,6 +108,8 @@ não publicar silenciosamente sem gate.
 
 ### P-5. Criar o ambiente `producao` no GitHub
 
+> **2026-09-25:** continua aberta, junto com a P-4 (Fase 1 do roadmap).
+
 **Situação:** o workflow referencia `environment: producao`. Ele funciona sem o
 ambiente existir, mas criá-lo permite **exigir aprovação manual** antes de publicar e
 restringe quem enxerga o secret de deploy.
@@ -108,7 +119,10 @@ restringe quem enxerga o secret de deploy.
 
 ---
 
-### P-6. Cadastrar as variáveis de ambiente no painel da Render
+### ~~P-6. Cadastrar as variáveis de ambiente no painel da Render~~ ✅ RESOLVIDA na prática (2026-09-25)
+
+**Resolução:** o `snakethai-api` está no ar e atende o app e a web; o `ALLOWED_ORIGIN`
+foi conferido pelo dono em 24/09. O registro abaixo fica como histórico.
 
 **Por que não fiz:** exige acesso à sua conta da Render.
 
@@ -120,7 +134,9 @@ existir) nem `SUPABASE_SERVICE_ROLE_KEY` (ignora a RLS por completo).
 
 ---
 
-### P-7. Apontar o aplicativo para a API publicada
+### ~~P-7. Apontar o aplicativo para a API publicada~~ ✅ RESOLVIDA na prática (2026-09-25)
+
+**Resolução:** o app envia comprovantes e anexos de justificativa pela API publicada.
 
 Depois do primeiro deploy, copiar a URL gerada (`https://….onrender.com`) para a
 variável `EXPO_PUBLIC_API_URL` do app.
@@ -189,12 +205,29 @@ de uma checagem chutada que seria decorativa ou quebraria o admin de verdade.
 troque para `POLITICA_ACESSO_COMPROVANTE=somente-dono` — é a postura mais segura. Se
 houver, me diga como o papel é identificado e eu implemento a checagem de verdade.
 
+> **2026-09-25:** hoje se sabe como o banco modela o admin: `profiles.role` e
+> `public.is_admin()`. A checagem de verdade virou o item **5.5** do roadmap.
+
 **Referência:** achado A-1 do [`../REVIEW.md`](../REVIEW.md), seção 4 de
 [`ARQUITETURA.md`](ARQUITETURA.md).
 
 ---
 
-### P-10. Verificar se as políticas de RLS existem e estão corretas
+### ~~P-10. Verificar se as políticas de RLS existem e estão corretas~~ ✅ RESOLVIDA em 2026-09-25
+
+**Evidência** (item 5.6 do roadmap), no repositório `snake-thai`, dono do esquema:
+
+- `supabase/migrations/20260727130000_init_schema.sql:250`: `alter table public.payments
+  enable row level security`;
+- a política de leitura é `payments_select_own_or_admin`: `(select auth.uid()) = user_id or
+  public.is_admin()` (linhas 313–315). Inserir e apagar só admin; atualizar, dono ou admin,
+  com as colunas do aluno travadas pelo gatilho `enforce_payment_update_rules`;
+- nenhuma migration posterior cria, troca ou apaga política de `payments`;
+- a auditoria de 31/08 (`REVIEW.md` do `snake-thai`, linha 365) dá o veredicto **V1 ✅
+  PROTEGIDO**, e os testes SQL (`supabase/tests/`, inclusive
+  `regressao_c3_payment_whitelist.sql`) rodam no CI de lá.
+
+O registro abaixo fica como histórico.
 
 **Situação:** toda a autorização do `/v1/proofs/view-url` depende de políticas de Row
 Level Security na tabela `payments` — que vivem no Supabase, fora deste repositório.
@@ -408,6 +441,23 @@ Nenhuma ação sua é necessária para este item.
 
 ### P-20. Upgrades major de ferramentas de desenvolvimento adiados (2026-09-16)
 
+> **Atualização de 2026-09-25 (lote de dependências, PR #22, merge `9e95b39`):**
+>
+> | O que | Resultado |
+> | --- | --- |
+> | `vitest` 3 → 5 | **Feito**, em par com `@vitest/coverage-v8` 5.0.2 (sozinho, o PR quebrava o `npm ci`). A cobertura mudou de método: statements 79 → 83%, branches 95 → 75%, sem thresholds |
+> | `eslint` 9 → 10 | **Feito**, em par com `@eslint/js` 10.0.1 (comentado `@dependabot unignore @eslint/js`) |
+> | `@types/node` 22 → 26 | **Fechado com ignore de major** (#21): os tipos acompanham o Node 22.14 da imagem e do CI |
+> | `typescript` 5.9 → 6.0.3 | **PR #25 aberto**, a avaliar sozinho (item 3.5 do roadmap): é o compilador da imagem |
+> | TypeScript 7 | **Continua adiado**: só quando o `typescript-eslint` suportar |
+>
+> O `dependabot.yml` passou a agrupar os majors que só funcionam em par (`vitest` e
+> `@vitest/*`; `eslint` e `@eslint/js`), antes do grupo semanal. E, desde o item 3.4, o
+> `FROM` do `Dockerfile` é literal, para o Dependabot da imagem funcionar (com ignore de
+> major de `node`).
+>
+> A tabela abaixo é o registro original de 16/09.
+
 **Por que não fiz:** os três PRs do Dependabot abaixo quebram o `npm ci` com
 `ERESOLVE`, porque cada um exige atualizar outros pacotes junto. Nenhum traz ganho
 para produção: são ferramentas de desenvolvimento. Foram fechados com
@@ -433,24 +483,20 @@ também **≠ garantido**:
 
 | Item | Como foi verificado | O que falta |
 | --- | --- | --- |
-| Esteira de CI | Cada comando rodado **localmente**, e os gates testados bloqueando de propósito | Nunca executou num runner do GitHub |
-| CodeQL | Sintaxe do workflow validada | Depende do GitHub para rodar |
-| Deploy hook da Render | Lógica escrita e validada | Nunca disparado — falta o secret |
-| Build no runner | Imagem construída e validada **localmente** | Não construída no ambiente do GitHub |
-| Rotas `/v1` de ponta a ponta | Testadas com dublês e no smoke test | Nunca com Supabase e Cloudinary reais |
-
-**A primeira execução da esteira (após o push) é o teste real dela.** Se algo falhar
-lá, é esperado e corrigível — avise que eu ajusto.
+| Esteira de CI | ✅ Roda no GitHub em todo PR e merge desde setembro | — |
+| CodeQL | ✅ Roda no GitHub | — |
+| Deploy hook da Render | Lógica escrita e validada | Nunca disparado — falta o secret (P-4, Fase 1) |
+| Build no runner | ✅ Job "Imagem Docker" constrói e sobe a imagem no GitHub | — |
+| Rotas `/v1` de ponta a ponta | O app usa comprovantes e justificativas em produção | O envio **pela web** (web → servidor → Cloudinary) nunca rodou: item 2.3 do roadmap |
 
 ---
 
 ## Resumo do que fazer primeiro
 
-1. **P-2** — rotacionar a chave da Cloudinary, se ela já circulou. É o único item que
-   pode já estar comprometido.
-2. **P-1** — preencher o `.env` e ver o servidor funcionando de verdade.
-3. **P-4** e **P-6** — cadastrar secrets no GitHub e variáveis na Render.
-4. **P-10** — confirmar que a RLS existe e está correta. A segurança do `/view-url`
-   depende disso.
-5. **P-11** — decidir sobre o ciclo de vida do comprovante antes de receber dados de
-   alunos reais.
+A ordem agora vive no [`ROADMAP-server.md`](../ROADMAP-server.md). Das pendências deste
+documento, as que ainda dependem do dono:
+
+1. **P-4** e **P-5** — a Fase 1 (quem publica em produção).
+2. **P-2** — rotacionar a chave da Cloudinary, se ela já circulou (item 5.4).
+3. **P-11** — o prazo de guarda do comprovante (item 5.3).
+4. **P-9** — vira código no item 5.5.
