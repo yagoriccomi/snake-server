@@ -52,6 +52,31 @@ export interface ComprovanteParaVisualizar {
   pagina: number;
 }
 
+/**
+ * Monta a visualização de um arquivo JÁ autorizado, com o caminho JÁ
+ * derivado — quem chama responde pelas duas coisas. Os módulos que exibem
+ * anexo (comprovante, justificativa, motivo) diferem em quem pode ver e em
+ * como o caminho é derivado, não nesta parte. [#6]
+ *
+ * O total vem junto para a tela poder avisar que há mais documento além do
+ * que está sendo exibido. Um comprovante na página 2 de um extrato, sem esse
+ * aviso, é indistinguível de comprovante que não existe.
+ */
+export async function montarVisualizacao(
+  midia: AssinadorDeMidia,
+  publicId: string,
+  pagina: number,
+): Promise<ComprovanteParaVisualizar> {
+  const paginas = await midia.contarPaginas(publicId);
+  const paginaExibida = Math.min(Math.max(pagina, 1), paginas);
+
+  return {
+    url: midia.gerarUrlDeVisualizacao(publicId, paginaExibida),
+    paginas,
+    pagina: paginaExibida,
+  };
+}
+
 export interface RegistroDePagamento {
   user_id: string;
   /** Onde o arquivo está: `cloudinary` ou `supabase_storage` (legado). */
@@ -203,17 +228,7 @@ export function criarProofsService(deps: DependenciasDeProofs) {
        */
       const publicId = `${PASTA_COMPROVANTES}/${pagamento.user_id}/${paymentId}`;
 
-      // O total vem junto para a tela poder avisar que há mais documento além
-      // do que está sendo exibido. Um comprovante na página 2 de um extrato,
-      // sem esse aviso, é indistinguível de comprovante que não existe.
-      const paginas = await deps.midia.contarPaginas(publicId);
-      const paginaExibida = Math.min(Math.max(pagina, 1), paginas);
-
-      return {
-        url: deps.midia.gerarUrlDeVisualizacao(publicId, paginaExibida),
-        paginas,
-        pagina: paginaExibida,
-      };
+      return montarVisualizacao(deps.midia, publicId, pagina);
     },
   };
 }

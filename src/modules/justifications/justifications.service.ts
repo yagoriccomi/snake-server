@@ -1,10 +1,11 @@
 import { semAcesso } from '../../lib/http-error.js';
 import { PROVEDOR_CLOUDINARY, TIPO_ENTREGA_PRIVADO } from '../proofs/proofs.constants.js';
-import type {
-  AssinadorDeMidia,
-  Chamador,
-  ComprovanteParaVisualizar,
-  UploadAssinado,
+import {
+  montarVisualizacao,
+  type AssinadorDeMidia,
+  type Chamador,
+  type ComprovanteParaVisualizar,
+  type UploadAssinado,
 } from '../proofs/proofs.service.js';
 import { PASTA_JUSTIFICATIVAS } from './justifications.constants.js';
 
@@ -97,14 +98,7 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
        */
       const publicId = `${PASTA_JUSTIFICATIVAS}/${justificativa.user_id}/${justificativa.class_id}`;
 
-      const paginas = await deps.midia.contarPaginas(publicId);
-      const paginaExibida = Math.min(Math.max(pagina, 1), paginas);
-
-      return {
-        url: deps.midia.gerarUrlDeVisualizacao(publicId, paginaExibida),
-        paginas,
-        pagina: paginaExibida,
-      };
+      return montarVisualizacao(deps.midia, publicId, pagina);
     },
   };
 }
