@@ -78,7 +78,8 @@ async function principal(): Promise<void> {
 
   console.log(
     `media-cleanup: ${String(resultado.processados)} apagados, ` +
-      `${String(resultado.falhas)} com falha (seguem na fila).`,
+      `${String(resultado.falhas)} com falha (seguem na fila), ` +
+      `${String(resultado.recusados)} recusados por caminho inválido (fechados sem apagar).`,
   );
 
   // Falha no processo ≠ falha de UM item (essa já ficou registrada na fila

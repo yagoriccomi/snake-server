@@ -239,6 +239,36 @@ imagem do comprovante sobrevivia com eles.
   único lugar deste repositório que carrega a `SUPABASE_SERVICE_ROLE_KEY` como
   processo de longa duração — isolado, sem porta HTTP nenhuma exposta. [#55]
 
+**Antes de apagar, o worker confere o caminho** (contrato § 13.3). Ele apaga com a
+`service_role`, fora da RLS, então um `asset_ref` forjado na fila não pode virar a
+exclusão do arquivo de outra pessoa:
+
+| Provedor | O que é exigido |
+| --- | --- |
+| Cloudinary | Formato `^(comprovantes\|justificativas\|motivos)/<uuid>/<uuid>(-2)?$` e a pasta aceita para o `motivo` do item (tabela abaixo) |
+| Storage (legado) | Nenhum `..` no caminho; cada segmento vai escapado por `encodeURIComponent` |
+
+| `motivo` | Pasta aceita |
+| --- | --- |
+| `comprovante_recusado`, `migrado_de_provedor`, `retencao_expirada` | `comprovantes/` |
+| `justificativa_removida` | `justificativas/` |
+| `anexo_de_motivo_removido` | `motivos/` |
+| `anexo_expirado` | `justificativas/` ou `motivos/` |
+| `conta_excluida` | qualquer uma das três |
+
+- **Caminho recusado é terminal:** o item é fechado com `processado_em` e
+  `ultimo_erro = 'prefixo_invalido'`, **sem apagar** e sem somar `tentativas`, e o
+  log registra um `error` com o id do item e o motivo (nunca o caminho, que carrega o
+  id do titular). A fila não tem coluna de estado; quem audita separa os recusados
+  por `ultimo_erro`.
+- **Motivo desconhecido** (valor novo do enum que o worker ainda não conhece) para o
+  lote, como o provedor desconhecido: é esquema divergente, não caso de adivinhar.
+- **Os três tipos de recurso:** em `motivos/` e `justificativas/`, o `destroy` tenta
+  `image`, `raw` e `video` (sempre `type: 'authenticated'`), porque um PDF pode estar
+  guardado como `raw` e o tipo errado responde `"not found"`. O item conclui quando um
+  tipo apaga ou quando os três respondem `"not found"`; falha em qualquer um volta
+  para nova tentativa. `comprovantes/` continua só com `image`.
+
 > ⚠️ **Escopo do worker é deliberadamente limitado.** Ele processa o que os
 > gatilhos já enfileiraram (conta excluída, comprovante recusado, migração de
 > provedor). Ele **não** varre pagamentos por prazo de retenção — falta decidir
@@ -284,8 +314,8 @@ o valor gravado repetiria o achado C-2.
 
 Trocar ou remover o anexo, ou apagar a justificativa, enfileira o arquivo antigo
 em `media_deletion_queue` com o motivo `justificativa_removida`. O worker
-`media-cleanup` consome a fila **sem mudança**: ele lê só
-`id, provider, asset_ref, tentativas`.
+`media-cleanup` consome a fila com as regras da seção anterior (caminho conferido
+e os três tipos de recurso).
 
 ## 7. Módulos futuros prováveis (esboço — não implementar agora)
 

@@ -42,21 +42,25 @@ export function criarExclusorDeMidia(config: ConfigDosProvedores): ExclusorDeMid
   });
 
   return {
-    async apagarDaCloudinary(publicId) {
+    async apagarDaCloudinary(publicId, tipo) {
       const resultado = (await cloudinary.uploader.destroy(publicId, {
         type: 'authenticated',
-        resource_type: 'image',
+        resource_type: tipo,
         invalidate: true,
       })) as { result?: string };
 
-      if (resultado.result !== 'ok' && resultado.result !== 'not found') {
-        throw new Error(`Cloudinary recusou a exclusão: ${resultado.result ?? 'desconhecido'}`);
-      }
+      if (resultado.result === 'ok') return 'apagado';
+      if (resultado.result === 'not found') return 'inexistente';
+      throw new Error(`Cloudinary recusou a exclusão: ${resultado.result ?? 'desconhecido'}`);
     },
 
     async apagarDoStorage(caminho) {
+      // `encodeURI` deixaria `?`, `#` e `%` passarem e mudarem a URL; cada
+      // segmento vai escapado, e só a `/` entre eles continua sendo `/`. O
+      // `..` já foi barrado pela regra antes de chegar aqui. [#51]
+      const caminhoEscapado = caminho.split('/').map(encodeURIComponent).join('/');
       const resposta = await fetch(
-        `${config.supabaseUrl}/storage/v1/object/${BUCKET_LEGADO}/${encodeURI(caminho)}`,
+        `${config.supabaseUrl}/storage/v1/object/${BUCKET_LEGADO}/${caminhoEscapado}`,
         {
           method: 'DELETE',
           headers: {
