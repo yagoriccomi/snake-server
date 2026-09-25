@@ -14,7 +14,7 @@
  * "não há referência". [#9]
  */
 
-import { logger } from '../../lib/logger.js';
+import { descreverErro } from '../../lib/descrever-erro.js';
 
 import {
   FORMATO_DO_ASSET_NA_CLOUDINARY,
@@ -25,6 +25,7 @@ import {
   type TipoDeRecurso,
 } from './media-cleanup.constants.js';
 import type { ExclusorDeMidia } from './media-cleanup.service.js';
+import { logger } from './media-cleanup.logger.js';
 
 export interface AssetListado {
   public_id: string;
@@ -105,7 +106,7 @@ async function apagarOrfaosDaPagina(
         resultado.falhas += 1;
         logger.warn('falha ao apagar anexo órfão', {
           tipo,
-          erro: causa instanceof Error ? causa.message : 'desconhecido',
+          erro: descreverErro(causa),
         });
       }
     }
@@ -141,7 +142,7 @@ export async function varrerOrfaos(deps: DependenciasDaVarredura): Promise<Resul
     // que a varredura para, todo dia, até o esquema chegar. [#92]
     resultado.interrompida = true;
     logger.warn('varredura de órfãos interrompida sem apagar o restante', {
-      erro: causa instanceof Error ? causa.message : 'desconhecido',
+      erro: descreverErro(causa),
     });
   }
 

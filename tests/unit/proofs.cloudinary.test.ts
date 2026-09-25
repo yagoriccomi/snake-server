@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { logger } from '../../src/lib/logger.js';
 import { criarAssinadorCloudinary } from '../../src/modules/proofs/proofs.cloudinary.js';
 
 /**
@@ -237,5 +238,43 @@ describe('gerarUrlDeVisualizacao', () => {
 
     const tokenDe = (url: string) => /__cld_token__=([^&]+)/.exec(url)?.[1];
     expect(tokenDe(pagina1)).not.toBe(tokenDe(pagina2));
+  });
+});
+
+describe('contarPaginas', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('deveDevolverOTotalDePaginasDoDocumento', async () => {
+    vi.spyOn(cloudinary.api, 'resource').mockResolvedValue({ pages: 3 });
+
+    expect(await assinador.contarPaginas('comprovantes/a/b')).toBe(3);
+  });
+
+  it('deveDegradarPara1ELogarAMensagemQuandoASdkRejeitaComObjetoSimples', async () => {
+    // O SDK rejeita com `{ error: { message, http_code } }`, não com Error:
+    // antes, o log gravava "desconhecido" e ninguém sabia o motivo. [#92]
+    vi.spyOn(cloudinary.api, 'resource').mockRejectedValue({
+      error: { message: 'Rate Limit Exceeded', http_code: 420 },
+    });
+    const aviso = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    expect(await assinador.contarPaginas('comprovantes/a/b')).toBe(1);
+    expect(aviso).toHaveBeenCalledWith(expect.any(String), {
+      erro: 'Rate Limit Exceeded (HTTP 420)',
+    });
+  });
+
+  it('naoDeveLogarOIdDoTitularQueAMensagemDoProvedorCita', async () => {
+    const titular = '11111111-2222-4333-8444-555555555555';
+    vi.spyOn(cloudinary.api, 'resource').mockRejectedValue({
+      error: { message: `Resource not found - comprovantes/${titular}/x`, http_code: 404 },
+    });
+    const aviso = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await assinador.contarPaginas(`comprovantes/${titular}/x`);
+
+    expect(JSON.stringify(aviso.mock.calls)).not.toContain(titular);
   });
 });

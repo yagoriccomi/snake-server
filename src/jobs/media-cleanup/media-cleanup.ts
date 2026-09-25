@@ -18,6 +18,8 @@
 
 import { z } from 'zod';
 
+import { descreverErro } from '../../lib/descrever-erro.js';
+
 import { varrerOrfaos } from './media-cleanup.orfaos.js';
 import { criarConsultaDeReferencias, criarRepositorioDaFila } from './media-cleanup.repository.js';
 import { criarExclusorDeMidia } from './media-cleanup.provedores.js';
@@ -104,6 +106,6 @@ async function principal(): Promise<void> {
 }
 
 principal().catch((erro: unknown) => {
-  console.error(erro instanceof Error ? erro.message : String(erro));
+  console.error(descreverErro(erro));
   process.exit(1);
 });
