@@ -4,9 +4,9 @@
 > do contrato v3.
 > **Complementa** o [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md): aquele registra **por que**
 > algo ficou pendente; este diz **em que ordem** resolver.
-> **Repositórios irmãos:** [`snake-thai/ROADMAP.md`](../snake-thai/ROADMAP.md) (app e banco,
+> **Repositórios irmãos:** [`snake-thai/ROADMAP-thai.md`](../snake-thai/ROADMAP-thai.md) (app e banco,
 > onde está o marco "pronto para o primeiro aluno real") ·
-> [`snake-web/ROADMAP.md`](../snake-web/ROADMAP.md)
+> [`snake-web/ROADMAP-web.md`](../snake-web/ROADMAP-web.md)
 
 **Como usar**
 
