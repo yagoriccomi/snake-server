@@ -59,6 +59,10 @@ export function criarSupabaseFalso(espioes: Espioes): ClienteSupabase {
       return authorization === TOKEN_VALIDO ? USUARIO_DONO : null;
     },
 
+    // Os módulos recebem os seus leitores prontos (ver `criarDependenciasFalsas`);
+    // nenhum chama RPC por este dublê.
+    chamarRpcComoChamador: () => Promise.resolve(null),
+
     async consultarComoChamador<T>(
       _tabela: string,
       filtros: Record<string, string>,

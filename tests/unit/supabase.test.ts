@@ -206,4 +206,80 @@ describe('consultarComoChamador — onde a injeção seria possível', () => {
 
     expect(urlChamada().pathname).not.toContain('//');
   });
+
+  it('deveContinuarUsandoGetSemCorpo', async () => {
+    await cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO);
+
+    const opcoes = fetchFalso.mock.calls[0]?.[1] as RequestInit;
+    expect(opcoes.method).toBe('GET');
+    expect(opcoes.body).toBeUndefined();
+  });
+});
+
+describe('chamarRpcComoChamador', () => {
+  const ARGUMENTOS = { p_motivo_id: '00000000-0000-4000-8000-000000000000' };
+
+  it('deveChamarARpcPorPostComOsArgumentosNoCorpo', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa(true));
+
+    await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO);
+
+    const opcoes = fetchFalso.mock.calls[0]?.[1] as RequestInit;
+    expect(urlChamada().pathname).toBe('/rest/v1/rpc/pode_anexar_ao_motivo');
+    expect(urlChamada().search).toBe('');
+    expect(opcoes.method).toBe('POST');
+    expect(JSON.parse(opcoes.body as string)).toEqual(ARGUMENTOS);
+    expect((opcoes.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+  });
+
+  it('deveRepassarOTokenDoChamadorParaQueAFuncaoDecidaPorEle', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa(true));
+
+    await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO);
+
+    const opcoes = fetchFalso.mock.calls[0]?.[1] as RequestInit;
+    expect((opcoes.headers as Record<string, string>).Authorization).toBe(AUTORIZACAO);
+  });
+
+  it('deveDevolverORetornoDaFuncao', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa(false));
+
+    expect(
+      await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO),
+    ).toBe(false);
+  });
+
+  it('deveDevolverNuloQuandoAFuncaoAindaNaoExisteNoBancoAntigo', async () => {
+    // PGRST202: o servidor foi ao ar antes das migrations (contrato § 14).
+    // Tem que virar "sem acesso", nunca 5xx.
+    fetchFalso.mockResolvedValue(respostaFalsa({ code: 'PGRST202' }, 404));
+
+    expect(
+      await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO),
+    ).toBeNull();
+  });
+
+  it('deveDevolverNuloQuandoOTokenNaoTemPermissao', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa({ code: '42501' }, 403));
+
+    expect(
+      await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO),
+    ).toBeNull();
+  });
+
+  it('deveLancar503QuandoOPostgrestRespondeErroDeServidor', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'boom' }, 500));
+
+    await expect(
+      cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO),
+    ).rejects.toMatchObject({ status: 503, code: 'supabase_error' });
+  });
+
+  it('deveCodificarONomeDaFuncaoParaNaoPermitirTravessiaDeCaminho', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa(true));
+
+    await cliente.chamarRpcComoChamador('../../auth/v1/admin/users', {}, AUTORIZACAO);
+
+    expect(urlChamada().pathname).not.toContain('/auth/v1');
+  });
 });
