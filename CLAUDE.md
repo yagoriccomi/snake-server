@@ -98,30 +98,38 @@ src/
 │   ├── constants.ts            # Limites da APLICAÇÃO (payload, rate limit, timeouts) [#3]
 │   └── env.ts                  # ÚNICO ponto que lê process.env; fail-fast [#80]
 ├── lib/
-│   ├── logger.ts               # JSON estruturado com PII mascarada [#91][#63]
+│   ├── log-estruturado.ts      # criarLogger(): JSON com PII mascarada, SEM ler config [#91][#63]
+│   ├── logger.ts               # o logger do servidor web, montado do env.ts
+│   ├── descrever-erro.ts       # mensagem legível de Error ou do objeto da Cloudinary, sem UUID
 │   ├── http-error.ts           # Contrato de erro da aplicação [#93]
-│   └── supabase.ts             # criarClienteSupabase() — identidade + leitura via RLS
+│   └── supabase.ts             # criarClienteSupabase() — identidade, leitura e RPC via RLS
 ├── middleware/
 │   ├── request-context.ts      # traceId por requisição [#94]
 │   ├── validate.ts             # Validação Zod na borda [#51]
 │   ├── require-user.ts         # criarRequireUser(supabase) — auth injetável
 │   └── error-handler.ts        # classificarErro() puro + handler global [#2][#93]
 ├── modules/
-│   └── proofs/                 # Módulo 1 — comprovantes
-│       ├── proofs.constants.ts   # constantes DO DOMÍNIO (pasta, tipo, tabela) [#13]
-│       ├── proofs.cloudinary.ts  # adaptador do provedor de mídia (infra) [#20]
-│       ├── proofs.repository.ts  # única camada que fala PostgREST [#22]
-│       ├── proofs.service.ts     # a regra + os CONTRATOS que a infra implementa
-│       ├── proofs.controller.ts  # só HTTP
-│       ├── proofs.schema.ts      # validação Zod
-│       └── proofs.routes.ts      # criarProofsRouter(deps) — factory, não instância
+│   ├── proofs/                 # Módulo 1 — comprovantes
+│   │   ├── proofs.constants.ts   # constantes DO DOMÍNIO (pasta, tipo, tabela) [#13]
+│   │   ├── proofs.cloudinary.ts  # adaptador do provedor de mídia (infra) [#20]
+│   │   ├── proofs.repository.ts  # única camada que fala PostgREST [#22]
+│   │   ├── proofs.service.ts     # a regra + os CONTRATOS que a infra implementa
+│   │   ├── proofs.controller.ts  # só HTTP
+│   │   ├── proofs.schema.ts      # validação Zod
+│   │   └── proofs.routes.ts      # criarProofsRouter(deps) — factory, não instância
+│   ├── justifications/         # Módulo 2 — anexos de justificativa (mesmas camadas)
+│   └── motivos/                # Módulo 3 — anexos de motivo (mesmas camadas)
 ├── routes/
 │   └── v1.ts                   # criarV1Router(deps) — registro dos módulos [#28]
 ├── jobs/
 │   └── media-cleanup/          # Cron Job SEPARADO do serviço web (LGPD)
-│       ├── media-cleanup.service.ts     # a regra: processa 1 lote da fila
-│       ├── media-cleanup.repository.ts  # fala com media_deletion_queue
-│       ├── media-cleanup.provedores.ts  # apaga na Cloudinary / no Storage
+│       ├── media-cleanup.constants.ts   # formato e pastas do contrato (§ 13.3)
+│       ├── media-cleanup.service.ts     # a regra: valida o caminho e processa 1 lote da fila
+│       ├── media-cleanup.orfaos.ts      # a regra: varredura diária de anexos órfãos
+│       ├── media-cleanup.repository.ts  # fala com media_deletion_queue e as referências
+│       ├── media-cleanup.provedores.ts  # lista e apaga na Cloudinary / apaga no Storage
+│       ├── media-cleanup.logger.ts      # logger do worker — NUNCA importar lib/logger.ts
+│       │                                # (carrega o env.ts do servidor web e derruba o worker)
 │       └── media-cleanup.ts             # entrypoint — próprio esquema de env
 │                                # ÚNICO lugar do repo que carrega a
 │                                # SUPABASE_SERVICE_ROLE_KEY como processo
@@ -292,10 +300,17 @@ tests/
 │   ├── env.test.ts                    # fail-fast e bloqueio do JWT_SECRET
 │   ├── error-handler.test.ts          # classificarErro: nunca vaza detalhe interno
 │   ├── logger.test.ts                 # mascarar: a barreira de PII
-│   ├── proofs.cloudinary.test.ts      # adaptador REAL (assina local, sem rede)
-│   ├── proofs.service.test.ts         # os invariantes de segurança da regra
-│   └── supabase.test.ts               # montagem da URL = defesa contra injeção
-└── integracao/api.test.ts             # criarApp(depsFalsas) + supertest [#42]
+│   ├── descrever-erro.test.ts         # objeto da Cloudinary, sem [object Object], sem UUID
+│   ├── supabase.test.ts               # montagem da URL e da RPC = defesa contra injeção
+│   ├── proofs.*.test.ts               # adaptador REAL (assina local), regra e repositório
+│   ├── justifications.service.test.ts # as duas formas e o caminho derivado
+│   ├── motivos.*.test.ts              # regra e repositório (banco antigo = 403)
+│   ├── defesa-em-profundidade.test.ts # segunda barreira dos comprovantes
+│   └── media-cleanup.*.test.ts        # fila, validação, três tipos, órfãos, ambiente
+└── integracao/                        # criarApp(depsFalsas) + supertest [#42]
+    ├── api.test.ts                    # middlewares, limites, comprovantes
+    ├── justifications.api.test.ts
+    └── motivos.api.test.ts
 ```
 
 **Como testar sem rede:** `criarApp(deps)` aceita as dependências por
@@ -307,94 +322,7 @@ parâmetro, então a API inteira sobe com dublês — nada de `vi.mock` de módu
 - Cada teste prepara o próprio estado; a ordem não importa. [#48]
 - Credenciais dos testes são **fictícias**, definidas em `vitest.config.ts`. [#37]
 
-**Comandos:** `npm test` · `npm run test:watch` · `npm run test:coverage` 
-> snakethai-api@0.1.0 test
-> vitest run
-
-
-[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/USER/Desktop/GIT/snake-server[39m
-
- [32m✓[39m tests/unit/error-handler.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m tests/unit/proofs.service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 11[2mms[22m[39m
- [32m✓[39m tests/unit/logger.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 18[2mms[22m[39m
- [32m✓[39m tests/unit/supabase.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 20[2mms[22m[39m
- [32m✓[39m tests/unit/env.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 165[2mms[22m[39m
- [32m✓[39m tests/unit/proofs.cloudinary.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 22[2mms[22m[39m
- [32m✓[39m tests/integracao/api.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 176[2mms[22m[39m
-
-[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
-[2m      Tests [22m [1m[32m173 passed[39m[22m[90m (173)[39m
-[2m   Start at [22m 13:45:46
-[2m   Duration [22m 959ms[2m (transform 366ms, setup 0ms, collect 1.14s, tests 420ms, environment 1ms, prepare 833ms)[22m · 
-> snakethai-api@0.1.0 test:watch
-> vitest
-
-
-[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/USER/Desktop/GIT/snake-server[39m
-
- [32m✓[39m tests/unit/proofs.service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m tests/unit/error-handler.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 6[2mms[22m[39m
- [32m✓[39m tests/unit/logger.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 20[2mms[22m[39m
- [32m✓[39m tests/unit/supabase.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 20[2mms[22m[39m
- [32m✓[39m tests/unit/env.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 161[2mms[22m[39m
- [32m✓[39m tests/unit/proofs.cloudinary.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 21[2mms[22m[39m
- [32m✓[39m tests/integracao/api.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 182[2mms[22m[39m
-
-[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
-[2m      Tests [22m [1m[32m173 passed[39m[22m[90m (173)[39m
-[2m   Start at [22m 13:45:47
-[2m   Duration [22m 954ms[2m (transform 333ms, setup 0ms, collect 1.04s, tests 418ms, environment 1ms, prepare 948ms)[22m · 
-> snakethai-api@0.1.0 test:coverage
-> vitest run --coverage
-
-
-[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mC:/Users/USER/Desktop/GIT/snake-server[39m
-      [2mCoverage enabled with [22m[33mv8[39m
-
- [32m✓[39m tests/unit/proofs.service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 12[2mms[22m[39m
- [32m✓[39m tests/unit/logger.test.ts [2m([22m[2m49 tests[22m[2m)[22m[32m 22[2mms[22m[39m
- [32m✓[39m tests/unit/error-handler.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 7[2mms[22m[39m
- [32m✓[39m tests/unit/supabase.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 18[2mms[22m[39m
- [32m✓[39m tests/unit/proofs.cloudinary.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 18[2mms[22m[39m
- [32m✓[39m tests/unit/env.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 173[2mms[22m[39m
- [32m✓[39m tests/integracao/api.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 196[2mms[22m[39m
-
-[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
-[2m      Tests [22m [1m[32m173 passed[39m[22m[90m (173)[39m
-[2m   Start at [22m 13:45:50
-[2m   Duration [22m 1.11s[2m (transform 316ms, setup 0ms, collect 1.05s, tests 445ms, environment 1ms, prepare 1.01s)[22m
-
-[34m % [39m[2mCoverage report from [22m[33mv8[39m
--------------------|---------|----------|---------|---------|-------------------
-File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
--------------------|---------|----------|---------|---------|-------------------
-All files          |   95.02 |    95.29 |   96.07 |   95.02 |                   
- src               |   81.03 |    66.66 |      50 |   81.03 |                   
-  app.ts           |     100 |    66.66 |     100 |     100 | 43                
-  ...ition-root.ts |   31.25 |      100 |       0 |   31.25 | 24-35             
- src/config        |     100 |    93.75 |     100 |     100 |                   
-  constants.ts     |     100 |      100 |     100 |     100 |                   
-  env.ts           |     100 |    93.75 |     100 |     100 | 97                
- src/lib           |   98.41 |    95.12 |     100 |   98.41 |                   
-  http-error.ts    |     100 |      100 |     100 |     100 |                   
-  logger.ts        |   96.93 |     92.3 |     100 |   96.93 | 123-124,153       
-  supabase.ts      |     100 |      100 |     100 |     100 |                   
- src/middleware    |   96.37 |    95.74 |     100 |   96.37 |                   
-  error-handler.ts |   95.94 |    95.83 |     100 |   95.94 | 124-126           
-  ...st-context.ts |     100 |      100 |     100 |     100 |                   
-  require-user.ts  |   93.75 |       90 |     100 |   93.75 | 60-61             
-  validate.ts      |     100 |      100 |     100 |     100 |                   
- ...modules/proofs |   91.89 |      100 |   91.66 |   91.89 |                   
-  ...cloudinary.ts |     100 |      100 |     100 |     100 |                   
-  ....constants.ts |     100 |      100 |     100 |     100 |                   
-  ...controller.ts |     100 |      100 |     100 |     100 |                   
-  ...repository.ts |   14.28 |      100 |       0 |   14.28 | 17-29             
-  proofs.routes.ts |     100 |      100 |     100 |     100 |                   
-  proofs.schema.ts |     100 |      100 |     100 |     100 |                   
-  ...fs.service.ts |     100 |      100 |     100 |     100 |                   
- src/routes        |     100 |      100 |     100 |     100 |                   
-  v1.ts            |     100 |      100 |     100 |     100 |                   
--------------------|---------|----------|---------|---------|-------------------
+**Comandos:** `npm test` · `npm run test:watch` · `npm run test:coverage`
 
 ### Regras invioláveis
 
