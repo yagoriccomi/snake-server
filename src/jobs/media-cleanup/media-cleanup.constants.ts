@@ -4,8 +4,11 @@
  * um valor daqui muda antes o contrato. [#3][#13]
  */
 
-import { PASTA_JUSTIFICATIVAS } from '../../modules/justifications/justifications.constants.js';
-import { PASTA_MOTIVOS } from '../../modules/motivos/motivos.constants.js';
+import {
+  PASTA_JUSTIFICATIVAS,
+  TABELA_JUSTIFICATIVAS,
+} from '../../modules/justifications/justifications.constants.js';
+import { PASTA_MOTIVOS, TABELA_ANEXOS_DE_MOTIVO } from '../../modules/motivos/motivos.constants.js';
 import { PASTA_COMPROVANTES } from '../../modules/proofs/proofs.constants.js';
 
 /** Valores de `media_deletion_reason` que este worker sabe tratar. */
@@ -64,3 +67,36 @@ export type TipoDeRecurso = 'image' | 'raw' | 'video';
  */
 export const TIPOS_DE_RECURSO_DO_COMPROVANTE: readonly TipoDeRecurso[] = ['image'];
 export const TIPOS_DE_RECURSO_DOS_ANEXOS: readonly TipoDeRecurso[] = ['image', 'raw', 'video'];
+
+/**
+ * Varredura de órfãos (contrato § 13.3): as pastas dos anexos que o banco
+ * referencia por linha. `comprovantes/` fica de fora — o contrato não a varre.
+ */
+export const PASTAS_VARRIDAS: readonly string[] = [PASTA_JUSTIFICATIVAS, PASTA_MOTIVOS];
+
+/**
+ * Idade mínima para um arquivo sem linha ser tratado como órfão. O cliente
+ * envia o arquivo ANTES de gravar a linha (`anexar_ao_motivo`,
+ * `anexar_a_justificativa`); sem essa folga, a varredura apagaria um anexo
+ * no meio do envio.
+ */
+export const IDADE_MINIMA_DO_ORFAO_MS = 24 * 60 * 60 * 1000;
+
+/** Teto da Admin API da Cloudinary por página de listagem. */
+export const TAMANHO_DA_PAGINA_DA_LISTAGEM = 500;
+
+/**
+ * Quantos caminhos vão num `in.(...)` do PostgREST. Os filtros viajam na URL:
+ * 100 caminhos de ~90 caracteres ficam longe do limite de URL do proxy.
+ */
+export const TAMANHO_DO_LOTE_DE_REFERENCIAS = 100;
+
+/**
+ * Onde o banco guarda o caminho de cada anexo (contrato § 8 e § 9.1). Um
+ * arquivo referenciado por QUALQUER uma destas colunas não é órfão.
+ */
+export const REFERENCIAS_DE_ANEXO: readonly { tabela: string; coluna: string }[] = [
+  { tabela: TABELA_ANEXOS_DE_MOTIVO, coluna: 'public_id' },
+  { tabela: TABELA_JUSTIFICATIVAS, coluna: 'proof_public_id' },
+  { tabela: 'absence_justification_attempts', coluna: 'proof_public_id' },
+];
