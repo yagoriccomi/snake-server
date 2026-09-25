@@ -25,7 +25,7 @@
 | **Worker** | Cron Job `snakethai-media-cleanup` (LGPD), declarado no `render.yaml`. **Não se sabe se existe no painel** |
 | **Clientes** | O app Android (sem `Origin`) e, desde 23/09, o **`snake-web`**, o **primeiro cliente de navegador**. `ALLOWED_ORIGIN` conferido pelo dono em 24/09 |
 | **Cópia local** | Na branch `chore/ambiente-dev-local`, já mesclada (PR #16). A `main` local está atrás da remota, que já tem o PR #22 |
-| **PRs abertos** | Os 5 do Dependabot (#17 a #21) foram resolvidos em 25/09 pelo PR #22. O próximo esperado é o do `typescript` 6 (item 3.5) |
+| **PRs abertos** | Os 5 do Dependabot (#17 a #21) foram resolvidos em 25/09 pelo PR #22. Com o `dependabot.yml` novo, chegaram no mesmo dia o #23, o #24 (item 3.8) e o #25 (`typescript` 6, item 3.5), os três com CI verde |
 | **Contrato** | `snake-thai/docs/CONTRATO.md` **v3** (revisão de 25/09). O **G0** abriu em 25/09 (registrado no ROADMAP do `snake-thai`); o **G2** é deste servidor (Fase 4) |
 | **Fundação** | Git, GitHub, Husky, commitlint, lint, typecheck e testes no pre-commit. Jira **recusado** em 2026-08-21, e não se pergunta de novo |
 
@@ -174,7 +174,7 @@ de `express` e `zod`. Rótulos `dependencias`, `ci` e `docker` criados no reposi
   (`FROM node:22.14-alpine@sha256:… AS base`), e pôr no bloco `docker` um `ignore` de major de
   `node` (o major sobe à mão, junto com `ci.yml` e `@types/node`, Fase 7). Gate: job "Imagem
   Docker" verde.
-- [ ] **3.5** 🤖 **O `typescript` 5.9.3 → 6.0.3 deve chegar** (o `typescript-eslint` 8.70 aceita
+- [ ] **3.5** 🤖 **O `typescript` 5.9.3 → 6.0.3 chegou: PR #25** (aberto em 25/09, CI verde; o `typescript-eslint` 8.70 aceita
   `<6.1.0`). Avaliar **sozinho**, num PR só dele: é o compilador da imagem de produção. `npm ci`,
   gate completo e job "Imagem Docker" verdes antes do merge. O TypeScript 7 continua ignorado
   (P-20).
@@ -186,6 +186,12 @@ de `express` e `zod`. Rótulos `dependencias`, `ci` e `docker` criados no reposi
   `[object Object]` em `ultimo_erro`.
 - [ ] **3.7** ⚠️👤 **Depois de confirmar que o lote está no ar (item 1.2)**, fazer o ponta a ponta
   do item 2.3: comprovante pela web, com imagem e com PDF. É o teste real do `cloudinary` 2.11.0.
+- [ ] **3.8** 🤖 **PRs do Dependabot abertos em 25/09, já com o `dependabot.yml` novo**, CI verde nos dois:
+  **#24** (grupo `ferramentas-de-desenvolvimento`, 6 atualizações de minor/patch) e **#23**
+  (`actions/upload-artifact` 4 → 7, no `ci.yml`). Ler as notas de versão, conferir que o #24 não
+  sobe nenhum major e, se o gate continuar verde, mesclar com merge commit (um de cada vez; o
+  Dependabot rebaseia o outro). O #25 é o 3.5, e o #24 conflita com ele no lockfile: mesclar o #24
+  primeiro.
 
 ---
 
