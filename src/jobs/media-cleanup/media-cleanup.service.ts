@@ -17,10 +17,18 @@
 
 import { logger } from '../../lib/logger.js';
 
+import {
+  ERRO_PREFIXO_INVALIDO,
+  FORMATO_DO_ASSET_NA_CLOUDINARY,
+  PASTAS_ACEITAS_POR_MOTIVO,
+  type MotivoDaFila,
+} from './media-cleanup.constants.js';
+
 export interface ItemDaFila {
   id: string;
   provider: 'cloudinary' | 'supabase_storage';
   asset_ref: string;
+  motivo: MotivoDaFila;
   tentativas: number;
 }
 
@@ -35,6 +43,8 @@ export interface RepositorioDaFila {
   listarPendentes(limite: number): Promise<ItemDaFila[]>;
   marcarProcessado(id: string): Promise<void>;
   marcarFalha(id: string, tentativas: number, erro: string): Promise<void>;
+  /** Fecha o item sem apagar e sem nova tentativa, com o motivo em `ultimo_erro`. */
+  marcarInvalido(id: string, erro: string): Promise<void>;
 }
 
 export interface DependenciasDoWorker {
@@ -45,7 +55,11 @@ export interface DependenciasDoWorker {
 export interface ResultadoDoLote {
   processados: number;
   falhas: number;
+  /** Itens fechados sem apagar porque o caminho não passou na validação. */
+  recusados: number;
 }
+
+type DesfechoDoItem = 'processado' | 'falha' | 'recusado';
 
 /**
  * Depois de quantas tentativas o erro vira alarme (`error`) em vez de aviso
@@ -62,19 +76,59 @@ function mensagemDeErro(causa: unknown): string {
 }
 
 /**
+ * O worker apaga com `service_role`, fora da RLS: o `asset_ref` precisa provar
+ * que aponta para onde o motivo diz, antes de qualquer chamada ao provedor.
+ * Na Cloudinary, o formato do contrato e a pasta do motivo; no Storage (só o
+ * legado dos comprovantes), nenhum `..` que suba de pasta. [#51][#55]
+ */
+function caminhoEhValido(item: ItemDaFila): boolean {
+  if (item.provider === 'supabase_storage') {
+    return !item.asset_ref.includes('..');
+  }
+
+  const pasta = FORMATO_DO_ASSET_NA_CLOUDINARY.exec(item.asset_ref)?.[1];
+  if (pasta === undefined) return false;
+  return PASTAS_ACEITAS_POR_MOTIVO[item.motivo].includes(pasta);
+}
+
+/**
+ * Caminho recusado é terminal: tentar de novo não o torna legítimo, e deixar o
+ * item aberto o traria de volta, na frente da fila, em toda execução. `error`
+ * porque ninguém além dos gatilhos do banco escreve nesta fila — um caminho
+ * fora do formato é sinal de adulteração ou de esquema divergente. O caminho
+ * não vai para o log: carrega o id do titular. [#63][#92]
+ */
+async function recusarItem(item: ItemDaFila, deps: DependenciasDoWorker): Promise<void> {
+  await deps.fila.marcarInvalido(item.id, ERRO_PREFIXO_INVALIDO);
+  logger.error('item da fila de eliminação recusado: caminho fora do contrato', {
+    itemId: item.id,
+    provider: item.provider,
+    motivo: item.motivo,
+  });
+}
+
+/**
  * Apaga UM item, seja qual for o provedor. Nunca lança: o chamador precisa
  * seguir para o próximo item do lote mesmo se este falhar — um asset preso
  * não pode travar a fila inteira. [#9]
  */
-async function processarItem(item: ItemDaFila, deps: DependenciasDoWorker): Promise<boolean> {
+async function processarItem(
+  item: ItemDaFila,
+  deps: DependenciasDoWorker,
+): Promise<DesfechoDoItem> {
   try {
+    if (!caminhoEhValido(item)) {
+      await recusarItem(item, deps);
+      return 'recusado';
+    }
+
     if (item.provider === 'cloudinary') {
       await deps.midia.apagarDaCloudinary(item.asset_ref);
     } else {
       await deps.midia.apagarDoStorage(item.asset_ref);
     }
     await deps.fila.marcarProcessado(item.id);
-    return true;
+    return 'processado';
   } catch (causa) {
     const erro = mensagemDeErro(causa);
     const tentativas = item.tentativas + 1;
@@ -86,7 +140,7 @@ async function processarItem(item: ItemDaFila, deps: DependenciasDoWorker): Prom
     } else {
       logger.warn('falha ao processar item da fila de eliminação', contexto);
     }
-    return false;
+    return 'falha';
   }
 }
 
@@ -97,17 +151,14 @@ export async function processarLote(
 ): Promise<ResultadoDoLote> {
   const pendentes = await deps.fila.listarPendentes(limite);
 
-  let processados = 0;
-  let falhas = 0;
+  const resultado: ResultadoDoLote = { processados: 0, falhas: 0, recusados: 0 };
 
   for (const item of pendentes) {
-    const sucesso = await processarItem(item, deps);
-    if (sucesso) {
-      processados += 1;
-    } else {
-      falhas += 1;
-    }
+    const desfecho = await processarItem(item, deps);
+    if (desfecho === 'processado') resultado.processados += 1;
+    if (desfecho === 'falha') resultado.falhas += 1;
+    if (desfecho === 'recusado') resultado.recusados += 1;
   }
 
-  return { processados, falhas };
+  return resultado;
 }

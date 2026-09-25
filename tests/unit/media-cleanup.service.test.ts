@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { MotivoDaFila } from '../../src/jobs/media-cleanup/media-cleanup.constants.js';
 import {
   processarLote,
   type DependenciasDoWorker,
@@ -7,6 +8,7 @@ import {
   type ItemDaFila,
   type RepositorioDaFila,
 } from '../../src/jobs/media-cleanup/media-cleanup.service.js';
+import { logger } from '../../src/lib/logger.js';
 
 /**
  * A regra do worker: consumir a fila de eliminação sem deixar um item ruim
@@ -14,11 +16,21 @@ import {
  * casos ataca falha — é para isso que este worker existe. [Regra de Ouro nº 3]
  */
 
+const TITULAR = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const OUTRO_TITULAR = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const REGISTRO = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+/** Caminho no formato do contrato (§ 13.3): `<pasta>/<uuid do dono>/<uuid do registro>`. */
+function caminho(pasta: string, registro = REGISTRO): string {
+  return `${pasta}/${TITULAR}/${registro}`;
+}
+
 function itemCloudinary(overrides: Partial<ItemDaFila> = {}): ItemDaFila {
   return {
     id: '11111111-1111-4111-8111-111111111111',
     provider: 'cloudinary',
-    asset_ref: 'comprovantes/aluno-1/pagamento-1',
+    asset_ref: caminho('comprovantes'),
+    motivo: 'comprovante_recusado',
     tentativas: 0,
     ...overrides,
   };
@@ -29,6 +41,7 @@ function itemStorage(overrides: Partial<ItemDaFila> = {}): ItemDaFila {
     id: '22222222-2222-4222-8222-222222222222',
     provider: 'supabase_storage',
     asset_ref: 'aluno-1/pagamento-2_recibo.jpg',
+    motivo: 'migrado_de_provedor',
     tentativas: 0,
     ...overrides,
   };
@@ -47,8 +60,8 @@ function criarCenario(itens: ItemDaFila[]) {
   const apagarDaCloudinaryMock = vi.fn(async (publicId: string) => {
     chamadasCloudinary.push(publicId);
   });
-  const apagarDoStorageMock = vi.fn(async (caminho: string) => {
-    chamadasStorage.push(caminho);
+  const apagarDoStorageMock = vi.fn(async (caminhoNoStorage: string) => {
+    chamadasStorage.push(caminhoNoStorage);
   });
   const listarPendentesMock = vi.fn(async () => itens);
   const marcarProcessadoMock = vi.fn(async (id: string) => {
@@ -57,6 +70,7 @@ function criarCenario(itens: ItemDaFila[]) {
   const marcarFalhaMock = vi.fn(async (id: string, tentativas: number, erro: string) => {
     falhas.push({ id, tentativas, erro });
   });
+  const marcarInvalidoMock = vi.fn(async (_id: string, _erro: string) => {});
 
   const midia: ExclusorDeMidia = {
     apagarDaCloudinary: apagarDaCloudinaryMock,
@@ -67,6 +81,7 @@ function criarCenario(itens: ItemDaFila[]) {
     listarPendentes: listarPendentesMock,
     marcarProcessado: marcarProcessadoMock,
     marcarFalha: marcarFalhaMock,
+    marcarInvalido: marcarInvalidoMock,
   };
 
   const deps: DependenciasDoWorker = { midia, fila };
@@ -81,6 +96,7 @@ function criarCenario(itens: ItemDaFila[]) {
     listarPendentesMock,
     marcarProcessadoMock,
     marcarFalhaMock,
+    marcarInvalidoMock,
   };
 }
 
@@ -125,9 +141,10 @@ describe('processarLote', () => {
     // O caso mais importante deste worker: um asset problemático (já
     // deletado manualmente, permissão mudou, o que for) não pode travar a
     // fila inteira. Os outros itens têm que seguir sendo processados. [#9]
-    const bomAntes = itemCloudinary({ id: 'a', asset_ref: 'comprovantes/x/1' });
-    const ruim = itemCloudinary({ id: 'b', asset_ref: 'comprovantes/x/2' });
-    const bomDepois = itemCloudinary({ id: 'c', asset_ref: 'comprovantes/x/3' });
+    const caminhoRuim = caminho('comprovantes', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    const bomAntes = itemCloudinary({ id: 'a' });
+    const ruim = itemCloudinary({ id: 'b', asset_ref: caminhoRuim });
+    const bomDepois = itemCloudinary({ id: 'c' });
 
     const { deps, apagarDaCloudinaryMock, processados, falhas } = criarCenario([
       bomAntes,
@@ -135,7 +152,7 @@ describe('processarLote', () => {
       bomDepois,
     ]);
     apagarDaCloudinaryMock.mockImplementation(async (publicId: string) => {
-      if (publicId === 'comprovantes/x/2') {
+      if (publicId === caminhoRuim) {
         throw new Error('Cloudinary indisponível');
       }
     });
@@ -145,7 +162,7 @@ describe('processarLote', () => {
     expect(processados).toEqual(['a', 'c']);
     expect(falhas).toHaveLength(1);
     expect(falhas[0]?.id).toBe('b');
-    expect(resultado).toEqual({ processados: 2, falhas: 1 });
+    expect(resultado).toEqual({ processados: 2, falhas: 1, recusados: 0 });
   });
 
   it('naoDeveMarcarComoProcessadoQuandoAExclusaoFalha', async () => {
@@ -187,7 +204,7 @@ describe('processarLote', () => {
 
     const resultado = await processarLote(deps, 100);
 
-    expect(resultado).toEqual({ processados: 0, falhas: 0 });
+    expect(resultado).toEqual({ processados: 0, falhas: 0, recusados: 0 });
   });
 
   it('naoDevePropagarErroDeUmItemParaForaDoLote', async () => {
@@ -198,6 +215,166 @@ describe('processarLote', () => {
     const { deps, apagarDaCloudinaryMock } = criarCenario([item]);
     apagarDaCloudinaryMock.mockRejectedValue(new Error('boom'));
 
-    await expect(processarLote(deps, 100)).resolves.toEqual({ processados: 0, falhas: 1 });
+    await expect(processarLote(deps, 100)).resolves.toEqual({
+      processados: 0,
+      falhas: 1,
+      recusados: 0,
+    });
+  });
+});
+
+/**
+ * Item 4.1 do ROADMAP (contrato § 13.3): o worker apaga com `service_role`,
+ * fora da RLS. Um `asset_ref` forjado na fila não pode virar a exclusão do
+ * arquivo de outra pessoa — e a recusa é terminal, sem apagar nada.
+ */
+describe('processarLote — validação do caminho antes de apagar', () => {
+  // A recusa alarma em `error` de propósito; aqui o alarme é esperado e só
+  // poluiria a saída da suíte.
+  let erroNoLog: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    erroNoLog = vi.spyOn(logger, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const PASTAS_ACEITAS: [MotivoDaFila, string][] = [
+    ['comprovante_recusado', 'comprovantes'],
+    ['migrado_de_provedor', 'comprovantes'],
+    ['retencao_expirada', 'comprovantes'],
+    ['justificativa_removida', 'justificativas'],
+    ['anexo_de_motivo_removido', 'motivos'],
+    ['anexo_expirado', 'justificativas'],
+    ['anexo_expirado', 'motivos'],
+    ['conta_excluida', 'comprovantes'],
+    ['conta_excluida', 'justificativas'],
+    ['conta_excluida', 'motivos'],
+  ];
+
+  const PASTAS_RECUSADAS: [MotivoDaFila, string][] = [
+    ['comprovante_recusado', 'justificativas'],
+    ['migrado_de_provedor', 'motivos'],
+    ['retencao_expirada', 'justificativas'],
+    ['justificativa_removida', 'comprovantes'],
+    ['justificativa_removida', 'motivos'],
+    ['anexo_de_motivo_removido', 'justificativas'],
+    ['anexo_de_motivo_removido', 'comprovantes'],
+    ['anexo_expirado', 'comprovantes'],
+  ];
+
+  it.each(PASTAS_ACEITAS)('deveApagarQuandoOMotivo %s apontaPara %s/', async (motivo, pasta) => {
+    const item = itemCloudinary({ motivo, asset_ref: caminho(pasta) });
+    const { deps, chamadasCloudinary, processados, marcarInvalidoMock } = criarCenario([item]);
+
+    await processarLote(deps, 100);
+
+    expect(chamadasCloudinary).toEqual([item.asset_ref]);
+    expect(processados).toEqual([item.id]);
+    expect(marcarInvalidoMock).not.toHaveBeenCalled();
+  });
+
+  it.each(PASTAS_RECUSADAS)(
+    'deveRecusarSemApagarQuandoOMotivo %s apontaPara %s/',
+    async (motivo, pasta) => {
+      const item = itemCloudinary({ motivo, asset_ref: caminho(pasta) });
+      const { deps, apagarDaCloudinaryMock, marcarInvalidoMock, marcarProcessadoMock } =
+        criarCenario([item]);
+
+      const resultado = await processarLote(deps, 100);
+
+      expect(apagarDaCloudinaryMock).not.toHaveBeenCalled();
+      expect(marcarProcessadoMock).not.toHaveBeenCalled();
+      expect(marcarInvalidoMock).toHaveBeenCalledWith(item.id, 'prefixo_invalido');
+      expect(resultado).toEqual({ processados: 0, falhas: 0, recusados: 1 });
+    },
+  );
+
+  const CAMINHOS_FORJADOS: [string, string][] = [
+    [
+      'subida de pasta até o arquivo de outra pessoa',
+      `${caminho('comprovantes')}/../../${OUTRO_TITULAR}/${REGISTRO}`,
+    ],
+    [
+      'segmento a mais apontando para outra pessoa',
+      `comprovantes/${TITULAR}/${OUTRO_TITULAR}/${REGISTRO}`,
+    ],
+    ['pasta fora da lista do contrato', caminho('amostras')],
+    ['caminho sem o dono', `comprovantes/${REGISTRO}`],
+    ['sufixo diferente do -2 da segunda tentativa', `${caminho('comprovantes')}-3`],
+    ['extensão no public_id', `${caminho('comprovantes')}.jpg`],
+    ['prefixo antes da pasta', `x/${caminho('comprovantes')}`],
+    ['uuid em maiúsculas', caminho('comprovantes', REGISTRO.toUpperCase())],
+    ['quebra de linha no fim', `${caminho('comprovantes')}\n`],
+  ];
+
+  it.each(CAMINHOS_FORJADOS)(
+    'deveRecusarSemApagarQuandoOCaminhoForjadoTem %s',
+    async (_caso, assetRef) => {
+      const item = itemCloudinary({ motivo: 'conta_excluida', asset_ref: assetRef });
+      const { deps, apagarDaCloudinaryMock, marcarInvalidoMock } = criarCenario([item]);
+
+      await processarLote(deps, 100);
+
+      expect(apagarDaCloudinaryMock).not.toHaveBeenCalled();
+      expect(marcarInvalidoMock).toHaveBeenCalledWith(item.id, 'prefixo_invalido');
+    },
+  );
+
+  it('deveAceitarOSufixoDaSegundaTentativaDaJustificativa', async () => {
+    const item = itemCloudinary({
+      motivo: 'anexo_expirado',
+      asset_ref: `${caminho('justificativas')}-2`,
+    });
+    const { deps, chamadasCloudinary } = criarCenario([item]);
+
+    await processarLote(deps, 100);
+
+    expect(chamadasCloudinary).toEqual([item.asset_ref]);
+  });
+
+  it('deveRecusarSemApagarQuandoOCaminhoDoStorageTemPontoPonto', async () => {
+    const item = itemStorage({ asset_ref: `${TITULAR}/../${OUTRO_TITULAR}/recibo.jpg` });
+    const { deps, apagarDoStorageMock, marcarInvalidoMock } = criarCenario([item]);
+
+    await processarLote(deps, 100);
+
+    expect(apagarDoStorageMock).not.toHaveBeenCalled();
+    expect(marcarInvalidoMock).toHaveBeenCalledWith(item.id, 'prefixo_invalido');
+  });
+
+  it('naoDeveContarARecusaComoTentativaNemComoFalha', async () => {
+    // Recusa não é falha passageira: `marcarFalha` incrementaria `tentativas`
+    // e deixaria o item aberto para a próxima execução tentar de novo.
+    const item = itemCloudinary({ asset_ref: caminho('motivos'), tentativas: 2 });
+    const { deps, marcarFalhaMock } = criarCenario([item]);
+
+    await processarLote(deps, 100);
+
+    expect(marcarFalhaMock).not.toHaveBeenCalled();
+  });
+
+  it('umItemRecusadoNaoDeveImpedirOProcessamentoDosDemais', async () => {
+    const forjado = itemCloudinary({ id: 'forjado', asset_ref: caminho('justificativas') });
+    const legitimo = itemCloudinary({ id: 'legitimo' });
+    const { deps, processados } = criarCenario([forjado, legitimo]);
+
+    const resultado = await processarLote(deps, 100);
+
+    expect(processados).toEqual(['legitimo']);
+    expect(resultado).toEqual({ processados: 1, falhas: 0, recusados: 1 });
+  });
+
+  it('deveAlarmarSemGravarOCaminhoNoLogQuandoRecusa', async () => {
+    // O caminho carrega o id do titular. O log leva o id do item da fila, que
+    // basta para achar a linha, e nada do titular. [#63][#92]
+    const item = itemCloudinary({ asset_ref: caminho('motivos') });
+    const { deps } = criarCenario([item]);
+
+    await processarLote(deps, 100);
+
+    expect(erroNoLog).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(erroNoLog.mock.calls)).not.toContain(TITULAR);
   });
 });

@@ -55,8 +55,12 @@ export function criarExclusorDeMidia(config: ConfigDosProvedores): ExclusorDeMid
     },
 
     async apagarDoStorage(caminho) {
+      // `encodeURI` deixaria `?`, `#` e `%` passarem e mudarem a URL; cada
+      // segmento vai escapado, e só a `/` entre eles continua sendo `/`. O
+      // `..` já foi barrado pela regra antes de chegar aqui. [#51]
+      const caminhoEscapado = caminho.split('/').map(encodeURIComponent).join('/');
       const resposta = await fetch(
-        `${config.supabaseUrl}/storage/v1/object/${BUCKET_LEGADO}/${encodeURI(caminho)}`,
+        `${config.supabaseUrl}/storage/v1/object/${BUCKET_LEGADO}/${caminhoEscapado}`,
         {
           method: 'DELETE',
           headers: {
