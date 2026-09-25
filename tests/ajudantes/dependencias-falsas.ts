@@ -1,6 +1,9 @@
 import type { DependenciasDaApi } from '../../src/composition-root.js';
 import type { ClienteSupabase, UsuarioAutenticado } from '../../src/lib/supabase.js';
-import type { RegistroDeJustificativa } from '../../src/modules/justifications/justifications.service.js';
+import type {
+  JustificativaParaAssinar,
+  RegistroDeJustificativa,
+} from '../../src/modules/justifications/justifications.service.js';
 import type { RegistroDeAnexoDeMotivo } from '../../src/modules/motivos/motivos.service.js';
 import type {
   AssinadorDeMidia,
@@ -38,6 +41,12 @@ export const JUSTIFICATIVA_INVISIVEL = '6a5b4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d';
 
 /** Aula a que a justificativa visível pertence. */
 export const AULA_DA_JUSTIFICATIVA = '5b4c3d2e-1f0a-4b9c-8d7e-6f5a4b3c2d1e';
+
+/** Justificativa do dono, pendente e sem anexo, na primeira tentativa. */
+export const JUSTIFICATIVA_PENDENTE = '6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c';
+
+/** Justificativa do dono, pendente e sem anexo, reenviada (segunda tentativa). */
+export const JUSTIFICATIVA_REENVIADA = '7e6d5c4b-3a2f-4e1d-8c0b-9a8f7e6d5c4b';
 
 /** Motivo a que o dono pode anexar: `pode_anexar_ao_motivo` responde `true`. */
 export const MOTIVO_PERMITIDO = '4c3d2e1f-0a9b-4c8d-9e7f-6a5b4c3d2e1f';
@@ -164,14 +173,46 @@ export function criarDependenciasFalsas(
         buscarPorId(justificationId, authorization) {
           espioes.buscasPorJustificativa.push({ justificationId, authorization });
 
-          // Simula a RLS de absence_justifications.
+          // Simula a RLS de absence_justifications: uma justificativa do
+          // legado, com o anexo gravado pelo caminho da aula.
           const linha: RegistroDeJustificativa = {
+            id: JUSTIFICATIVA_VISIVEL,
             user_id: USUARIO_DONO.id,
             class_id: AULA_DA_JUSTIFICATIVA,
+            attempt: 1,
             proof_provider: 'cloudinary',
             proof_public_id: `justificativas/${USUARIO_DONO.id}/${AULA_DA_JUSTIFICATIVA}`,
           };
           return Promise.resolve(justificationId === JUSTIFICATIVA_VISIVEL ? linha : null);
+        },
+        buscarParaAssinar(justificationId, authorization) {
+          espioes.buscasPorJustificativa.push({ justificationId, authorization });
+
+          const linhas: Record<string, JustificativaParaAssinar> = {
+            [JUSTIFICATIVA_PENDENTE]: {
+              id: JUSTIFICATIVA_PENDENTE,
+              user_id: USUARIO_DONO.id,
+              status: 'pending',
+              attempt: 1,
+              proof_public_id: null,
+            },
+            [JUSTIFICATIVA_REENVIADA]: {
+              id: JUSTIFICATIVA_REENVIADA,
+              user_id: USUARIO_DONO.id,
+              status: 'pending',
+              attempt: 2,
+              proof_public_id: null,
+            },
+            // A visível já tem anexo: não aceita outro.
+            [JUSTIFICATIVA_VISIVEL]: {
+              id: JUSTIFICATIVA_VISIVEL,
+              user_id: USUARIO_DONO.id,
+              status: 'pending',
+              attempt: 1,
+              proof_public_id: `justificativas/${USUARIO_DONO.id}/${AULA_DA_JUSTIFICATIVA}`,
+            },
+          };
+          return Promise.resolve(linhas[justificationId] ?? null);
         },
       },
       agoraEmSegundos: () => AGORA_EM_SEGUNDOS,

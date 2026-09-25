@@ -3,7 +3,7 @@ import type { RequestHandler } from 'express';
 import { logger } from '../../lib/logger.js';
 import { usuarioDaRequisicao } from '../../middleware/require-user.js';
 import type {
-  CorpoComClassId,
+  CorpoDeAssinaturaDeJustificativa,
   CorpoDeVisualizacaoDeJustificativa,
 } from './justifications.schema.js';
 import type { JustificationsService } from './justifications.service.js';
@@ -12,7 +12,11 @@ import type { JustificationsService } from './justifications.service.js';
  * Camada HTTP: traduz requisição em chamada de serviço e resultado em
  * resposta. Zero regra de negócio aqui. [#22]
  */
-type HandlerComClassId = RequestHandler<Record<string, never>, unknown, CorpoComClassId>;
+type HandlerDeAssinatura = RequestHandler<
+  Record<string, never>,
+  unknown,
+  CorpoDeAssinaturaDeJustificativa
+>;
 type HandlerDeVisualizacao = RequestHandler<
   Record<string, never>,
   unknown,
@@ -20,19 +24,31 @@ type HandlerDeVisualizacao = RequestHandler<
 >;
 
 export function criarJustificationsController(service: JustificationsService) {
-  /** POST /v1/justifications/sign-upload */
-  const assinarUpload: HandlerComClassId = (req, res) => {
-    const { classId } = req.body;
-    const { id: userId } = usuarioDaRequisicao(req);
+  /** POST /v1/justifications/sign-upload — `{ classId }` (legado) ou `{ justificationId }`. */
+  const assinarUpload: HandlerDeAssinatura = async (req, res) => {
+    const corpo = req.body;
+    const { id: userId, authorization } = usuarioDaRequisicao(req);
 
-    const assinatura = service.assinarUpload(userId, classId);
+    if ('classId' in corpo) {
+      const assinatura = service.assinarUpload(userId, corpo.classId);
+      logger.info('upload de anexo de justificativa assinado', {
+        traceId: req.traceId,
+        user_id: userId,
+        class_id: corpo.classId,
+      });
+      res.json(assinatura);
+      return;
+    }
 
+    const assinatura = await service.assinarUploadDaJustificativa(
+      { userId, authorization, traceId: req.traceId },
+      corpo.justificationId,
+    );
     logger.info('upload de anexo de justificativa assinado', {
       traceId: req.traceId,
       user_id: userId,
-      class_id: classId,
+      justification_id: corpo.justificationId,
     });
-
     res.json(assinatura);
   };
 
