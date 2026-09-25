@@ -12,7 +12,7 @@ import {
   type RepositorioDaFila,
   type ResultadoDaExclusao,
 } from '../../src/jobs/media-cleanup/media-cleanup.service.js';
-import { logger } from '../../src/lib/logger.js';
+import { logger } from '../../src/jobs/media-cleanup/media-cleanup.logger.js';
 
 /**
  * A regra do worker: consumir a fila de eliminação sem deixar um item ruim
