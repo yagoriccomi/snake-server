@@ -9,13 +9,16 @@
 # Imagem fixada por DIGEST, não por tag.
 # Uma tag pode ser reapontada para outra imagem sem que este arquivo mude —
 # o digest torna o build reproduzível e impede troca silenciosa da base. [#62]
-# Para atualizar: docker pull node:<tag> && docker inspect node:<tag> --format '{{index .RepoDigests 0}}'
-ARG NODE_IMAGE=node:22.14-alpine@sha256:9bef0ef1e268f60627da9ba7d7605e8831d5b56ad07487d24d1aa386336d1944
+#
+# O `FROM` é LITERAL de propósito, sem `ARG`: o Dependabot não resolve
+# variável, e com `FROM ${NODE_IMAGE}` ele nunca avisaria que o digest ficou
+# para trás. O major do Node sobe à mão, junto com `ci.yml` e `@types/node`.
+# Para atualizar à mão: docker pull node:<tag> && docker inspect node:<tag> --format '{{index .RepoDigests 0}}'
 
 # ─────────────────────────────────────────────────────────────
 #  Stage: base — versão do Node fixada, uma única fonte de verdade
 # ─────────────────────────────────────────────────────────────
-FROM ${NODE_IMAGE} AS base
+FROM node:22.14-alpine@sha256:9bef0ef1e268f60627da9ba7d7605e8831d5b56ad07487d24d1aa386336d1944 AS base
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false

@@ -71,6 +71,7 @@ updates:
   # ── Imagem base do Dockerfile ──
   # A base está fixada por digest de propósito; o Dependabot é quem
   # avisa quando esse digest ficou para trás em correção de segurança.
+  # Só funciona com o `FROM` literal (ele não resolve `ARG`).
   - package-ecosystem: docker
     directory: '/'
     schedule:
@@ -78,3 +79,8 @@ updates:
     labels: ['docker']
     commit-message:
       prefix: 'build'
+    ignore:
+      # O major do Node sobe à mão, junto com o ci.yml e o @types/node:
+      # trocar só a imagem deixaria o CI e os tipos num Node diferente.
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
