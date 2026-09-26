@@ -120,7 +120,7 @@ qualquer site, de propósito.
   > O cabeçalho `Origin` nunca tem barra, e a comparação é exata. Com a barra, entrar e ver os
   > dados continua funcionando (eles vêm direto do Supabase), e **só o envio do comprovante
   > falha**, com um erro no console que não diz que o motivo é uma barra.
-- [ ] **2.2** 🤖 **Verificação opcional** (o 2.1 já foi conferido no painel): provar o CORS
+- [x] **2.2** 🤖 **Feito em 25/09** em `https://snake-server-3j25.onrender.com` (a URL real; `snakethai-api.onrender.com` não existe): preflight com a origem da web → `204` e `Access-Control-Allow-Origin: https://snake-web-eight.vercel.app`; com uma origem estranha → sem o cabeçalho. `/health` → `{"ok":true}`. **Verificação opcional** (o 2.1 já foi conferido no painel): provar o CORS
   **sem abrir o navegador**:
 
   ```bash
@@ -537,3 +537,4 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | 2026-09-25 | ⚠️ **Achado: o worker de limpeza morria ao iniciar.** Ele importava o logger do servidor web, que carrega o `env.ts` e exige `SUPABASE_ANON_KEY`, variável que o Cron Job não recebe. Reproduzido rodando o build com o ambiente do `render.yaml`. A menos que o painel tenha essa variável a mais, **nenhum arquivo foi apagado de fato** (5.2). Correção no **PR #31** (núcleo do logger sem configuração; logger próprio do worker; teste que prova o defeito), trazida por merge para o #29. |
 | 2026-09-25 | **No PR #29:** 3.6 (`descreverErro`: mensagem da Cloudinary legível e sem UUID) e 6.3 (`CLAUDE.md`). 395 testes verdes. |
 | 2026-09-25 | **PRs #31 e #30 mesclados** com a confirmação do dono (`5a72cc4` e `f9afb95`): o worker não carrega mais a configuração do servidor web, e o Dependabot volta a vigiar a imagem. **Falta o dono conferir no painel** se o Cron Job pegou o commit e se o último "Run" passou da configuração (itens 1.2 e 5.2). |
+| 2026-09-25 | **2.2 e 2.4 feitos.** CORS conferido em produção por `curl` (a web passa, outra origem não) na URL real, **`https://snake-server-3j25.onrender.com`** — é nela que se fazem as conferências do G2. README, `DEPLOY.md` e `.env.example` documentam o domínio da web sem barra (PR #29). |
