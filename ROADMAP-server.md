@@ -21,15 +21,19 @@
 
 | | |
 | --- | --- |
-| **Em produção** | `snakethai-api` na Render (plano free): `/health`, `/v1/proofs/*` e `/v1/justifications/*`. Último merge na `main`: PR #22 (`9e95b39`, 25/09). **Qual commit está no ar, só o painel diz** (item 1.2): o `/health` responde `{"ok":true}` em qualquer versão |
+| **Em produção** | `snakethai-api` na Render (plano free): `/health`, `/v1/proofs/*` e `/v1/justifications/*`. Último merge na `main`: **PR #30** (`f9afb95`, 25/09), depois do #28 (worker, 4.1 e 4.8) e do #31 (worker que morria ao iniciar). **Qual commit está no ar, só o painel diz** (item 1.2): o `/health` responde `{"ok":true}` em qualquer versão |
 | **Worker** | Cron Job `snakethai-media-cleanup` (LGPD), declarado no `render.yaml`. **Não se sabe se existe no painel** |
 | **Clientes** | O app Android (sem `Origin`) e, desde 23/09, o **`snake-web`**, o **primeiro cliente de navegador**. `ALLOWED_ORIGIN` conferido pelo dono em 24/09 |
 | **Cópia local** | Na branch `chore/ambiente-dev-local`, já mesclada (PR #16). A `main` local está atrás da remota, que já tem o PR #22 |
-| **PRs abertos** | Os 5 do Dependabot (#17 a #21) foram resolvidos em 25/09 pelo PR #22. Com o `dependabot.yml` novo, chegaram no mesmo dia o #23, o #24 (item 3.8) e o #25 (`typescript` 6, item 3.5), os três com CI verde |
+| **PRs abertos** | **#29, a Fase 4 inteira (G2)**, esperando a Fase 1 e a confirmação do dono (item 4.7). Os #30 e #31 foram mesclados em 25/09. Do Dependabot: #23, #24 (item 3.8) e #25 (`typescript` 6, item 3.5) |
 | **Contrato** | `snake-thai/docs/CONTRATO.md` **v3** (revisão de 25/09). O **G0** abriu em 25/09 (registrado no ROADMAP do `snake-thai`); o **G2** é deste servidor (Fase 4) |
 | **Fundação** | Git, GitHub, Husky, commitlint, lint, typecheck e testes no pre-commit. Jira **recusado** em 2026-08-21, e não se pergunta de novo |
 
 **O que está faltando, em ordem de gravidade:**
+
+0. **(25/09) O worker de limpeza morria ao iniciar** com só as variáveis do `render.yaml`
+   (`SUPABASE_ANON_KEY: Required`): a menos que o painel tenha essa variável a mais, **nunca
+   apagou nada**. Correção no **PR #31**, **mesclado em 25/09** (`5a72cc4`). Ver o item 5.2.
 
 1. **O CI da `main` está vermelho em todo merge desde 14/09**, inclusive no do PR #22 (25/09). O
    job "Publicar na Render" falha com `Secret RENDER_DEPLOY_HOOK_URL não configurado` (conferido
@@ -59,10 +63,14 @@ só cresce por módulo quando houver um requisito que exija segredo ou terceiro.
 
 ## Fase 0 — Arrumar a casa (só local)
 
-- [ ] **0.1** 🤖 `git-flow-projeto`: `git switch main && git pull --ff-only` e apagar a branch
-  local `chore/ambiente-dev-local`, já mesclada.
-- [ ] **0.2** 🤖 Conferir se o `.env` local foi recriado depois do PR #16: o de desenvolvimento
-  lê o `.env.dev`, não o `.env`.
+- [x] **0.1** 🤖 `git-flow-projeto`: `git switch main && git pull --ff-only` e apagar a branch
+  local `chore/ambiente-dev-local`, já mesclada. **Feito em 25/09** (`main` local em `7a73c83`;
+  apagadas também as locais do PR #28).
+- [x] **0.2** 🤖 Conferir se o `.env` local foi recriado depois do PR #16: o de desenvolvimento
+  lê o `.env.dev`, não o `.env`. **Conferido em 25/09:** o `.env.dev` existe (23/09) e é o que o
+  `docker-compose.yml` e o `dev.sh` leem; nenhum dos dois tem marcador `<<<`. O `.env` (imagem de
+  produção local) ainda traz `SUPABASE_SERVICE_ROLE_KEY`, que o servidor web não usa (só avisa):
+  vale tirar de lá.
 
 ---
 
@@ -87,6 +95,7 @@ As duas saídas possíveis:
 | B — o painel publica | Apagar o job `deploy` do `ci.yml` e assumir o Auto-Deploy | Publica qualquer push na `main`, com ou sem teste verde. Contraria a regra do próprio projeto |
 
 - [ ] **1.1** 👤 Escolher A ou B. Os passos da A estão em `PENDENCIAS.md`, itens P-4 e P-5.
+  **25/09: o dono decidiu escolher depois.** O G2 (item 4.7) espera esta escolha.
 - [ ] **1.2** 👤 Painel da Render, no `snakethai-api` e no `snakethai-media-cleanup`: conferir se
   o Auto-Deploy está ligado (era pendência da T4 e nunca foi confirmada) **e qual commit está no
   ar** (lista de deploys). Se o `9e95b39` (merge do PR #22) não aparecer no `snakethai-api`,
@@ -111,7 +120,7 @@ qualquer site, de propósito.
   > O cabeçalho `Origin` nunca tem barra, e a comparação é exata. Com a barra, entrar e ver os
   > dados continua funcionando (eles vêm direto do Supabase), e **só o envio do comprovante
   > falha**, com um erro no console que não diz que o motivo é uma barra.
-- [ ] **2.2** 🤖 **Verificação opcional** (o 2.1 já foi conferido no painel): provar o CORS
+- [x] **2.2** 🤖 **Feito em 25/09** em `https://snake-server-3j25.onrender.com` (a URL real; `snakethai-api.onrender.com` não existe): preflight com a origem da web → `204` e `Access-Control-Allow-Origin: https://snake-web-eight.vercel.app`; com uma origem estranha → sem o cabeçalho. `/health` → `{"ok":true}`. **Verificação opcional** (o 2.1 já foi conferido no painel): provar o CORS
   **sem abrir o navegador**:
 
   ```bash
@@ -131,7 +140,7 @@ qualquer site, de propósito.
   Cloudinary não tem credenciais, e o envio cai para o Storage do Supabase.
   **Faça depois de confirmar que o lote de 25/09 está no ar (item 1.2):** uma execução fecha este
   item e o 3.7.
-- [ ] **2.4** 🤖 `documentar-projeto`: a linha de `ALLOWED_ORIGIN` no `README.md` ainda diz
+- [x] **2.4** 🤖 **No PR #29 (25/09):** README, `docs/DEPLOY.md` e `.env.example` com o domínio da web e a armadilha da barra. `documentar-projeto`: a linha de `ALLOWED_ORIGIN` no `README.md` ainda diz
   "deixe vazio se não houver site", e a do `docs/DEPLOY.md`, "deixe vazio enquanto não houver
   cliente web". Agora há um site: documentar o domínio da web e a armadilha da barra.
 
@@ -167,7 +176,8 @@ de `express` e `zod`. Rótulos `dependencias`, `ci` e `docker` criados no reposi
 
 **Pendências que a avaliação do lote achou:**
 
-- [ ] **3.4** 🤖 `executar-projeto`: **o ecossistema `docker` do Dependabot está inerte.** O
+- [x] **3.4** 🤖 **PR #30**, mesclado em 25/09 (`f9afb95`): `FROM` literal, mesmo digest, e `ignore` de
+  major de `node`; build local da imagem `runtime` conferido. `executar-projeto`: **o ecossistema `docker` do Dependabot está inerte.** O
   `Dockerfile` usa `FROM ${NODE_IMAGE}` (o `ARG NODE_IMAGE` com o digest), e o Dependabot não
   resolve `ARG`: nunca vai avisar que o digest ficou para trás, que é o que o bloco `docker` do
   `dependabot.yml` promete. Escrever o `FROM` literal, com o digest
@@ -178,7 +188,9 @@ de `express` e `zod`. Rótulos `dependencias`, `ci` e `docker` criados no reposi
   `<6.1.0`). Avaliar **sozinho**, num PR só dele: é o compilador da imagem de produção. `npm ci`,
   gate completo e job "Imagem Docker" verdes antes do merge. O TypeScript 7 continua ignorado
   (P-20).
-- [ ] **3.6** 🤖 `executar-projeto` + `testes-projeto`: **o log de `contarPaginas` grava
+- [x] **3.6** 🤖 **No PR #29** (25/09): `descreverErro` (`src/lib/descrever-erro.ts`) lê o objeto da
+  Cloudinary e troca todo UUID por `[id]`; usado em `contarPaginas`, no lote da fila, na varredura
+  e no erro fatal do worker. `executar-projeto` + `testes-projeto`: **o log de `contarPaginas` grava
   `desconhecido`** quando a Cloudinary falha, porque o SDK rejeita com objeto simples, não
   `Error` (`src/modules/proofs/proofs.cloudinary.ts`). Extrair a mensagem do objeto, sem dado
   pessoal no log, e testar os dois formatos. Conferir o mesmo padrão no worker: `mensagemDeErro`
@@ -256,8 +268,16 @@ do que **já está** em produção, vêm **primeiro**, antes do resto da Fase 4.
 **Ordem de execução:** 4.1 → 4.8 → 4.9 → 4.2 → 4.3 → 4.4 → 4.5 → 4.6 → 4.7. O 4.7 fica por
 último: depende de todos.
 
-**4.1 — Worker valida o caminho antes de apagar.** Código pronto em 25/09 no **PR #28** (junto do
-4.8), aguardando o merge (⚠️ publica).
+**Estado (25/09):**
+
+- [x] **4.1** e **4.8** — PR #28, **mesclado** (`7a73c83`). CI verde, menos "Publicar na Render"
+  (Fase 1). Se o Cron Job já roda o commit novo, só o painel diz (item 1.2).
+- [x] **4.9**, **4.2**, **4.3**, **4.4**, **4.5** e **4.6** — **PR #29** (branch
+  `feature/g2-anexos`), um commit por item, 377 testes verdes e OpenAPI válido. **Não mesclado.**
+- [ ] **4.7** — espera a Fase 1 (item 1.1) e a confirmação do dono. Ver o aviso no 4.7 sobre o
+  `view-url` de justificativas no banco antigo.
+
+**4.1 — Worker valida o caminho antes de apagar.** ✅ PR #28, mesclado em 25/09 (`7a73c83`).
 
 - **É correção de segurança do que já está em produção**, independente da nova direção. Hoje o
   worker apaga `asset_ref` sem conferir nada. Um valor forjado no banco faria apagar o arquivo de
@@ -326,8 +346,7 @@ e `/v1/motivos`.
   de `absence_justifications` ou nas tentativas, `absence_justification_attempts`);
 - usa a service role que o worker já tem.
 
-**4.8 — (v3) Worker apaga nos três tipos de recurso.** Código pronto em 25/09 no **PR #28** (junto do
-4.1), aguardando o merge (⚠️ publica).
+**4.8 — (v3) Worker apaga nos três tipos de recurso.** ✅ PR #28, mesclado em 25/09 (`7a73c83`).
 
 - **O problema de hoje:** `apagarDaCloudinary` usa só `resource_type: 'image'`, e `"not found"`
   conta como sucesso. Um arquivo guardado como `raw` ou `video` nunca seria apagado, e o item
@@ -357,6 +376,11 @@ e `/v1/motivos`.
   cliente.
 
 **4.7 — Publicar e abrir o G2** (depois da Fase 1, com o caminho único até produção).
+
+- **⚠️ Aviso antes de publicar (decisão do dono, 25/09):** o `view-url` de justificativas lê a
+  coluna `attempt` (contrato § 13.2), que só existe depois das migrations. Entre a publicação do
+  PR #29 e as migrations do `snake-thai`, **ninguém abre anexo de justificativa** (inclusive o
+  professor no APK 1.8): a rota responde 403. Combine as migrations para logo depois.
 
 - **O que o G2 significa (§ 14):** módulo `motivos`, variante `{justificationId}`, limitadores e
   worker **em produção**; **(v3)** com `allowed_formats` na assinatura e a exclusão nos três tipos
@@ -423,11 +447,11 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | # | Item | Quem | Observação |
 | --- | --- | --- | --- |
 | 5.1 | ⚠️ **Nova `service_role` no Cron Job de limpeza** | 👤 | **Decisão do dono: girar só quando o app for usado de verdade** (os dados de hoje são fictícios). Na hora: girar a chave no Supabase (item 3.1 do roadmap do app) e trocar em Render → `snakethai-media-cleanup` → `SUPABASE_SERVICE_ROLE_KEY`. **O serviço web nunca recebe essa chave**; o servidor se recusa a tratá-la como atalho |
-| 5.2 | **O Cron Job existe e roda?** | 👤 | Pendência da T7. Sem ele, **nenhum arquivo é apagado de fato**: nem de conta excluída, nem de comprovante recusado, nem (v3) o anexo que passou dos 180 dias (D54), que sai do banco e fica na Cloudinary. É plano pago (`starter`); confirme o custo. Prova: o último "Run" no painel e as linhas da `media_deletion_queue` marcadas como processadas |
+| 5.2 | **O Cron Job existe e roda?** | 👤 | **(25/09) Com só as variáveis do `render.yaml`, ele morria ao iniciar (`SUPABASE_ANON_KEY: Required`); correção no PR #31, mesclado em 25/09. No painel, veja se o último "Run" falhou com essa mensagem.** Pendência da T7. Sem ele, **nenhum arquivo é apagado de fato**: nem de conta excluída, nem de comprovante recusado, nem (v3) o anexo que passou dos 180 dias (D54), que sai do banco e fica na Cloudinary. É plano pago (`starter`); confirme o custo. Prova: o último "Run" no painel e as linhas da `media_deletion_queue` marcadas como processadas |
 | 5.3 | **Prazo de guarda do comprovante** | 👤 | A decisão vive no banco (`proof_retention_days`, recomendação de 90 dias), mas é este worker que apaga. Sem o prazo, só a exclusão a pedido funciona. Os anexos de motivo e de justificativa já têm prazo (180 dias, `attachment_retention_days`) |
 | 5.4 | **P-2 — girar a `CLOUDINARY_API_SECRET`** se ela algum dia circulou no app ou no chat | 👤 | Se nunca circulou, confirme e risque |
 | 5.5 | **P-9 — segunda barreira de verdade** | 🤖 `executar-projeto` | Quando a P-9 foi escrita, não se sabia como o banco modela o admin. Hoje se sabe: `profiles.role` e `public.is_admin()`. A política `rls` pode virar uma checagem real ("dono **ou** admin" no comprovante; "dono, professor da aula **ou** admin" na justificativa) em vez de só confiar na RLS. Baixo esforço, fecha a pendência |
-| 5.6 | **P-10 — RLS de `payments`** | 🤖 | Já dá para verificar: as migrations estão no `snake-thai`, e a auditoria de 31/08 (veredicto V1) e os testes SQL no CI cobrem. Registrar a evidência e riscar |
+| 5.6 | ✅ **P-10 — RLS de `payments`** (evidência registrada no `PENDENCIAS.md`, PR #30, 25/09) | 🤖 | Já dá para verificar: as migrations estão no `snake-thai`, e a auditoria de 31/08 (veredicto V1) e os testes SQL no CI cobrem. Registrar a evidência e riscar |
 | 5.7 | **Auditoria focada no navegador** | 🤖 `seguranca-projeto` | CORS, preflight, Helmet e limite de taxa agora que existe um cliente web. `trust proxy` já está certo (`app.set('trust proxy', 1)`), então o limite é por aluno, não pelo proxy da Render. Faz parte da auditoria do marco M1 |
 
 ---
@@ -436,10 +460,10 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 
 | # | Item | Skill |
 | --- | --- | --- |
-| 6.1 | **`docs/openapi.yaml` não tem `/v1/justifications/sign-upload` nem `/v1/justifications/view-url`**, que estão no README e em produção. O CI valida se a especificação é um documento válido, não se ela está completa. Documentação que omite rota engana quem confia nela [#29] | `documentar-projeto` |
-| 6.2 | **`docs/PENDENCIAS.md`** diz "Atualizado em 2026-08-31" e "branch `feature/servidor-docker`". A P-1, a P-6 e a P-7 foram resolvidas na prática, já que a API está em produção e o app a usa; conferir e riscar. A P-4 e a P-5 dependem da Fase 1 | `documentar-projeto` |
-| 6.3 | **`CLAUDE.md`**: <br>• a linha "Comandos" tem a saída de três execuções do Vitest colada no meio do texto; <br>• cita o caminho antigo `GIT/snake-server`; <br>• a árvore de pastas e a lista de testes mostram só o módulo `proofs`, sem `justifications` e sem os testes novos | `documentar-projeto` |
-| 6.4 | **P-20 do `docs/PENDENCIAS.md`** ainda lista como adiados o `vitest` 4, o TypeScript 7 e o `@eslint/js` 10. Registrar o lote de 25/09: `eslint` 10 e `vitest` 5 em par (PR #22), #21 fechado com ignore (os tipos acompanham o Node 22.14), os grupos de major do `dependabot.yml`, o `typescript` 6 do item 3.5 e o que continua adiado (TypeScript 7) | `documentar-projeto` |
+| 6.1 | ✅ **Feito no 4.6 (PR #29).** **`docs/openapi.yaml` não tem `/v1/justifications/sign-upload` nem `/v1/justifications/view-url`**, que estão no README e em produção. O CI valida se a especificação é um documento válido, não se ela está completa. Documentação que omite rota engana quem confia nela [#29] | `documentar-projeto` |
+| 6.2 | ✅ **PR #30 (25/09).** **`docs/PENDENCIAS.md`** diz "Atualizado em 2026-08-31" e "branch `feature/servidor-docker`". A P-1, a P-6 e a P-7 foram resolvidas na prática, já que a API está em produção e o app a usa; conferir e riscar. A P-4 e a P-5 dependem da Fase 1 | `documentar-projeto` |
+| 6.3 | ✅ **PR #29 (25/09).** **`CLAUDE.md`**: <br>• a linha "Comandos" tem a saída de três execuções do Vitest colada no meio do texto; <br>• cita o caminho antigo `GIT/snake-server`; <br>• a árvore de pastas e a lista de testes mostram só o módulo `proofs`, sem `justifications` e sem os testes novos | `documentar-projeto` |
+| 6.4 | ✅ **PR #30 (25/09).** **P-20 do `docs/PENDENCIAS.md`** ainda lista como adiados o `vitest` 4, o TypeScript 7 e o `@eslint/js` 10. Registrar o lote de 25/09: `eslint` 10 e `vitest` 5 em par (PR #22), #21 fechado com ignore (os tipos acompanham o Node 22.14), os grupos de major do `dependabot.yml`, o `typescript` 6 do item 3.5 e o que continua adiado (TypeScript 7) | `documentar-projeto` |
 
 ---
 
@@ -505,3 +529,12 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | 2026-09-25 | **Fase 4 atualizada para o contrato v3** (revisão de 25/09, § 13 e § 14): itens novos 4.8 (worker nos três tipos de recurso) e 4.9 (`allowed_formats`, `FORMATOS_DE_ANEXO`); o 4.5 lista os três tipos; o que não muda (`class_swap_evidence` pelo módulo `motivos`, `{classId}` sem `allowed_formats`); G0 como portão de entrada; o servidor como passo 1 da ordem de publicação; G2 com as conferências do § 14. |
 | 2026-09-25 | **G0 aberto** (registrado no ROADMAP do `snake-thai`). O dono decidiu que o **4.1** (worker confere o caminho antes de apagar) e o **4.8** (worker apaga nos três tipos de recurso) vêm primeiro, porque corrigem a produção de hoje. |
 | 2026-09-25 | **4.1 e 4.8 implementados** na branch `bugfix/worker-valida-caminho-e-tipos-de-recurso`, **PR #28** (plano em `docs/planos/PLANO-worker-4.1-4.8.md`). O worker lê `motivo`, exige o formato e a pasta do § 13.3 (Storage: sem `..`, `encodeURIComponent` por segmento) e apaga `motivos/` e `justificativas/` em `image`, `raw` e `video`. **Decisão de implementação:** a fila não tem coluna de estado, então a recusa terminal fecha o item com `processado_em` + `ultimo_erro = 'prefixo_invalido'`, sem somar `tentativas`. Gate local verde (56 casos no worker). **Falta o merge, com a confirmação do dono** (publica), e conferir no painel que o Cron Job recebeu o commit. |
+| 2026-09-25 | **PR #28 mesclado** com a confirmação do dono (merge `7a73c83`): worker com os itens **4.1** e **4.8**. CI verde em "Qualidade e testes", "Segurança e licenças", "CodeQL" e "Imagem Docker"; "Publicar na Render" falhou de novo por falta do secret (Fase 1). Se o Cron Job já roda o commit, só o painel diz (item 1.2). |
+| 2026-09-25 | **Fase 1 adiada pelo dono** ("decido depois"). O G2 (4.7) espera essa escolha. |
+| 2026-09-25 | **Decisão do dono sobre um conflito do contrato:** o § 13.2 manda o `view-url` de justificativas ler `attempt`, que só existe depois das migrations, e o § 14 publica o servidor antes delas. O dono escolheu **seguir o contrato como está**: entre o G2 e as migrations, o `view-url` de justificativas responde 403 no banco antigo. Registrado no 4.7 e no PR #29. |
+| 2026-09-25 | **Fase 4 implementada no PR #29** (branch `feature/g2-anexos`, empilhada sobre o #28): 4.9 (`overwrite` e `allowed_formats`), 4.2 (módulo `motivos` e RPC com o token de quem chama), 4.3 (`{classId}` \| `{justificationId}` e o `view-url` pelo caminho derivado igual ao gravado), 4.4 (limite de 20/min somado nas três rotas), 4.5 (varredura diária de órfãos, falha fechada) e 4.6 (OpenAPI com justificativas e motivos, que fecha o 6.1; README; BACKEND.md). 377 testes verdes, OpenAPI válido. **Não mesclado:** o 4.7 espera a Fase 1 e a confirmação do dono. **O G2 continua fechado.** |
+| 2026-09-25 | **Fase 0 feita** (0.1 e 0.2) e **PR #30** aberto: 3.4 (`FROM` literal para o Dependabot da imagem), 6.2, 6.4 e a evidência do 5.6 (RLS de `payments`) no `PENDENCIAS.md`. |
+| 2026-09-25 | ⚠️ **Achado: o worker de limpeza morria ao iniciar.** Ele importava o logger do servidor web, que carrega o `env.ts` e exige `SUPABASE_ANON_KEY`, variável que o Cron Job não recebe. Reproduzido rodando o build com o ambiente do `render.yaml`. A menos que o painel tenha essa variável a mais, **nenhum arquivo foi apagado de fato** (5.2). Correção no **PR #31** (núcleo do logger sem configuração; logger próprio do worker; teste que prova o defeito), trazida por merge para o #29. |
+| 2026-09-25 | **No PR #29:** 3.6 (`descreverErro`: mensagem da Cloudinary legível e sem UUID) e 6.3 (`CLAUDE.md`). 395 testes verdes. |
+| 2026-09-25 | **PRs #31 e #30 mesclados** com a confirmação do dono (`5a72cc4` e `f9afb95`): o worker não carrega mais a configuração do servidor web, e o Dependabot volta a vigiar a imagem. **Falta o dono conferir no painel** se o Cron Job pegou o commit e se o último "Run" passou da configuração (itens 1.2 e 5.2). |
+| 2026-09-25 | **2.2 e 2.4 feitos.** CORS conferido em produção por `curl` (a web passa, outra origem não) na URL real, **`https://snake-server-3j25.onrender.com`** — é nela que se fazem as conferências do G2. README, `DEPLOY.md` e `.env.example` documentam o domínio da web sem barra (PR #29). |

@@ -24,6 +24,13 @@ a esta API quando há um segredo, um terceiro ou uma lógica de servidor envolvi
   Cloudinary com uma assinatura gerada aqui; o arquivo nunca passa pelo servidor.
 * **Comprovantes privados** — todo comprovante sobe como asset autenticado e só é
   visível por URL assinada, emitida para o dono do pagamento ou um administrador.
+* **Anexos de justificativa e de motivo** — atestados e documentos dos pedidos
+  seguem o mesmo caminho privado; o banco decide quem anexa e quem lê, e a
+  Cloudinary recusa o que não é imagem ou PDF.
+* **Limpeza automática (LGPD)** — um Cron Job separado apaga os arquivos que o banco
+  mandou apagar (conta excluída, comprovante recusado, prazo de guarda vencido) e,
+  uma vez por dia, os anexos que ficaram sem dono. Ele confere cada caminho antes
+  de apagar.
 * **Autenticação delegada ao Supabase** — o servidor confirma quem é o chamador
   com o próprio Supabase e nunca guarda o segredo capaz de forjar um token.
 * **Autorização pela RLS** — as regras de acesso que já existem no banco continuam
@@ -192,7 +199,7 @@ produção local) e preencha. Nenhum desses arquivos deve ser enviado ao reposit
 | `PORT` | Porta do servidor. Em produção a Render define sozinha. | Não (padrão `3000`) |
 | `NODE_ENV` | `development`, `test` ou `production`. | Não (padrão `development`) |
 | `LOG_LEVEL` | Detalhamento dos logs: `debug`, `info`, `warn` ou `error`. | Não (padrão `info`) |
-| `ALLOWED_ORIGIN` | Endereços de sites autorizados a chamar a API, separados por vírgula. O app de celular não precisa disso; deixe vazio se não houver site. | Não |
+| `ALLOWED_ORIGIN` | Endereços de sites autorizados a chamar a API, separados por vírgula. O app de celular não precisa disso. Em produção: `https://snake-web-eight.vercel.app` (a web do aluno), **sem barra no final** — a comparação é exata, e com a barra só o envio de arquivo pela web falha. Vazio = nenhum site. | Não |
 | `SUPABASE_URL` | Endereço do seu projeto no Supabase. | **Sim** |
 | `SUPABASE_ANON_KEY` | Chave pública do Supabase, usada para confirmar a identidade de quem chama. | **Sim** |
 | `POLITICA_ACESSO_COMPROVANTE` | Segunda camada de proteção ao abrir um comprovante. Veja a explicação abaixo. | Não (padrão `rls`) |
@@ -264,11 +271,18 @@ comprovante de outra pessoa.
 Autoriza o envio do anexo (imagem ou PDF) de uma justificativa de falta. Como nos
 comprovantes, a pasta é decidida pelo servidor a partir do usuário do token.
 
-**Envio:** `{ "classId": "<uuid>" }`
+**Envio:** exatamente um dos dois (os dois juntos, ou nenhum, dão `400`):
 
-**Resposta:** o mesmo formato de `/v1/proofs/sign-upload`. O arquivo fica em
-`justificativas/<usuário>/<aula>`, então reenviar o anexo da mesma aula substitui o
-anterior.
+* `{ "justificationId": "<uuid>" }` — a forma nova. O servidor lê a justificativa com
+  o seu token e só assina se ela for sua, estiver pendente e ainda não tiver anexo
+  (senão, `403`). O arquivo fica em `justificativas/<usuário>/<justificativa>`, ou
+  `…/<justificativa>-2` no reenvio.
+* `{ "classId": "<uuid>" }` — a forma antiga, do app 1.8 e da web atual, que continua
+  valendo até todos atualizarem. O arquivo fica em `justificativas/<usuário>/<aula>`.
+
+**Resposta:** o mesmo formato de `/v1/proofs/sign-upload`. Na forma nova vêm também
+`overwrite: false` e `allowed_formats: "jpg,png,webp,heic,pdf"`, que fazem parte da
+assinatura: envie os dois à Cloudinary exatamente como vieram.
 
 ### `POST /v1/justifications/view-url`
 
@@ -280,8 +294,36 @@ administrador.
 
 **Resposta:** `{ "url": "https://res.cloudinary.com/...", "paginas": 1, "pagina": 1 }`
 
-Como nos comprovantes, o caminho do arquivo é **derivado** da justificativa (aluno e
-aula), nunca lido da coluna — que o aluno pode editar enquanto ela está pendente.
+O endereço é assinado sobre um dos caminhos **derivados** da justificativa (a
+justificativa, o reenvio ou a aula) — o que for igual ao anexo gravado. Se nenhum
+for, `403`: o aluno pode editar a coluna enquanto a justificativa está pendente, e
+apontá-la para o arquivo de outra pessoa não tem efeito.
+
+### `POST /v1/motivos/sign-upload`
+
+Autoriza o envio de um anexo de motivo (cancelamento, retificação, solicitação ou
+troca permanente de aula). Antes de assinar, o servidor pergunta ao banco, com o seu
+token, se você pode anexar a esse motivo; se não puder, `403`.
+
+**Envio:** `{ "motivoId": "<uuid>", "anexoId": "<uuid>" }` — o `anexoId` é gerado pelo
+app.
+
+**Resposta:** o mesmo formato de `/v1/proofs/sign-upload`, com `overwrite: false` e
+`allowed_formats`. O arquivo fica em `motivos/<usuário>/<anexo>`.
+
+### `POST /v1/motivos/view-url`
+
+Devolve o endereço temporário para ver um anexo de motivo. Quem pode ver é decidido
+pelas regras de acesso do banco.
+
+**Envio:** `{ "anexoId": "<uuid>", "pagina": 1 }` — `pagina` é opcional.
+
+**Resposta:** `{ "url": "https://res.cloudinary.com/...", "paginas": 1, "pagina": 1 }`
+
+O caminho é **derivado** de quem enviou e do anexo, nunca lido da coluna.
+
+> As rotas de arquivo (comprovantes, justificativas e motivos) somam **20 requisições
+> por minuto** num contador só, por endereço de origem, além do limite geral de 60.
 
 ### Formato dos erros
 
@@ -296,7 +338,7 @@ nos logs:
 | --- | --- |
 | `400` | Dados inválidos ou JSON malformado |
 | `401` | Sem token, ou token expirado/inválido |
-| `403` | Autenticado, mas sem direito ao comprovante |
+| `403` | Autenticado, mas sem direito ao arquivo (ou a anexar) |
 | `404` | Rota inexistente |
 | `413` | Corpo da requisição acima do limite |
 | `429` | Requisições demais em pouco tempo |

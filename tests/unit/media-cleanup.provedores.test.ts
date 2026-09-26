@@ -103,3 +103,54 @@ describe('criarExclusorDeMidia — Cloudinary', () => {
     );
   });
 });
+
+describe('criarExclusorDeMidia — listagem para a varredura de órfãos', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('devePedirUmaPaginaDosAssetsPrivadosDoPrefixoENoTipoPedido', async () => {
+    const resources = vi.spyOn(cloudinary.api, 'resources').mockResolvedValue({ resources: [] });
+
+    await criarExclusor().listarAssets('motivos/', 'video', null);
+
+    expect(resources).toHaveBeenCalledWith({
+      type: 'authenticated',
+      resource_type: 'video',
+      prefix: 'motivos/',
+      max_results: 500,
+    });
+  });
+
+  it('deveRepassarOCursorDaPaginaAnterior', async () => {
+    const resources = vi.spyOn(cloudinary.api, 'resources').mockResolvedValue({ resources: [] });
+
+    await criarExclusor().listarAssets('motivos/', 'image', 'cursor-2');
+
+    expect(resources).toHaveBeenCalledWith(expect.objectContaining({ next_cursor: 'cursor-2' }));
+  });
+
+  it('deveDevolverSoCaminhoEDataEOProximoCursor', async () => {
+    vi.spyOn(cloudinary.api, 'resources').mockResolvedValue({
+      resources: [
+        { public_id: 'motivos/a/b', created_at: '2026-09-23T03:00:00Z', bytes: 10, url: 'x' },
+      ],
+      next_cursor: 'seguinte',
+    });
+
+    const pagina = await criarExclusor().listarAssets('motivos/', 'image', null);
+
+    expect(pagina).toEqual({
+      assets: [{ public_id: 'motivos/a/b', created_at: '2026-09-23T03:00:00Z' }],
+      proximoCursor: 'seguinte',
+    });
+  });
+
+  it('deveMarcarAUltimaPaginaComCursorNulo', async () => {
+    vi.spyOn(cloudinary.api, 'resources').mockResolvedValue({ resources: [] });
+
+    const pagina = await criarExclusor().listarAssets('motivos/', 'image', null);
+
+    expect(pagina.proximoCursor).toBeNull();
+  });
+});

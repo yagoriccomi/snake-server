@@ -46,7 +46,7 @@ Render → o serviço → **Environment**:
 | `CLOUDINARY_CLOUD_NAME` | não | Cloudinary → Dashboard → Cloud name |
 | `CLOUDINARY_API_KEY` | sim | Cloudinary → Dashboard → API Key |
 | `CLOUDINARY_API_SECRET` | **sim** | Cloudinary → Dashboard → API Secret |
-| `ALLOWED_ORIGIN` | não | deixe vazio enquanto não houver cliente web |
+| `ALLOWED_ORIGIN` | não | o domínio da web do aluno: `https://snake-web-eight.vercel.app`, **sem barra no final** (o cabeçalho `Origin` nunca tem barra e a comparação é exata; com a barra, entrar e ver dados funciona, e só o envio de arquivo pela web falha, com um erro de CORS no console) |
 | `CLOUDINARY_AUTH_TOKEN_KEY` | sim | **opcional, plano Advanced+** — fornecida pelo suporte da Cloudinary, não gerada no painel. Sem ela a URL do comprovante não expira. Ver passo 9 e P-12. |
 
 ⚠️ **Não cadastre** `SUPABASE_JWT_SECRET` — o servidor **se recusa a iniciar**

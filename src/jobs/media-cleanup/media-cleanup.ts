@@ -18,7 +18,10 @@
 
 import { z } from 'zod';
 
-import { criarRepositorioDaFila } from './media-cleanup.repository.js';
+import { descreverErro } from '../../lib/descrever-erro.js';
+
+import { varrerOrfaos } from './media-cleanup.orfaos.js';
+import { criarConsultaDeReferencias, criarRepositorioDaFila } from './media-cleanup.repository.js';
 import { criarExclusorDeMidia } from './media-cleanup.provedores.js';
 import { processarLote } from './media-cleanup.service.js';
 
@@ -58,28 +61,43 @@ const tamanhoDoLote = (() => {
 })();
 
 async function principal(): Promise<void> {
-  const deps = {
-    fila: criarRepositorioDaFila({
-      supabaseUrl: config.SUPABASE_URL,
-      serviceRoleKey: config.SUPABASE_SERVICE_ROLE_KEY,
-    }),
-    midia: criarExclusorDeMidia({
-      supabaseUrl: config.SUPABASE_URL,
-      serviceRoleKey: config.SUPABASE_SERVICE_ROLE_KEY,
-      cloudinary: {
-        cloudName: config.CLOUDINARY_CLOUD_NAME,
-        apiKey: config.CLOUDINARY_API_KEY,
-        apiSecret: config.CLOUDINARY_API_SECRET,
-      },
-    }),
+  const banco = {
+    supabaseUrl: config.SUPABASE_URL,
+    serviceRoleKey: config.SUPABASE_SERVICE_ROLE_KEY,
   };
+  const midia = criarExclusorDeMidia({
+    ...banco,
+    cloudinary: {
+      cloudName: config.CLOUDINARY_CLOUD_NAME,
+      apiKey: config.CLOUDINARY_API_KEY,
+      apiSecret: config.CLOUDINARY_API_SECRET,
+    },
+  });
 
-  const resultado = await processarLote(deps, tamanhoDoLote);
+  const resultado = await processarLote(
+    { fila: criarRepositorioDaFila(banco), midia },
+    tamanhoDoLote,
+  );
 
   console.log(
     `media-cleanup: ${String(resultado.processados)} apagados, ` +
       `${String(resultado.falhas)} com falha (seguem na fila), ` +
       `${String(resultado.recusados)} recusados por caminho inválido (fechados sem apagar).`,
+  );
+
+  // Na mesma execução, depois da fila (contrato § 13.3): a fila é o que o
+  // banco pediu; a varredura, o que ficou sem dono no caminho.
+  const varredura = await varrerOrfaos({
+    midia,
+    acervo: midia,
+    referencias: criarConsultaDeReferencias(banco),
+    agoraEmMs: () => Date.now(),
+  });
+
+  console.log(
+    `media-cleanup: ${String(varredura.apagados)} órfãos apagados, ` +
+      `${String(varredura.falhas)} com falha` +
+      (varredura.interrompida ? ' (varredura interrompida; tenta de novo amanhã).' : '.'),
   );
 
   // Falha no processo ≠ falha de UM item (essa já ficou registrada na fila
@@ -88,6 +106,6 @@ async function principal(): Promise<void> {
 }
 
 principal().catch((erro: unknown) => {
-  console.error(erro instanceof Error ? erro.message : String(erro));
+  console.error(descreverErro(erro));
   process.exit(1);
 });

@@ -68,7 +68,10 @@ export function criarApp(deps: DependenciasDaApi = montarDependencias()): Expres
 
   /**
    * Rate limiting em DUAS camadas: um teto global e outro, mais apertado,
-   * nas rotas que assinam credencial ou emitem URL de dado financeiro. [#58]
+   * nas rotas que assinam credencial ou emitem URL de arquivo privado —
+   * comprovante, atestado de justificativa e anexo de motivo. O contador é UM
+   * para as três (contrato § 13.1): quem varre uma não ganha cota nova
+   * trocando de rota. [#58]
    *
    * ⚠️ LIMITAÇÃO CONHECIDA — armazenamento em memória.
    * Sem `store` configurado, o `express-rate-limit` conta em memória, e isso
@@ -102,7 +105,7 @@ export function criarApp(deps: DependenciasDaApi = montarDependencias()): Expres
   });
 
   app.use(limitadorGlobal);
-  app.use('/v1/proofs', limitadorDeComprovantes);
+  app.use(['/v1/proofs', '/v1/justifications', '/v1/motivos'], limitadorDeComprovantes);
 
   app.use('/v1', criarV1Router(deps));
 

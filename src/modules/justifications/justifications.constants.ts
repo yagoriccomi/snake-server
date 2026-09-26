@@ -13,7 +13,26 @@ export const PASTA_JUSTIFICATIVAS = 'justificativas';
 export const TABELA_JUSTIFICATIVAS = 'absence_justifications';
 
 /**
- * `class_id` entra na projeção porque o caminho do anexo é DERIVADO do par
- * (user_id, class_id) — nunca lido de `proof_public_id`. Ver o service.
+ * Leitura do `view-url` (contrato § 13.2). `id`, `user_id` e `class_id` entram
+ * porque os caminhos possíveis do anexo são DERIVADOS deles; o
+ * `proof_public_id` gravado só escolhe entre esses caminhos. Ver o service.
+ *
+ * `attempt` só existe depois das migrations da v3: num banco antigo esta
+ * leitura é recusada e o `view-url` responde 403 até as migrations rodarem.
+ * Decisão do dono em 25/09 (seguir o contrato como está).
  */
-export const COLUNAS_DA_JUSTIFICATIVA = 'user_id,class_id,proof_provider,proof_public_id';
+export const COLUNAS_DA_JUSTIFICATIVA =
+  'id,user_id,class_id,attempt,proof_provider,proof_public_id';
+
+/**
+ * Leitura do `sign-upload` com `{ justificationId }` (contrato § 13.2): o
+ * suficiente para conferir dono, estado e anexo, e escolher o nome do
+ * arquivo pela tentativa.
+ */
+export const COLUNAS_PARA_ASSINAR_JUSTIFICATIVA = 'id,user_id,status,attempt,proof_public_id';
+
+/** Único estado em que a justificativa aceita anexo novo. */
+export const STATUS_PENDENTE = 'pending';
+
+/** A segunda tentativa (reenvio, D42) grava o anexo com este sufixo no nome. */
+export const SUFIXO_DA_SEGUNDA_TENTATIVA = '-2';

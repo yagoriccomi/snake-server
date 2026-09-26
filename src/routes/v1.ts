@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import type { DependenciasDaApi } from '../composition-root.js';
 import { criarJustificationsRouter } from '../modules/justifications/justifications.routes.js';
+import { criarMotivosRouter } from '../modules/motivos/motivos.routes.js';
 import { criarProofsRouter } from '../modules/proofs/proofs.routes.js';
 
 /**
@@ -24,6 +25,7 @@ export function criarV1Router(deps: DependenciasDaApi): Router {
 
   v1.use('/proofs', criarProofsRouter(deps.proofs));
   v1.use('/justifications', criarJustificationsRouter(deps.justifications));
+  v1.use('/motivos', criarMotivosRouter(deps.motivos));
 
   // v1.use('/notifications', criarNotificationsRouter(deps.notifications));
   // v1.use('/reports', criarReportsRouter(deps.reports));

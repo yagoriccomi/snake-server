@@ -4,7 +4,10 @@ import type { ClienteSupabase } from '../../lib/supabase.js';
 import { criarRequireUser } from '../../middleware/require-user.js';
 import { validarCorpo } from '../../middleware/validate.js';
 import { criarJustificationsController } from './justifications.controller.js';
-import { corpoComClassId, corpoDeVisualizacaoDeJustificativa } from './justifications.schema.js';
+import {
+  corpoDeAssinaturaDeJustificativa,
+  corpoDeVisualizacaoDeJustificativa,
+} from './justifications.schema.js';
 import {
   criarJustificationsService,
   type DependenciasDeJustificativas,
@@ -31,7 +34,7 @@ export function criarJustificationsRouter(deps: DependenciasDoRouterDeJustificat
 
   justifications.post(
     '/sign-upload',
-    validarCorpo(corpoComClassId),
+    validarCorpo(corpoDeAssinaturaDeJustificativa),
     requireUser,
     controller.assinarUpload,
   );

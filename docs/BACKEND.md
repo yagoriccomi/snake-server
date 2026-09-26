@@ -269,6 +269,23 @@ exclusão do arquivo de outra pessoa:
   tipo apaga ou quando os três respondem `"not found"`; falha em qualquer um volta
   para nova tentativa. `comprovantes/` continua só com `image`.
 
+**Varredura diária de órfãos** (contrato § 13.3), na mesma execução, depois da fila.
+O cliente envia o anexo à Cloudinary antes de gravar a linha que o referencia; se ele
+cai no meio, o arquivo fica sem dono e a fila nunca fica sabendo dele. O worker lista
+`justificativas/` e `motivos/` nos três tipos de recurso (só `authenticated`) e apaga
+o arquivo que:
+
+- está no formato do contrato (o mesmo exigido para apagar da fila);
+- tem mais de **24 h** (a folga do envio em curso);
+- não aparece em `action_reason_attachments.public_id`,
+  `absence_justifications.proof_public_id` nem
+  `absence_justification_attempts.proof_public_id` (consultadas com a `service_role`).
+
+Se a listagem ou a consulta ao banco falhar, a varredura **para sem apagar mais nada**
+e a linha final do worker diz "varredura interrompida": "não consegui ver a
+referência" nunca vira "não há referência". Num banco anterior às migrations da v3
+(sem as tabelas novas), é o que acontece todo dia até o esquema chegar.
+
 > ⚠️ **Escopo do worker é deliberadamente limitado.** Ele processa o que os
 > gatilhos já enfileiraram (conta excluída, comprovante recusado, migração de
 > provedor). Ele **não** varre pagamentos por prazo de retenção — falta decidir
@@ -279,27 +296,42 @@ exclusão do arquivo de outra pessoa:
 ## 6B. Módulo 2 — Justificativas de falta (Cloudinary)
 
 Anexo (imagem ou PDF) de uma justificativa de falta do aluno. As regras de
-negócio — quem envia, quem revisa, o limite de 255 caracteres — vivem no banco
-(`absence_justifications`; ver `docs/FREQUENCIA.md` no app). Este módulo só
-assina o upload e a visualização do arquivo.
+negócio — quem envia, quem revisa, o limite de 255 caracteres, o reenvio — vivem no
+banco (`absence_justifications`; contrato § 9.1). Este módulo só assina o upload e a
+visualização do arquivo.
 
 Reusa o contrato `AssinadorDeMidia` dos comprovantes e a mesma instância do
 adaptador, montada uma vez no `composition-root`: duas integrações com a mesma
 conta da Cloudinary só dariam a chance de divergirem.
 
 ### `POST /v1/justifications/sign-upload`
-Autenticado. Body `{ "classId": "<uuid>" }`.
+Autenticado. Body com **exatamente um** de dois campos (contrato § 13.2); os dois
+juntos, ou nenhum, é `400`.
 
-Destino derivado do **id verificado**: `folder = justificativas/<userId>`,
-`public_id = <classId>`. Reenviar o anexo da mesma aula substitui o anterior.
+- **`{ "classId": "<uuid>" }` (legado, até a Fase B):** `folder =
+  justificativas/<userId>`, `public_id = <classId>`, sem consulta ao banco e sem
+  campo novo na assinatura — o APK 1.8 não envia `overwrite` nem `allowed_formats`.
+- **`{ "justificationId": "<uuid>" }`:** lê `id, user_id, status, attempt,
+  proof_public_id` com o token do chamador e só assina se `user_id` for o do token,
+  `status = 'pending'` e `proof_public_id` for nulo; senão, `403`. `public_id =
+  <id>` na tentativa 1 e `<id>-2` na 2, com `overwrite = false` e `allowed_formats =
+  "jpg,png,webp,heic,pdf"` dentro da assinatura. O professor da aula lê a
+  justificativa pela RLS, mas não anexa nela: por isso o `user_id` é conferido aqui.
 
 ### `POST /v1/justifications/view-url`
 Autenticado. Body `{ "justificationId": "<uuid>", "pagina"?: number }`.
 
-1. Lê a justificativa com o **token do chamador**; a RLS libera para o aluno
-   dono, o professor daquela aula e o admin. Vazio ou sem anexo → `403`.
+1. Lê `id, user_id, class_id, attempt, proof_provider, proof_public_id` com o
+   **token do chamador**; a RLS libera para o dono, quem pode decidir a
+   justificativa pendente e o admin. Vazio ou sem anexo → `403`.
 2. Se `proof_provider` **não for** `cloudinary`, responde `403`.
-3. Deriva `justificativas/<user_id>/<class_id>` e assina a URL.
+3. Calcula os caminhos derivados (`justificativas/<user_id>/<id>`, `…/<id>-2` e, com
+   `class_id`, `…/<class_id>`) e assina o que for **igual** a `proof_public_id`. Se
+   nenhum for, `403`.
+
+> **Banco antigo:** `attempt` só existe depois das migrations da v3. Até elas, as
+> duas leituras acima são recusadas pelo PostgREST e as rotas respondem `403` —
+> inclusive o `view-url` do legado. Decisão do dono em 25/09: seguir o contrato.
 
 #### Por que não há `conferirDono` aqui
 
@@ -308,7 +340,8 @@ legítimo explica. Aqui é o caminho **normal**: o professor revisa a justificat
 do aluno. Um alarme de "não é o dono" dispararia a cada revisão e ensinaria todo
 mundo a ignorá-lo. A barreira que continua valendo é a **derivação do caminho**:
 enquanto a justificativa está pendente o aluno edita `proof_public_id`, e assinar
-o valor gravado repetiria o achado C-2.
+o valor gravado repetiria o achado C-2. O valor gravado só **escolhe** entre os
+caminhos derivados; nunca é assinado sem ser um deles.
 
 ### Eliminação (LGPD)
 
@@ -316,6 +349,37 @@ Trocar ou remover o anexo, ou apagar a justificativa, enfileira o arquivo antigo
 em `media_deletion_queue` com o motivo `justificativa_removida`. O worker
 `media-cleanup` consome a fila com as regras da seção anterior (caminho conferido
 e os três tipos de recurso).
+
+## 6C. Módulo 3 — Anexos de motivo (Cloudinary)
+
+Anexos do motivo de uma ação da equipe ou do aluno: cancelamento, retificação,
+solicitação e a justificativa da troca permanente de aula (`class_swap_evidence`,
+que usa este módulo como está). Quem anexa e quem lê é decidido **no banco** (contrato
+§ 8): este módulo pergunta, obedece e deriva o caminho — não olha o tipo do motivo.
+
+### `POST /v1/motivos/sign-upload`
+Autenticado. Body `{ "motivoId": "<uuid>", "anexoId": "<uuid>" }`.
+
+1. Chama `rpc/pode_anexar_ao_motivo` com `{ p_motivo_id }` e o **token do chamador**.
+   Só o booleano `true` libera; qualquer outra resposta é `403`. Num banco antigo, sem
+   a função, o PostgREST responde 4xx e isso também é `403`, nunca 5xx: é o que deixa
+   o servidor ir ao ar antes das migrations (§ 14).
+2. Assina `folder = motivos/<userId do token>`, `public_id = <anexoId>`,
+   `type = authenticated`, `overwrite = false` e `allowed_formats =
+   "jpg,png,webp,heic,pdf"`.
+
+### `POST /v1/motivos/view-url`
+Autenticado. Body `{ "anexoId": "<uuid>", "pagina"?: number }`.
+
+1. Lê `action_reason_attachments` (`id, uploaded_by, provider, public_id`) com o
+   **token do chamador**; a política chama `pode_ler_motivo(reason_id)`. Linha ausente
+   → `403`.
+2. Provedor diferente de `cloudinary` → `403`.
+3. Deriva `motivos/<uploaded_by>/<id>` (nunca lido de `public_id`, achado C-2) e
+   assina a URL.
+
+As três rotas de arquivo (`/v1/proofs`, `/v1/justifications`, `/v1/motivos`) somam
+**20 requisições por minuto** por IP num contador só (`limitadorDeComprovantes`).
 
 ## 7. Módulos futuros prováveis (esboço — não implementar agora)
 
@@ -345,6 +409,9 @@ src/
 │   ├── proofs.repository.ts  # única camada que fala PostgREST
 │   ├── proofs.controller.ts  # só HTTP
 │   └── proofs.routes.ts      # factory, não instância pronta
+├── modules/justifications/ # mesmas camadas; reusa o adaptador dos comprovantes
+├── modules/motivos/        # mesmas camadas; reusa o adaptador dos comprovantes
+├── jobs/media-cleanup/     # Cron Job: fila de exclusão + varredura de órfãos
 └── routes/v1.ts            # registro dos módulos
 ```
 

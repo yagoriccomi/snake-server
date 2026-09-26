@@ -6,7 +6,12 @@
  * negócio nela. [#55]
  */
 
-import { MOTIVOS_DA_FILA, type MotivoDaFila } from './media-cleanup.constants.js';
+import {
+  MOTIVOS_DA_FILA,
+  REFERENCIAS_DE_ANEXO,
+  type MotivoDaFila,
+} from './media-cleanup.constants.js';
+import type { ConsultaDeReferencias } from './media-cleanup.orfaos.js';
 import type { ItemDaFila, RepositorioDaFila } from './media-cleanup.service.js';
 
 export interface ConfigDoRepositorio {
@@ -117,6 +122,52 @@ export function criarRepositorioDaFila(config: ConfigDoRepositorio): Repositorio
       if (!resposta.ok) {
         throw new Error(`Falha ao marcar item inválido: HTTP ${String(resposta.status)}`);
       }
+    },
+  };
+}
+
+/**
+ * Quais caminhos o banco ainda referencia, nas três colunas que guardam anexo
+ * (contrato § 8 e § 9.1). Usa a `service_role`: a varredura precisa ver TODAS
+ * as linhas, não só as que a RLS de alguém liberaria.
+ *
+ * Qualquer resposta que não seja 2xx LANÇA — inclusive a tabela que ainda não
+ * existe num banco anterior às migrations. Devolver "nenhuma referência" nesse
+ * caso mandaria apagar anexos que têm dono. [#9]
+ */
+export function criarConsultaDeReferencias(config: ConfigDoRepositorio): ConsultaDeReferencias {
+  const cabecalhos = {
+    apikey: config.serviceRoleKey,
+    Authorization: `Bearer ${config.serviceRoleKey}`,
+  };
+
+  return {
+    async caminhosReferenciados(caminhos) {
+      const referenciados = new Set<string>();
+      if (caminhos.length === 0) return referenciados;
+
+      // Cada valor entre aspas: o `in.(...)` do PostgREST separa por vírgula,
+      // e um valor sem aspas com vírgula ou parêntese mudaria a lista. [#52]
+      const lista = `in.(${caminhos.map((c) => `"${c.replaceAll('"', '')}"`).join(',')})`;
+
+      for (const { tabela, coluna } of REFERENCIAS_DE_ANEXO) {
+        const parametros = new URLSearchParams({ select: coluna, [coluna]: lista });
+        const resposta = await fetch(
+          `${config.supabaseUrl}/rest/v1/${encodeURIComponent(tabela)}?${parametros.toString()}`,
+          { headers: cabecalhos },
+        );
+        if (!resposta.ok) {
+          throw new Error(`Falha ao consultar ${tabela}: HTTP ${String(resposta.status)}`);
+        }
+
+        const linhas = (await resposta.json()) as Record<string, unknown>[];
+        for (const linha of linhas) {
+          const valor = linha[coluna];
+          if (typeof valor === 'string') referenciados.add(valor);
+        }
+      }
+
+      return referenciados;
     },
   };
 }
