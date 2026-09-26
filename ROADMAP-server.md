@@ -21,11 +21,11 @@
 
 | | |
 | --- | --- |
-| **Em produção** | `snakethai-api` na Render (plano free): `/health`, `/v1/proofs/*` e `/v1/justifications/*`. Último merge na `main`: **PR #28** (`7a73c83`, 25/09: worker com os itens 4.1 e 4.8). **Qual commit está no ar, só o painel diz** (item 1.2): o `/health` responde `{"ok":true}` em qualquer versão |
+| **Em produção** | `snakethai-api` na Render (plano free): `/health`, `/v1/proofs/*` e `/v1/justifications/*`. Último merge na `main`: **PR #30** (`f9afb95`, 25/09), depois do #28 (worker, 4.1 e 4.8) e do #31 (worker que morria ao iniciar). **Qual commit está no ar, só o painel diz** (item 1.2): o `/health` responde `{"ok":true}` em qualquer versão |
 | **Worker** | Cron Job `snakethai-media-cleanup` (LGPD), declarado no `render.yaml`. **Não se sabe se existe no painel** |
 | **Clientes** | O app Android (sem `Origin`) e, desde 23/09, o **`snake-web`**, o **primeiro cliente de navegador**. `ALLOWED_ORIGIN` conferido pelo dono em 24/09 |
 | **Cópia local** | Na branch `chore/ambiente-dev-local`, já mesclada (PR #16). A `main` local está atrás da remota, que já tem o PR #22 |
-| **PRs abertos** | **#31** (⚠️ o worker morria ao iniciar, ver Registro), **#30** (3.4 e pendências) e **#29, a Fase 4 inteira (G2)** — todos esperando a confirmação do dono; o #29 espera também a Fase 1. Do Dependabot: #23, #24 (item 3.8) e #25 (`typescript` 6, item 3.5) |
+| **PRs abertos** | **#29, a Fase 4 inteira (G2)**, esperando a Fase 1 e a confirmação do dono (item 4.7). Os #30 e #31 foram mesclados em 25/09. Do Dependabot: #23, #24 (item 3.8) e #25 (`typescript` 6, item 3.5) |
 | **Contrato** | `snake-thai/docs/CONTRATO.md` **v3** (revisão de 25/09). O **G0** abriu em 25/09 (registrado no ROADMAP do `snake-thai`); o **G2** é deste servidor (Fase 4) |
 | **Fundação** | Git, GitHub, Husky, commitlint, lint, typecheck e testes no pre-commit. Jira **recusado** em 2026-08-21, e não se pergunta de novo |
 
@@ -33,7 +33,7 @@
 
 0. **(25/09) O worker de limpeza morria ao iniciar** com só as variáveis do `render.yaml`
    (`SUPABASE_ANON_KEY: Required`): a menos que o painel tenha essa variável a mais, **nunca
-   apagou nada**. Correção no **PR #31**, esperando o merge. Ver o item 5.2.
+   apagou nada**. Correção no **PR #31**, **mesclado em 25/09** (`5a72cc4`). Ver o item 5.2.
 
 1. **O CI da `main` está vermelho em todo merge desde 14/09**, inclusive no do PR #22 (25/09). O
    job "Publicar na Render" falha com `Secret RENDER_DEPLOY_HOOK_URL não configurado` (conferido
@@ -176,7 +176,7 @@ de `express` e `zod`. Rótulos `dependencias`, `ci` e `docker` criados no reposi
 
 **Pendências que a avaliação do lote achou:**
 
-- [x] **3.4** 🤖 **PR #30** (25/09, esperando o merge): `FROM` literal, mesmo digest, e `ignore` de
+- [x] **3.4** 🤖 **PR #30**, mesclado em 25/09 (`f9afb95`): `FROM` literal, mesmo digest, e `ignore` de
   major de `node`; build local da imagem `runtime` conferido. `executar-projeto`: **o ecossistema `docker` do Dependabot está inerte.** O
   `Dockerfile` usa `FROM ${NODE_IMAGE}` (o `ARG NODE_IMAGE` com o digest), e o Dependabot não
   resolve `ARG`: nunca vai avisar que o digest ficou para trás, que é o que o bloco `docker` do
@@ -447,7 +447,7 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | # | Item | Quem | Observação |
 | --- | --- | --- | --- |
 | 5.1 | ⚠️ **Nova `service_role` no Cron Job de limpeza** | 👤 | **Decisão do dono: girar só quando o app for usado de verdade** (os dados de hoje são fictícios). Na hora: girar a chave no Supabase (item 3.1 do roadmap do app) e trocar em Render → `snakethai-media-cleanup` → `SUPABASE_SERVICE_ROLE_KEY`. **O serviço web nunca recebe essa chave**; o servidor se recusa a tratá-la como atalho |
-| 5.2 | **O Cron Job existe e roda?** | 👤 | **(25/09) Com só as variáveis do `render.yaml`, ele morria ao iniciar (`SUPABASE_ANON_KEY: Required`); correção no PR #31. No painel, veja se o último "Run" falhou com essa mensagem.** Pendência da T7. Sem ele, **nenhum arquivo é apagado de fato**: nem de conta excluída, nem de comprovante recusado, nem (v3) o anexo que passou dos 180 dias (D54), que sai do banco e fica na Cloudinary. É plano pago (`starter`); confirme o custo. Prova: o último "Run" no painel e as linhas da `media_deletion_queue` marcadas como processadas |
+| 5.2 | **O Cron Job existe e roda?** | 👤 | **(25/09) Com só as variáveis do `render.yaml`, ele morria ao iniciar (`SUPABASE_ANON_KEY: Required`); correção no PR #31, mesclado em 25/09. No painel, veja se o último "Run" falhou com essa mensagem.** Pendência da T7. Sem ele, **nenhum arquivo é apagado de fato**: nem de conta excluída, nem de comprovante recusado, nem (v3) o anexo que passou dos 180 dias (D54), que sai do banco e fica na Cloudinary. É plano pago (`starter`); confirme o custo. Prova: o último "Run" no painel e as linhas da `media_deletion_queue` marcadas como processadas |
 | 5.3 | **Prazo de guarda do comprovante** | 👤 | A decisão vive no banco (`proof_retention_days`, recomendação de 90 dias), mas é este worker que apaga. Sem o prazo, só a exclusão a pedido funciona. Os anexos de motivo e de justificativa já têm prazo (180 dias, `attachment_retention_days`) |
 | 5.4 | **P-2 — girar a `CLOUDINARY_API_SECRET`** se ela algum dia circulou no app ou no chat | 👤 | Se nunca circulou, confirme e risque |
 | 5.5 | **P-9 — segunda barreira de verdade** | 🤖 `executar-projeto` | Quando a P-9 foi escrita, não se sabia como o banco modela o admin. Hoje se sabe: `profiles.role` e `public.is_admin()`. A política `rls` pode virar uma checagem real ("dono **ou** admin" no comprovante; "dono, professor da aula **ou** admin" na justificativa) em vez de só confiar na RLS. Baixo esforço, fecha a pendência |
@@ -536,3 +536,4 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | 2026-09-25 | **Fase 0 feita** (0.1 e 0.2) e **PR #30** aberto: 3.4 (`FROM` literal para o Dependabot da imagem), 6.2, 6.4 e a evidência do 5.6 (RLS de `payments`) no `PENDENCIAS.md`. |
 | 2026-09-25 | ⚠️ **Achado: o worker de limpeza morria ao iniciar.** Ele importava o logger do servidor web, que carrega o `env.ts` e exige `SUPABASE_ANON_KEY`, variável que o Cron Job não recebe. Reproduzido rodando o build com o ambiente do `render.yaml`. A menos que o painel tenha essa variável a mais, **nenhum arquivo foi apagado de fato** (5.2). Correção no **PR #31** (núcleo do logger sem configuração; logger próprio do worker; teste que prova o defeito), trazida por merge para o #29. |
 | 2026-09-25 | **No PR #29:** 3.6 (`descreverErro`: mensagem da Cloudinary legível e sem UUID) e 6.3 (`CLAUDE.md`). 395 testes verdes. |
+| 2026-09-25 | **PRs #31 e #30 mesclados** com a confirmação do dono (`5a72cc4` e `f9afb95`): o worker não carrega mais a configuração do servidor web, e o Dependabot volta a vigiar a imagem. **Falta o dono conferir no painel** se o Cron Job pegou o commit e se o último "Run" passou da configuração (itens 1.2 e 5.2). |
