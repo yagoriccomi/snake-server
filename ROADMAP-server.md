@@ -140,7 +140,7 @@ qualquer site, de propósito.
   Cloudinary não tem credenciais, e o envio cai para o Storage do Supabase.
   **Faça depois de confirmar que o lote de 25/09 está no ar (item 1.2):** uma execução fecha este
   item e o 3.7.
-- [ ] **2.4** 🤖 `documentar-projeto`: a linha de `ALLOWED_ORIGIN` no `README.md` ainda diz
+- [x] **2.4** 🤖 **No PR #29 (25/09):** README, `docs/DEPLOY.md` e `.env.example` com o domínio da web e a armadilha da barra. `documentar-projeto`: a linha de `ALLOWED_ORIGIN` no `README.md` ainda diz
   "deixe vazio se não houver site", e a do `docs/DEPLOY.md`, "deixe vazio enquanto não houver
   cliente web". Agora há um site: documentar o domínio da web e a armadilha da barra.
 

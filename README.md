@@ -199,7 +199,7 @@ produção local) e preencha. Nenhum desses arquivos deve ser enviado ao reposit
 | `PORT` | Porta do servidor. Em produção a Render define sozinha. | Não (padrão `3000`) |
 | `NODE_ENV` | `development`, `test` ou `production`. | Não (padrão `development`) |
 | `LOG_LEVEL` | Detalhamento dos logs: `debug`, `info`, `warn` ou `error`. | Não (padrão `info`) |
-| `ALLOWED_ORIGIN` | Endereços de sites autorizados a chamar a API, separados por vírgula. O app de celular não precisa disso; deixe vazio se não houver site. | Não |
+| `ALLOWED_ORIGIN` | Endereços de sites autorizados a chamar a API, separados por vírgula. O app de celular não precisa disso. Em produção: `https://snake-web-eight.vercel.app` (a web do aluno), **sem barra no final** — a comparação é exata, e com a barra só o envio de arquivo pela web falha. Vazio = nenhum site. | Não |
 | `SUPABASE_URL` | Endereço do seu projeto no Supabase. | **Sim** |
 | `SUPABASE_ANON_KEY` | Chave pública do Supabase, usada para confirmar a identidade de quem chama. | **Sim** |
 | `POLITICA_ACESSO_COMPROVANTE` | Segunda camada de proteção ao abrir um comprovante. Veja a explicação abaixo. | Não (padrão `rls`) |
