@@ -129,7 +129,9 @@ jobs:
         # commitado, o pipeline reprova antes de o merge acontecer. [#37]
         run: |
           set -euo pipefail
-          if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production|development)$|\.pem$|\.key$|\.p12$|\.pfx$'; then
+          # Qualquer `.env` ou `.env.<algo>` (inclusive `.env.dev` e `.env.prod`,
+          # os nomes deste projeto), menos o `.env.example`, que só tem nomes.
+          if git ls-files | grep -E '(^|/)\.env(\.[^/]+)?$|\.pem$|\.key$|\.p12$|\.pfx$' | grep -vE '(^|/)\.env\.example$'; then
             echo "::error::Arquivo de segredo versionado. Remova do índice antes de seguir."
             exit 1
           fi
