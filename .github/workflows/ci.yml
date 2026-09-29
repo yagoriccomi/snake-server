@@ -5,6 +5,11 @@
 #  qualquer push direto para produção, sem lint, sem tipo e sem
 #  teste. Aqui está a barreira: código que não passa não é
 #  publicado. [#49][#76]
+#
+#  Quem publica é a própria Render, com `autoDeployTrigger: checksPass`
+#  (render.yaml): ela espera TODOS os checks deste commit na `main`
+#  passarem. Por isso não há job de deploy aqui — um job que falhasse
+#  (como o antigo, sem o secret do deploy hook) travaria toda publicação.
 # =============================================================
 
 name: CI
@@ -235,66 +240,3 @@ jobs:
       - name: Recolher o container de teste
         if: always()
         run: docker rm -f teste-ci || true
-
-  # ───────────────────────────────────────────────────────────
-  #  Deploy — só na main, e só depois de TUDO passar [#49][#77]
-  # ───────────────────────────────────────────────────────────
-  deploy:
-    name: Publicar na Render
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [qualidade, seguranca, codeql, docker]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    # O ambiente permite exigir aprovação manual e restringe quem
-    # enxerga o segredo do deploy. Configure em Settings → Environments.
-    environment:
-      name: producao
-      url: ${{ vars.RENDER_SERVICE_URL }}
-
-    steps:
-      - name: Disparar o deploy
-        # O `render.yaml` tem `autoDeploy: false` de propósito: se ele
-        # estivesse ligado, existiriam DOIS caminhos até produção — e um
-        # deles ignoraria tudo que esta esteira acabou de verificar.
-        env:
-          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${DEPLOY_HOOK:-}" ]; then
-            echo "::error::Secret RENDER_DEPLOY_HOOK_URL não configurado. Veja o README."
-            exit 1
-          fi
-          # A URL do hook é o próprio segredo — nunca ecoada no log.
-          codigo=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$DEPLOY_HOOK")
-          echo "Render respondeu HTTP $codigo"
-          if [ "$codigo" != "200" ] && [ "$codigo" != "201" ]; then
-            echo "::error::A Render recusou o disparo do deploy."
-            exit 1
-          fi
-
-      - name: Verificar a saúde do serviço publicado
-        # A Render hiberna no plano free e o build leva tempo: por isso a
-        # espera é generosa e a primeira resposta pode demorar. [#82]
-        env:
-          SERVICE_URL: ${{ vars.RENDER_SERVICE_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${SERVICE_URL:-}" ]; then
-            echo "::warning::Variável RENDER_SERVICE_URL não configurada; pulando a verificação."
-            exit 0
-          fi
-
-          echo "Aguardando o deploy ficar saudável..."
-          for tentativa in $(seq 1 40); do
-            if curl -fsS --max-time 70 "$SERVICE_URL/health" | grep -q '"ok":true'; then
-              echo "Serviço no ar e saudável."
-              exit 0
-            fi
-            echo "  tentativa $tentativa/40..."
-            sleep 15
-          done
-
-          echo "::error::O serviço não respondeu saudável após o deploy."
-          echo "Rollback: painel da Render → serviço → Deploys → 'Rollback' no deploy anterior."
-          exit 1

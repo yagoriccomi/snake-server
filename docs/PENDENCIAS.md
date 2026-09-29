@@ -81,8 +81,13 @@ algum momento você quiser fechar o código, saiba que isso só vale daí para f
 
 ## 🟠 Configuração externa — o deploy não acontece sem isto
 
-### P-4. Cadastrar os segredos e variáveis no GitHub
+### ~~P-4. Cadastrar os segredos e variáveis no GitHub~~ — sem efeito (28/09)
 
+> **2026-09-28:** o dono escolheu a **opção B** da Fase 1 do `ROADMAP-server.md`: quem
+> publica é a Render, com `autoDeployTrigger: checksPass` (só depois de todos os checks
+> do GitHub passarem). O job "Publicar na Render" saiu do `ci.yml`, e o secret e a
+> variável abaixo não são mais usados. O texto fica como histórico.
+>
 > **2026-09-25:** continua aberta. É a opção A da Fase 1 do `ROADMAP-server.md`
 > ("quem publica em produção"), que o dono decidiu escolher depois. Até lá, todo merge
 > na `main` fica com o job "Publicar na Render" vermelho.
@@ -106,8 +111,11 @@ não publicar silenciosamente sem gate.
 
 ---
 
-### P-5. Criar o ambiente `producao` no GitHub
+### ~~P-5. Criar o ambiente `producao` no GitHub~~ — sem efeito (28/09)
 
+> **2026-09-28:** sem efeito junto com a P-4 (opção B): o job de deploy que usava o
+> ambiente saiu do `ci.yml`. A aprovação humana é o merge na `main`.
+>
 > **2026-09-25:** continua aberta, junto com a P-4 (Fase 1 do roadmap).
 
 **Situação:** o workflow referencia `environment: producao`. Ele funciona sem o
@@ -485,7 +493,7 @@ também **≠ garantido**:
 | --- | --- | --- |
 | Esteira de CI | ✅ Roda no GitHub em todo PR e merge desde setembro | — |
 | CodeQL | ✅ Roda no GitHub | — |
-| Deploy hook da Render | Lógica escrita e validada | Nunca disparado — falta o secret (P-4, Fase 1) |
+| Publicação pela Render | `autoDeployTrigger: checksPass` no `render.yaml` (opção B, 28/09) | Conferir no painel que os dois serviços estão em *After CI Checks Pass* (itens 1.2 e 1.3 do roadmap) |
 | Build no runner | ✅ Job "Imagem Docker" constrói e sobe a imagem no GitHub | — |
 | Rotas `/v1` de ponta a ponta | O app usa comprovantes e justificativas em produção | O envio **pela web** (web → servidor → Cloudinary) nunca rodou: item 2.3 do roadmap |
 

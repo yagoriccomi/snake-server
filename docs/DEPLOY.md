@@ -30,10 +30,13 @@ Render → **New → Web Service** → conectar `yagoriccomi/snake-server` → p
 **Free**.
 
 O `render.yaml` já define o resto (runtime Docker, health check em `/health`,
-`autoDeploy: false`). O `autoDeploy` está desligado **de propósito**: ligado, a
-Render publicaria a cada push, inclusive de código que não passou pelos gates —
-existiriam dois caminhos até produção, e o mais rápido seria justamente o sem
-verificação.
+`autoDeployTrigger: checksPass`). Quem publica é a Render, e **só depois de todos os
+checks do GitHub passarem** no commit da `main` (opção B da Fase 1 do
+`ROADMAP-server.md`, decidida em 28/09). No painel, confira em **Settings → Build &
+Deploy** que o **Auto-Deploy** está em **After CI Checks Pass**, no serviço web e no
+Cron Job `snakethai-media-cleanup`: se os serviços não foram criados pelo Blueprint, o
+`render.yaml` não chega a eles. **Nunca** deixe em *On Commit*: publicaria sem esperar
+a esteira.
 
 ### 3. Cadastrar as variáveis no painel da Render (P-6)
 
@@ -55,35 +58,17 @@ se ela existir, porque quem a tem pode forjar o token de qualquer usuário.
 Ela é usada **apenas** pelo script de migração, exportada na sua sessão de
 terminal e em nenhum outro lugar.
 
-### 4. Cadastrar o segredo e a variável no GitHub (P-4)
+### 4. ~~Cadastrar o segredo e a variável no GitHub~~ — não é mais necessário (P-4)
 
-**Settings → Secrets and variables → Actions**
+Era o caminho da opção A (o GitHub disparava a publicação por um deploy hook). Em
+28/09 o dono escolheu a opção B: quem publica é a Render, depois dos checks (passo 2).
+`RENDER_DEPLOY_HOOK_URL` e `RENDER_SERVICE_URL` não são usados; se existirem no
+GitHub, podem ser apagados. Nenhuma ação aqui.
 
-Aba **Secrets**:
+### 5. ~~Criar o ambiente `producao` no GitHub~~ — não é mais necessário (P-5)
 
-| Nome | O que é | Onde obter |
-| --- | --- | --- |
-| `RENDER_DEPLOY_HOOK_URL` | URL secreta que dispara a publicação | Render → o serviço → Settings → Deploy Hook |
-
-Aba **Variables**:
-
-| Nome | O que é | Exemplo |
-| --- | --- | --- |
-| `RENDER_SERVICE_URL` | endereço público, usado no health check pós-deploy | `https://snakethai-api.onrender.com` |
-
-Sem o secret, o job de deploy falha com mensagem explícita — de propósito, para
-não publicar sem gate. Sem a variable, o deploy acontece mas a verificação de
-saúde é **pulada com aviso**: você fica sem a confirmação de que o serviço subiu.
-
-### 5. Criar o ambiente `producao` no GitHub (P-5)
-
-**Settings → Environments → New environment → `producao`**
-
-Marque **Required reviewers** e adicione você mesmo. Isso faz o deploy parar e
-esperar aprovação humana antes de publicar, e restringe quem enxerga o secret.
-
-O workflow funciona sem o ambiente existir — mas aí publica direto, sem a
-parada.
+Servia para exigir aprovação antes do job de deploy, que saiu do `ci.yml` na opção B.
+A aprovação humana agora é o merge na `main`. Nenhuma ação aqui.
 
 ### 6. Apontar o aplicativo para a API (P-7)
 
@@ -157,6 +142,9 @@ de fato (a exclusão fica registrada, não executada).
 Cadastre as mesmas variáveis do serviço web **neste serviço separado**, mais a
 `SUPABASE_SERVICE_ROLE_KEY` (marcada como secret) — ela é isolada aqui e **nunca**
 deve ir para o `snakethai-api` (o serviço web).
+
+Como no serviço web, o **Auto-Deploy** deste Cron Job fica em **After CI Checks
+Pass** (passo 2): é assim que as correções do worker chegam a ele.
 
 ---
 

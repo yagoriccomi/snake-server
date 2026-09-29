@@ -447,14 +447,14 @@ Para adicionar um módulo, siga o passo a passo do `CLAUDE.md`.
 
 ## 10. Deploy
 
-O passo a passo operacional — secrets do GitHub, variáveis da Render, ambiente
-com aprovação manual e a migração dos comprovantes existentes — está em
+O passo a passo operacional — variáveis e Auto-Deploy na Render e a migração dos
+comprovantes existentes — está em
 [`DEPLOY.md`](DEPLOY.md), na ordem de execução.
 
 Em resumo: `render.yaml` com `runtime: docker` (a Render constrói a **mesma**
-imagem que roda local), health check em `/health` e **`autoDeploy: false`** de
-propósito — com ele ligado existiriam dois caminhos até produção, e o mais rápido
-seria justamente o que ignora todos os gates da esteira.
+imagem que roda local), health check em `/health` e **`autoDeployTrigger: checksPass`**
+no serviço web e no Cron Job: a Render publica cada commit da `main`, mas só depois de
+todos os checks da esteira passarem. Um caminho só até produção, e ele passa pelos gates.
 
 ## 11. Lado do app
 
