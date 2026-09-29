@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
 
+import { descreverErro } from '../../lib/descrever-erro.js';
 import { logger } from '../../lib/logger.js';
 import {
   FORMATO_ENTREGA,
@@ -138,7 +139,7 @@ export function criarAssinadorCloudinary(config: ConfigDeMidia): AssinadorDeMidi
          * alguém reclamar de um comprovante que "sumiu". [#92]
          */
         logger.warn('não foi possível contar as páginas do comprovante', {
-          erro: causa instanceof Error ? causa.message : 'desconhecido',
+          erro: descreverErro(causa),
         });
         return 1;
       }

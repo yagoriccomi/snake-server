@@ -39,6 +39,17 @@ export interface ClienteSupabase {
     colunas: string,
     authorization: string,
   ): Promise<T[]>;
+
+  /**
+   * Chama uma RPC COM o token do chamador. `null` quando o PostgREST recusa
+   * (4xx) — inclusive a RPC que ainda não existe num banco antigo. Quem
+   * interpreta a recusa é a regra, não esta camada.
+   */
+  chamarRpcComoChamador<T>(
+    funcao: string,
+    argumentos: Record<string, unknown>,
+    authorization: string,
+  ): Promise<T | null>;
 }
 
 interface RespostaUsuarioSupabase {
@@ -56,16 +67,24 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
   /**
    * Toda chamada de saída tem timeout. Sem isso, um Supabase lento segura a
    * conexão do app até o cliente desistir — e nós nem ficamos sabendo.
+   *
+   * Sem `corpo`, é uma leitura (GET); com `corpo`, a chamada de uma RPC (POST
+   * com JSON).
    */
-  async function chamar(url: string, authorization: string): Promise<Response> {
+  async function chamar(url: string, authorization: string, corpo?: unknown): Promise<Response> {
+    const cabecalhos: Record<string, string> = {
+      apikey: config.anonKey,
+      Authorization: authorization,
+      Accept: 'application/json',
+    };
+    const requisicao: RequestInit =
+      corpo === undefined ? { method: 'GET' } : { method: 'POST', body: JSON.stringify(corpo) };
+    if (corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
+
     try {
       return await fetch(url, {
-        method: 'GET',
-        headers: {
-          apikey: config.anonKey,
-          Authorization: authorization,
-          Accept: 'application/json',
-        },
+        ...requisicao,
+        headers: cabecalhos,
         signal: AbortSignal.timeout(TIMEOUT_REQUISICAO_EXTERNA_MS),
       });
     } catch (causa) {
@@ -132,6 +151,36 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
 
       const corpo: unknown = await resposta.json();
       return Array.isArray(corpo) ? (corpo as T[]) : [];
+    },
+
+    /**
+     * Os argumentos vão no corpo JSON, nunca na URL; o nome da função passa
+     * por `encodeURIComponent`, como o nome da tabela acima. [#51][#52]
+     */
+    async chamarRpcComoChamador<T>(
+      funcao: string,
+      argumentos: Record<string, unknown>,
+      authorization: string,
+    ): Promise<T | null> {
+      const resposta = await chamar(
+        montarUrl(`/rest/v1/rpc/${encodeURIComponent(funcao)}`),
+        authorization,
+        argumentos,
+      );
+
+      if (!resposta.ok) {
+        logger.warn('PostgREST recusou a RPC', { funcao, status: resposta.status });
+
+        // 4xx: token sem permissão ou a função ainda não existe (banco antigo,
+        // PGRST202). Os dois viram "sem acesso" em quem chamou — nunca 5xx,
+        // para o servidor poder ir ao ar antes das migrations (contrato § 14).
+        if (resposta.status >= 500) {
+          throw dependenciaIndisponivel('Servidor de dados indisponível', 'supabase_error');
+        }
+        return null;
+      }
+
+      return (await resposta.json()) as T;
     },
   };
 }

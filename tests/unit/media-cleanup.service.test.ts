@@ -192,6 +192,19 @@ describe('processarLote', () => {
     expect(marcarFalhaMock).toHaveBeenCalledWith(item.id, 1, 'timeout');
   });
 
+  it('deveGravarAMensagemQuandoACloudinaryRejeitaComObjetoSimples', async () => {
+    // Antes, `String(causa)` gravava "[object Object]" em `ultimo_erro`.
+    const item = itemCloudinary();
+    const { deps, apagarDaCloudinaryMock, marcarFalhaMock } = criarCenario([item]);
+    apagarDaCloudinaryMock.mockRejectedValue({
+      error: { message: 'Rate Limit Exceeded', http_code: 420 },
+    });
+
+    await processarLote(deps, 100);
+
+    expect(marcarFalhaMock).toHaveBeenCalledWith(item.id, 1, 'Rate Limit Exceeded (HTTP 420)');
+  });
+
   it('deveIncrementarOContadorDeTentativasACadaNovaFalha', async () => {
     const item = itemCloudinary({ tentativas: 3 });
     const { deps, apagarDaCloudinaryMock, marcarFalhaMock } = criarCenario([item]);

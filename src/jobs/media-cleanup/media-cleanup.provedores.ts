@@ -6,6 +6,8 @@
 
 import { v2 as cloudinary } from 'cloudinary';
 
+import { TAMANHO_DA_PAGINA_DA_LISTAGEM, type TipoDeRecurso } from './media-cleanup.constants.js';
+import type { ListadorDeMidia, PaginaDeAssets } from './media-cleanup.orfaos.js';
 import type { ExclusorDeMidia } from './media-cleanup.service.js';
 
 /**
@@ -33,7 +35,9 @@ export interface ConfigDosProvedores {
  * concluído (ex.: crash entre apagar e marcar `processado_em`) — sem isso,
  * o retry criaria um falso alarme sobre um trabalho que já terminou. [#9]
  */
-export function criarExclusorDeMidia(config: ConfigDosProvedores): ExclusorDeMidia {
+export function criarExclusorDeMidia(
+  config: ConfigDosProvedores,
+): ExclusorDeMidia & ListadorDeMidia {
   cloudinary.config({
     cloud_name: config.cloudinary.cloudName,
     api_key: config.cloudinary.apiKey,
@@ -42,6 +46,32 @@ export function criarExclusorDeMidia(config: ConfigDosProvedores): ExclusorDeMid
   });
 
   return {
+    /**
+     * Uma página da Admin API. Só `authenticated`: é o único tipo de entrega
+     * que os anexos usam, e listar `upload` traria o que não é deste worker.
+     */
+    async listarAssets(prefixo: string, tipo: TipoDeRecurso, cursor: string | null) {
+      const resposta = (await cloudinary.api.resources({
+        type: 'authenticated',
+        resource_type: tipo,
+        prefix: prefixo,
+        max_results: TAMANHO_DA_PAGINA_DA_LISTAGEM,
+        ...(cursor === null ? {} : { next_cursor: cursor }),
+      })) as {
+        resources?: { public_id: string; created_at: string }[];
+        next_cursor?: string;
+      };
+
+      const pagina: PaginaDeAssets = {
+        assets: (resposta.resources ?? []).map(({ public_id, created_at }) => ({
+          public_id,
+          created_at,
+        })),
+        proximoCursor: resposta.next_cursor ?? null,
+      };
+      return pagina;
+    },
+
     async apagarDaCloudinary(publicId, tipo) {
       const resultado = (await cloudinary.uploader.destroy(publicId, {
         type: 'authenticated',

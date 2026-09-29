@@ -203,6 +203,37 @@ describe('validação de entrada — a barreira antes da rede', () => {
     expect(resposta.body.code).toBe('malformed_json');
   });
 
+  it.each(['/v1/proofs/view-url', '/v1/justifications/view-url', '/v1/motivos/view-url'])(
+    'deveResponder429DepoisDe20RequisicoesPorMinutoEm %s',
+    async (rota) => {
+      // Corpo vazio: o limite vem antes da validação, então cada tentativa
+      // conta mesmo sem token — é assim que se barra quem varre ids.
+      for (let i = 0; i < 20; i += 1) {
+        const resposta = await request(app).post(rota).send({});
+        expect(resposta.status).toBe(400);
+      }
+
+      const resposta = await request(app).post(rota).send({});
+
+      expect(resposta.status).toBe(429);
+      expect(resposta.body.code).toBe('rate_limited');
+    },
+  );
+
+  it('deveContarAsTresRotasDeArquivoPrivadoNoMesmoLimite', async () => {
+    // Trocar de rota não dá cota nova (contrato § 13.1: o mesmo limitador).
+    const rotas = ['/v1/proofs/view-url', '/v1/justifications/view-url', '/v1/motivos/view-url'];
+    for (let i = 0; i < 20; i += 1) {
+      await request(app)
+        .post(rotas[i % rotas.length] ?? '')
+        .send({});
+    }
+
+    const resposta = await request(app).post('/v1/motivos/sign-upload').send({});
+
+    expect(resposta.status).toBe(429);
+  });
+
   it('deveResponder413QuandoOCorpoUltrapassaOLimiteDe32kb', async () => {
     // Arquivos não passam por este servidor; payload gigante é abuso. [#65]
     const gigante = { paymentId: PAGAMENTO_DO_DONO, lixo: 'x'.repeat(40_000) };

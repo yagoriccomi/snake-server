@@ -15,6 +15,8 @@
  * processa o que existe e não inventa um prazo. Ver P-11 em `docs/PENDENCIAS.md`.
  */
 
+import { descreverErro } from '../../lib/descrever-erro.js';
+
 import { logger } from './media-cleanup.logger.js';
 import { PASTA_COMPROVANTES } from '../../modules/proofs/proofs.constants.js';
 
@@ -79,11 +81,6 @@ type DesfechoDoItem = 'processado' | 'falha' | 'recusado';
  * alarme sobe de nível para alguém notar. [#92]
  */
 const TENTATIVAS_PARA_ALARME = 5;
-
-/** Normaliza qualquer coisa lançada para uma mensagem de log. */
-function mensagemDeErro(causa: unknown): string {
-  return causa instanceof Error ? causa.message : String(causa);
-}
 
 /**
  * O worker apaga com `service_role`, fora da RLS: o `asset_ref` precisa provar
@@ -157,7 +154,7 @@ async function processarItem(
     await deps.fila.marcarProcessado(item.id);
     return 'processado';
   } catch (causa) {
-    const erro = mensagemDeErro(causa);
+    const erro = descreverErro(causa);
     const tentativas = item.tentativas + 1;
     await deps.fila.marcarFalha(item.id, tentativas, erro);
 

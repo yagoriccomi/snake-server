@@ -17,6 +17,15 @@ export const PASTA_COMPROVANTES = 'comprovantes';
 export const TIPO_ENTREGA_PRIVADO = 'authenticated';
 
 /**
+ * Formatos aceitos nos anexos de motivo e de justificativa (contrato § 13.1,
+ * `FORMATOS_DE_ANEXO`). Vai DENTRO da assinatura do upload: um `.docx` ou um
+ * vídeo enviado por um cliente modificado é recusado na própria Cloudinary,
+ * sem depender de o app filtrar. Mora aqui, com o tipo de entrega, porque é a
+ * mesma decisão de "mídia de aluno" para os dois módulos que a usam. [#6][#51]
+ */
+export const FORMATOS_DE_ANEXO = 'jpg,png,webp,heic,pdf';
+
+/**
  * Formato de ENTREGA do comprovante. O arquivo é guardado como veio (PDF, PNG,
  * HEIC); a conversão acontece na saída.
  *

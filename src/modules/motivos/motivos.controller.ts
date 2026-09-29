@@ -2,11 +2,8 @@ import type { RequestHandler } from 'express';
 
 import { logger } from '../../lib/logger.js';
 import { usuarioDaRequisicao } from '../../middleware/require-user.js';
-import type {
-  CorpoDeAssinaturaDeJustificativa,
-  CorpoDeVisualizacaoDeJustificativa,
-} from './justifications.schema.js';
-import type { JustificationsService } from './justifications.service.js';
+import type { CorpoDeAssinaturaDeMotivo, CorpoDeVisualizacaoDeMotivo } from './motivos.schema.js';
+import type { MotivosService } from './motivos.service.js';
 
 /**
  * Camada HTTP: traduz requisição em chamada de serviço e resultado em
@@ -15,58 +12,51 @@ import type { JustificationsService } from './justifications.service.js';
 type HandlerDeAssinatura = RequestHandler<
   Record<string, never>,
   unknown,
-  CorpoDeAssinaturaDeJustificativa
+  CorpoDeAssinaturaDeMotivo
 >;
 type HandlerDeVisualizacao = RequestHandler<
   Record<string, never>,
   unknown,
-  CorpoDeVisualizacaoDeJustificativa
+  CorpoDeVisualizacaoDeMotivo
 >;
 
-export function criarJustificationsController(service: JustificationsService) {
-  /** POST /v1/justifications/sign-upload — `{ classId }` (legado) ou `{ justificationId }`. */
+export function criarMotivosController(service: MotivosService) {
+  /** POST /v1/motivos/sign-upload */
   const assinarUpload: HandlerDeAssinatura = async (req, res) => {
-    const corpo = req.body;
+    const { motivoId, anexoId } = req.body;
     const { id: userId, authorization } = usuarioDaRequisicao(req);
 
-    if ('classId' in corpo) {
-      const assinatura = service.assinarUpload(userId, corpo.classId);
-      logger.info('upload de anexo de justificativa assinado', {
-        traceId: req.traceId,
-        user_id: userId,
-        class_id: corpo.classId,
-      });
-      res.json(assinatura);
-      return;
-    }
-
-    const assinatura = await service.assinarUploadDaJustificativa(
+    const assinatura = await service.assinarUpload(
       { userId, authorization, traceId: req.traceId },
-      corpo.justificationId,
+      motivoId,
+      anexoId,
     );
-    logger.info('upload de anexo de justificativa assinado', {
+
+    logger.info('upload de anexo de motivo assinado', {
       traceId: req.traceId,
       user_id: userId,
-      justification_id: corpo.justificationId,
+      motivo_id: motivoId,
+      anexo_id: anexoId,
     });
+
     res.json(assinatura);
   };
 
-  /** POST /v1/justifications/view-url */
+  /** POST /v1/motivos/view-url */
   const obterUrlDeVisualizacao: HandlerDeVisualizacao = async (req, res) => {
-    const { justificationId, pagina } = req.body;
+    const { anexoId, pagina } = req.body;
     const { id: userId, authorization } = usuarioDaRequisicao(req);
 
     const anexo = await service.obterUrlDeVisualizacao(
-      justificationId,
+      anexoId,
       { userId, authorization, traceId: req.traceId },
       pagina,
     );
 
-    logger.info('url de anexo de justificativa emitida', {
+    logger.info('url de anexo de motivo emitida', {
       traceId: req.traceId,
       user_id: userId,
-      justification_id: justificationId,
+      anexo_id: anexoId,
       paginas: anexo.paginas,
     });
 
