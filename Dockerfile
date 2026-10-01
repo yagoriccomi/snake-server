@@ -18,7 +18,7 @@
 # ─────────────────────────────────────────────────────────────
 #  Stage: base — versão do Node fixada, uma única fonte de verdade
 # ─────────────────────────────────────────────────────────────
-FROM node:22.14-alpine@sha256:9bef0ef1e268f60627da9ba7d7605e8831d5b56ad07487d24d1aa386336d1944 AS base
+FROM node:22.23-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS base
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false
