@@ -11,6 +11,7 @@ import {
   RATE_LIMIT_MAX_REQUISICOES,
 } from './config/constants.js';
 import { env } from './config/env.js';
+import { diagnosticoDeProxy } from './middleware/diagnostico-proxy.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { requestContext } from './middleware/request-context.js';
 import { criarV1Router } from './routes/v1.js';
@@ -62,6 +63,10 @@ export function criarApp(deps: DependenciasDaApi = montarDependencias()): Expres
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
   });
+
+  // Depois do `/health`: o health check da Render não precisa entrar no
+  // diagnóstico, e o que se mede é o que os limitadores abaixo enxergam.
+  app.use(diagnosticoDeProxy);
 
   // Teto de payload: arquivos não passam por aqui, então 32kb é folga. [#65]
   app.use(express.json({ limit: LIMITE_CORPO_JSON }));
