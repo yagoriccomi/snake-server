@@ -21,14 +21,13 @@ services:
     # Endpoint trivial e sem I/O: acorda rápido depois da hibernação. [#82]
     healthCheckPath: /health
 
-    # DESLIGADO de proposito. Com autoDeploy ligado, a Render publica a
-    # cada push - inclusive de codigo que nao passou por lint, tipo, teste,
-    # auditoria de licenca ou validacao da imagem. Existiriam dois caminhos
-    # ate producao, e o mais rapido deles seria justamente o sem gate.
-    #
-    # Agora o deploy e disparado pelo job `deploy` do .github/workflows/ci.yml,
-    # que so roda depois que todos os outros passam. [#49][#77]
-    autoDeploy: false
+    # Um caminho só até produção: a Render publica cada commit da `main`,
+    # mas SÓ depois de todos os checks do GitHub passarem (lint, tipos,
+    # testes, auditoria, CodeQL e a imagem). Commit com check vermelho não
+    # é publicado. Nunca use `commit` aqui: ele publica sem esperar a
+    # esteira, e o mais rápido dos caminhos seria justamente o sem gate.
+    # [#49][#77]
+    autoDeployTrigger: checksPass
 
     envVars:
       - key: NODE_ENV
@@ -89,6 +88,12 @@ services:
     # suficiente para a fila não crescer entre execuções.
     schedule: '0 3 * * *'
     dockerCommand: node dist/jobs/media-cleanup/media-cleanup.js
+
+    # O mesmo gatilho do serviço web: sem ele, o Cron Job fica no padrão da
+    # Render e pode publicar sem esperar a esteira, ou nunca receber as
+    # correções do worker. As duas coisas já foram dúvida aqui (itens 1.2
+    # e 5.2 do ROADMAP-server.md). [#49][#77]
+    autoDeployTrigger: checksPass
 
     envVars:
       - key: SUPABASE_URL

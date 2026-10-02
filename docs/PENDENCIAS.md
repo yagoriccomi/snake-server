@@ -47,7 +47,10 @@ Depois: `scripts\dev.bat restart` (Windows) ou `./scripts/dev.sh restart`.
 
 ---
 
-### P-2. Rotacionar a `CLOUDINARY_API_SECRET` se ela já circulou no aplicativo
+### ~~P-2. Rotacionar a `CLOUDINARY_API_SECRET` se ela já circulou no aplicativo~~ ✅ RISCADA em 2026-10-01
+
+> **Decisão do dono (D16, `handoffs/COORDENACAO.md`):** a chave nunca circulou, nem no app nem
+> no chat. Nada a girar. O registro abaixo fica como histórico.
 
 **Situação:** o `docs/BACKEND.md §12` pede isto explicitamente, e é o **único item deste
 documento que pode já estar comprometido hoje**.
@@ -81,8 +84,13 @@ algum momento você quiser fechar o código, saiba que isso só vale daí para f
 
 ## 🟠 Configuração externa — o deploy não acontece sem isto
 
-### P-4. Cadastrar os segredos e variáveis no GitHub
+### ~~P-4. Cadastrar os segredos e variáveis no GitHub~~ — sem efeito (28/09)
 
+> **2026-09-28:** o dono escolheu a **opção B** da Fase 1 do `ROADMAP-server.md`: quem
+> publica é a Render, com `autoDeployTrigger: checksPass` (só depois de todos os checks
+> do GitHub passarem). O job "Publicar na Render" saiu do `ci.yml`, e o secret e a
+> variável abaixo não são mais usados. O texto fica como histórico.
+>
 > **2026-09-25:** continua aberta. É a opção A da Fase 1 do `ROADMAP-server.md`
 > ("quem publica em produção"), que o dono decidiu escolher depois. Até lá, todo merge
 > na `main` fica com o job "Publicar na Render" vermelho.
@@ -106,8 +114,11 @@ não publicar silenciosamente sem gate.
 
 ---
 
-### P-5. Criar o ambiente `producao` no GitHub
+### ~~P-5. Criar o ambiente `producao` no GitHub~~ — sem efeito (28/09)
 
+> **2026-09-28:** sem efeito junto com a P-4 (opção B): o job de deploy que usava o
+> ambiente saiu do `ci.yml`. A aprovação humana é o merge na `main`.
+>
 > **2026-09-25:** continua aberta, junto com a P-4 (Fase 1 do roadmap).
 
 **Situação:** o workflow referencia `environment: producao`. Ele funciona sem o
@@ -252,7 +263,7 @@ ela é rede de segurança, não substituta.
 | --- | --- | --- |
 | Art. 18, VI | Eliminação a pedido do titular | ✅ `anonimizar_titular()` → `eliminar_comprovantes_do_titular` (corrigido em 2026-09-16: a Edge Function não chamava) |
 | Art. 15/16 | Eliminação após o fim do tratamento | ✅ **worker consumidor** (`src/jobs/media-cleanup/`) |
-| Art. 15, I (prazo) | Retenção por tempo definido | 🟡 varredura pronta (`enfileirar_comprovantes_expirados`, 02:30), **desligada até o prazo ser definido** — recomendação: 90 dias após o pagamento |
+| Art. 15, I (prazo) | Retenção por tempo definido | 🟡 varredura pronta (`enfileirar_comprovantes_expirados`, 02:30). **Prazo decidido em 01/10: 90 dias (D14)**; liga quando o dono preencher os Dados dos termos (G5) |
 | Art. 18, V | Portabilidade | ✅ "Exportar meus dados" no app (`export_my_data`) |
 | Art. 6º, I e III | Finalidade e necessidade declaradas | ❌ não iniciado |
 
@@ -269,7 +280,10 @@ mais barato (`starter`) — confirme o valor no painel antes do primeiro deploy.
 
 **O que ainda falta, e é decisão sua, não técnica:**
 
-1. **Prazo de retenção em dias.** A varredura existe (snake-thai, migration
+1. ✅ **Prazo de retenção: 90 dias, decidido pelo dono em 01/10 (D14).** O valor entra pelo
+   `{{prazo_comprovantes}}` dos Dados dos termos (G5, item 3.6 do roadmap do app), sem mudar o
+   texto da Política, e vai para `proof_retention_days`. O registro do pagamento continua por 5
+   anos mais o exercício. Histórico da recomendação: a varredura existe (snake-thai, migration
    `retencao_comprovantes`) e usa o motivo `retencao_expirada`, mas nasce desligada:
    ligar apaga arquivos de verdade. Recomendação registrada no PLANO-T7 do snake-thai:
    **90 dias após o pagamento** (cobre a contestação de Pix pelo MED e os prazos do
@@ -485,7 +499,7 @@ também **≠ garantido**:
 | --- | --- | --- |
 | Esteira de CI | ✅ Roda no GitHub em todo PR e merge desde setembro | — |
 | CodeQL | ✅ Roda no GitHub | — |
-| Deploy hook da Render | Lógica escrita e validada | Nunca disparado — falta o secret (P-4, Fase 1) |
+| Publicação pela Render | `autoDeployTrigger: checksPass` no `render.yaml` (opção B, 28/09) | Conferir no painel que os dois serviços estão em *After CI Checks Pass* (itens 1.2 e 1.3 do roadmap) |
 | Build no runner | ✅ Job "Imagem Docker" constrói e sobe a imagem no GitHub | — |
 | Rotas `/v1` de ponta a ponta | O app usa comprovantes e justificativas em produção | O envio **pela web** (web → servidor → Cloudinary) nunca rodou: item 2.3 do roadmap |
 
@@ -497,6 +511,6 @@ A ordem agora vive no [`ROADMAP-server.md`](../ROADMAP-server.md). Das pendênci
 documento, as que ainda dependem do dono:
 
 1. **P-4** e **P-5** — a Fase 1 (quem publica em produção).
-2. **P-2** — rotacionar a chave da Cloudinary, se ela já circulou (item 5.4).
-3. **P-11** — o prazo de guarda do comprovante (item 5.3).
+2. ~~**P-2**~~ — riscada em 01/10: a chave nunca circulou (D16, item 5.4).
+3. **P-11** — prazo decidido (90 dias, D14, item 5.3); falta o dono preencher os Dados dos termos (G5).
 4. **P-9** — vira código no item 5.5.
