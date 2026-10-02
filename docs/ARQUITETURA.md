@@ -133,7 +133,7 @@ não reimplementa, não discute.
 > abriria um parâmetro novo na consulta e quem chamasse controlaria a query. Há teste
 > automatizado provando que isso não passa. [#51][#52]
 
-### A segunda barreira — e por que ela é configurável
+### A segunda barreira — o banco confirma o admin
 
 A RLS é a trava principal. Mas ela mora em **outro sistema**, e este repositório não a
 controla: uma migration distraída, uma política renomeada ou uma tabela recriada sem
@@ -154,17 +154,22 @@ Quem sabe diferenciar é o schema do Supabase — que vive fora daqui. Chutar
 `authenticated` para todo mundo, então a verificação ou nunca dispararia (decoração)
 ou bloquearia o administrador de verdade.
 
-A saída foi transformar isso em **decisão explícita de configuração**:
+Por isso o servidor **pergunta ao banco**, com o token de quem pede, pela mesma
+função que a RLS usa: `rpc/is_admin` (contrato § 13.5, item 5.5). Só um `true`
+explícito libera; recusa, função ausente ou resposta estranha contam como "não". A
+variável escolhe a postura:
 
 | `POLITICA_ACESSO_COMPROVANTE` | Comportamento |
 | --- | --- |
-| `rls` *(padrão)* | Permite — pode ser administrador — mas registra **alarme em nível `error`**. Preserva o comportamento previsto e dá visibilidade imediata se a RLS cair. |
-| `somente-dono` | Nega qualquer comprovante que não seja do próprio dono, mesmo que a RLS tenha liberado. |
+| `rls` *(padrão)* | Serve ao admin confirmado por `is_admin`. Qualquer outro caso é `403` com **alarme em nível `error`**. |
+| `somente-dono` | Nega qualquer comprovante que não seja do próprio dono, sem perguntar ao banco, mesmo que a RLS tenha liberado. |
 
-> **O alarme é a entrega desta política.** Se a linha `RLS liberou comprovante de
-> outro usuário` aparecer nos registros sem que exista um administrador trabalhando
-> naquele momento, **a RLS está quebrada em produção** — e você fica sabendo por
-> alerta, não por incidente. [#55]
+> **O alarme agora significa uma coisa só:** a RLS liberou a linha de outra pessoa a
+> quem **não** é admin, ou seja, **a RLS está quebrada em produção**, e o pedido já
+> foi recusado. Você fica sabendo por alerta, não por incidente. [#55]
+>
+> A justificativa segue a mesma ideia, com `is_admin` e, se der `false`,
+> `pode_decidir_justificativa` (veja `BACKEND.md`).
 
 ### Por que `403` e não `404`
 

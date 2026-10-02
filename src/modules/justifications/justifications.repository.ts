@@ -2,6 +2,7 @@ import type { ClienteSupabase } from '../../lib/supabase.js';
 import {
   COLUNAS_DA_JUSTIFICATIVA,
   COLUNAS_PARA_ASSINAR_JUSTIFICATIVA,
+  RPC_PODE_DECIDIR_JUSTIFICATIVA,
   TABELA_JUSTIFICATIVAS,
 } from './justifications.constants.js';
 import type {
@@ -46,6 +47,18 @@ export function criarRepositorioDeJustificativas(
         COLUNAS_PARA_ASSINAR_JUSTIFICATIVA,
         authorization,
       );
+    },
+
+    async podeDecidir(justificationId, authorization) {
+      const resposta = await supabase.chamarRpcComoChamador<unknown>(
+        RPC_PODE_DECIDIR_JUSTIFICATIVA,
+        { p_id: justificationId },
+        authorization,
+      );
+
+      // Só o booleano `true` libera. Num banco antigo a função não existe, o
+      // PostgREST recusa (4xx) e a resposta é `null`: nega, nunca 5xx. [#9]
+      return resposta === true;
     },
   };
 }

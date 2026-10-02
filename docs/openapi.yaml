@@ -156,8 +156,9 @@ paths:
         Devolve um endereço assinado que abre o comprovante.
 
         Quem pode ver é decidido pelas regras de acesso do banco (RLS), com o **seu**
-        token: o dono do pagamento ou um administrador. Se você não tiver direito, a
-        resposta é `403` — a mesma resposta que você receberia se o pagamento não
+        token: o dono do pagamento ou um administrador. Se o pagamento não for seu, o
+        servidor ainda confirma no banco (`is_admin`) que você é administrador. Se você
+        não tiver direito, a resposta é `403` — a mesma resposta que você receberia se o pagamento não
         existisse. A indistinção é proposital: separar os dois casos entregaria a um
         curioso uma forma de descobrir quais pagamentos existem.
 
@@ -270,7 +271,9 @@ paths:
       description: |
         Quem pode ver é decidido pelas regras de acesso do banco (RLS), com o **seu**
         token: o dono, quem pode decidir a justificativa enquanto ela está pendente, e o
-        administrador. Sem direito, sem anexo ou com anexo fora da Cloudinary: `403`.
+        administrador. Se a justificativa não for sua, o servidor ainda confirma no banco
+        (`is_admin` e, se não for admin, `pode_decidir_justificativa`). Sem direito, sem
+        anexo ou com anexo fora da Cloudinary: `403`.
 
         O endereço é assinado sobre um dos caminhos **derivados** da justificativa
         (`justificativas/<user_id>/<id>`, `…/<id>-2` ou, na justificativa de aula,
