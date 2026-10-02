@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HttpError } from '../../src/lib/http-error.js';
 import {
@@ -38,14 +38,26 @@ interface Cenario {
   paraVisualizar?: RegistroDeJustificativa | null;
   paraAssinar?: JustificativaParaAssinar | null;
   paginas?: number;
+  /** Resposta de `is_admin` (§ 13.5). */
+  ehAdmin?: boolean;
+  /** Resposta de `pode_decidir_justificativa` (§ 13.5). */
+  podeDecidir?: boolean;
 }
 
-function criarCenario({ paraVisualizar = null, paraAssinar = null, paginas = 1 }: Cenario = {}) {
+function criarCenario({
+  paraVisualizar = null,
+  paraAssinar = null,
+  paginas = 1,
+  ehAdmin = false,
+  podeDecidir = false,
+}: Cenario = {}) {
   const registro = {
     assinados: [] as ParametrosDeUpload[],
     publicIdsVisualizados: [] as string[],
     buscas: [] as { justificationId: string; authorization: string }[],
     buscasParaAssinar: [] as { justificationId: string; authorization: string }[],
+    perguntasDeAdmin: [] as string[],
+    perguntasDeDecisao: [] as { justificationId: string; authorization: string }[],
   };
 
   const midia: AssinadorDeMidia = {
@@ -75,11 +87,21 @@ function criarCenario({ paraVisualizar = null, paraAssinar = null, paginas = 1 }
       registro.buscasParaAssinar.push({ justificationId, authorization });
       return paraAssinar;
     },
+    async podeDecidir(justificationId, authorization) {
+      registro.perguntasDeDecisao.push({ justificationId, authorization });
+      return podeDecidir;
+    },
   };
 
   const service = criarJustificationsService({
     midia,
     justificativas,
+    admin: {
+      async ehAdmin(authorization) {
+        registro.perguntasDeAdmin.push(authorization);
+        return ehAdmin;
+      },
+    },
     agoraEmSegundos: () => AGORA,
   });
 
@@ -316,6 +338,7 @@ describe('justifications.service — obterUrlDeVisualizacao', () => {
     const gravado = `justificativas/${OUTRO_ALUNO}/${JUSTIFICATIVA}`;
     const { service, registro } = criarCenario({
       paraVisualizar: comAnexo({ user_id: OUTRO_ALUNO, proof_public_id: gravado }),
+      podeDecidir: true,
     });
 
     await service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR);
@@ -329,5 +352,99 @@ describe('justifications.service — obterUrlDeVisualizacao', () => {
     const anexo = await service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR, 50);
 
     expect(anexo).toMatchObject({ paginas: 2, pagina: 2 });
+  });
+});
+
+describe('justifications.service — segunda barreira (contrato § 13.5)', () => {
+  const DO_OUTRO = `justificativas/${OUTRO_ALUNO}/${JUSTIFICATIVA}`;
+
+  function linhaDeOutroAluno(): RegistroDeJustificativa {
+    return comAnexo({ user_id: OUTRO_ALUNO, proof_public_id: DO_OUTRO });
+  }
+
+  /** O alarme sai em stderr, com nível `error`. */
+  function capturarStderr(): string[] {
+    const escritas: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((texto: unknown) => {
+      escritas.push(String(texto));
+      return true;
+    });
+    return escritas;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('naoDevePerguntarNadaAoBancoQuandoOChamadorEhODono', async () => {
+    // O caso comum (o aluno vendo o próprio anexo) não paga chamada a mais.
+    const { service, registro } = criarCenario({ paraVisualizar: comAnexo() });
+
+    await service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR);
+
+    expect(registro.perguntasDeAdmin).toEqual([]);
+    expect(registro.perguntasDeDecisao).toEqual([]);
+  });
+
+  it('deveServirAoAdminSemPerguntarSePodeDecidir', async () => {
+    const { service, registro } = criarCenario({
+      paraVisualizar: linhaDeOutroAluno(),
+      ehAdmin: true,
+    });
+
+    await service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR);
+
+    expect(registro.perguntasDeAdmin).toEqual([AUTORIZACAO]);
+    expect(registro.perguntasDeDecisao).toEqual([]);
+    expect(registro.publicIdsVisualizados).toEqual([DO_OUTRO]);
+  });
+
+  it('deveServirAQuemPodeDecidirPerguntandoComOTokenDoChamador', async () => {
+    const { service, registro } = criarCenario({
+      paraVisualizar: linhaDeOutroAluno(),
+      podeDecidir: true,
+    });
+
+    await service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR);
+
+    expect(registro.perguntasDeAdmin).toEqual([AUTORIZACAO]);
+    expect(registro.perguntasDeDecisao).toEqual([
+      { justificationId: JUSTIFICATIVA, authorization: AUTORIZACAO },
+    ]);
+  });
+
+  it('deveNegarComForbiddenQuandoARlsLiberouAQuemNaoEhAdminNemPodeDecidir', async () => {
+    // Inclui o professor depois da decisão: `pode_decidir_justificativa` dá
+    // `false` para a linha decidida, como a RLS (§ 9.1, D22).
+    capturarStderr();
+    const { service, registro } = criarCenario({ paraVisualizar: linhaDeOutroAluno() });
+
+    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(registro.publicIdsVisualizados).toEqual([]);
+  });
+
+  it('deveEmitirAlarmeSemOsIdentificadoresInteirosQuandoBloqueia', async () => {
+    const escritas = capturarStderr();
+    const { service } = criarCenario({ paraVisualizar: linhaDeOutroAluno() });
+
+    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toThrow();
+
+    const saida = escritas.join('');
+    expect(saida).toContain('RLS liberou justificativa de outro usuário');
+    expect(saida).toContain('"nivel":"error"');
+    expect(saida).not.toContain(USUARIO_DO_TOKEN);
+    expect(saida).not.toContain(OUTRO_ALUNO);
+  });
+
+  it('naoDeveEmitirAlarmeQuandoOLeitorEhLegitimo', async () => {
+    // Alarme que dispara a cada revisão vira ruído e para de ser lido.
+    const escritas = capturarStderr();
+    const { service } = criarCenario({ paraVisualizar: linhaDeOutroAluno(), podeDecidir: true });
+
+    await service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR);
+
+    expect(escritas.join('')).not.toContain('RLS liberou');
   });
 });

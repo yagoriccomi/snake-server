@@ -340,6 +340,58 @@ describe('POST /v1/proofs/view-url — autorização decidida pela RLS', () => {
 
     expect(espioes.buscasPorPagamento[0]?.authorization).toBe(TOKEN_VALIDO);
   });
+
+  it('naoDevePerguntarIsAdminQuandoOPagamentoEhDoChamador', async () => {
+    await request(app)
+      .post('/v1/proofs/view-url')
+      .set('Authorization', TOKEN_VALIDO)
+      .send({ paymentId: PAGAMENTO_DO_DONO });
+
+    expect(espioes.perguntasDeAdmin).toEqual([]);
+  });
+});
+
+describe('POST /v1/proofs/view-url — segunda barreira (contrato § 13.5)', () => {
+  /** Uma RLS quebrada: devolve o pagamento de outra pessoa a quem pedir. */
+  function appComRlsQuebrada(ehAdmin: boolean) {
+    const espioesLocais = criarEspioes();
+    const appLocal = criarApp(
+      criarDependenciasFalsas(espioesLocais, {
+        ehAdmin,
+        buscarPagamento: () =>
+          Promise.resolve({
+            user_id: '99999999-8888-4777-a666-555555555555',
+            proof_provider: 'cloudinary',
+            proof_public_id: 'comprovantes/qualquer',
+          }),
+      }),
+    );
+    return { appLocal, espioesLocais };
+  }
+
+  it('deveResponder403QuandoARlsLiberaAQuemNaoEhAdmin', async () => {
+    const { appLocal } = appComRlsQuebrada(false);
+
+    const resposta = await request(appLocal)
+      .post('/v1/proofs/view-url')
+      .set('Authorization', TOKEN_VALIDO)
+      .send({ paymentId: PAGAMENTO_DE_OUTRO });
+
+    expect(resposta.status).toBe(403);
+    expect(resposta.body.code).toBe('forbidden');
+  });
+
+  it('deveResponder200AoAdminPerguntandoComOTokenDeQuemPede', async () => {
+    const { appLocal, espioesLocais } = appComRlsQuebrada(true);
+
+    const resposta = await request(appLocal)
+      .post('/v1/proofs/view-url')
+      .set('Authorization', TOKEN_VALIDO)
+      .send({ paymentId: PAGAMENTO_DE_OUTRO });
+
+    expect(resposta.status).toBe(200);
+    expect(espioesLocais.perguntasDeAdmin).toEqual([TOKEN_VALIDO]);
+  });
 });
 
 describe('contrato de erro', () => {

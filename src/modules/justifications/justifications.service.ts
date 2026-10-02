@@ -1,4 +1,5 @@
 import { semAcesso } from '../../lib/http-error.js';
+import { logger } from '../../lib/logger.js';
 import {
   FORMATOS_DE_ANEXO,
   PROVEDOR_CLOUDINARY,
@@ -9,6 +10,7 @@ import {
   type AssinadorDeMidia,
   type Chamador,
   type ComprovanteParaVisualizar,
+  type ConferenciaDeAdmin,
   type UploadAssinado,
 } from '../proofs/proofs.service.js';
 import {
@@ -56,11 +58,14 @@ export interface LeitorDeJustificativas {
     justificationId: string,
     authorization: string,
   ): Promise<JustificativaParaAssinar | null>;
+  /** `pode_decidir_justificativa` com o token de quem pede: só `true` libera. */
+  podeDecidir(justificationId: string, authorization: string): Promise<boolean>;
 }
 
 export interface DependenciasDeJustificativas {
   midia: AssinadorDeMidia;
   justificativas: LeitorDeJustificativas;
+  admin: ConferenciaDeAdmin;
   /** Injetado para o teste congelar o tempo em vez de esperar por ele. */
   agoraEmSegundos: () => number;
 }
@@ -91,6 +96,30 @@ function caminhosDerivados(justificativa: RegistroDeJustificativa): string[] {
 }
 
 export function criarJustificationsService(deps: DependenciasDeJustificativas) {
+  /**
+   * Segunda barreira (contrato § 13.5, P-9). A RLS de `absence_justifications`
+   * libera três leitores: o dono, o admin e, com a justificativa pendente,
+   * quem pode decidi-la. Para a linha de outra pessoa, o servidor confere com
+   * as MESMAS funções da RLS, na ordem do contrato (o admin custa uma chamada
+   * só). Nenhuma confirmou: a RLS liberou o que não devia. [#55]
+   */
+  async function conferirLeitorLegitimo(
+    justificativa: RegistroDeJustificativa,
+    chamador: Chamador,
+  ): Promise<void> {
+    if (justificativa.user_id === chamador.userId) return;
+    if (await deps.admin.ehAdmin(chamador.authorization)) return;
+    if (await deps.justificativas.podeDecidir(justificativa.id, chamador.authorization)) return;
+
+    logger.error('RLS liberou justificativa de outro usuário', {
+      traceId: chamador.traceId,
+      user_id: chamador.userId,
+      dono_user_id: justificativa.user_id,
+      acao: 'bloqueado',
+    });
+    throw semAcesso();
+  }
+
   return {
     /**
      * Forma LEGADA `{ classId }`, do APK 1.8 e da web atual — sem mudança até a
@@ -149,10 +178,9 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
     /**
      * URL assinada do anexo de uma justificativa.
      *
-     * A autorização é inteiramente da RLS de `absence_justifications`: o dono,
-     * quem pode decidir a justificativa pendente e o admin são leitores
-     * LEGÍTIMOS. Por isso não existe aqui o alarme "a RLS liberou linha de
-     * outra pessoa" dos comprovantes — ele dispararia a cada revisão.
+     * Duas barreiras: a RLS, com o token do chamador, e, para a linha de
+     * outra pessoa, `conferirLeitorLegitimo`. O professor que revisa passa
+     * pelas duas; quem a RLS liberou por engano, só pela primeira.
      */
     async obterUrlDeVisualizacao(
       justificationId: string,
@@ -173,6 +201,8 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
       if (justificativa.proof_provider !== PROVEDOR_CLOUDINARY) {
         throw semAcesso();
       }
+
+      await conferirLeitorLegitimo(justificativa, chamador);
 
       /*
        * O caminho assinado é sempre um dos DERIVADOS; o `proof_public_id`

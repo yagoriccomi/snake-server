@@ -6,7 +6,10 @@ import type { DependenciasDoRouterDeJustificativas } from './modules/justificati
 import { criarRepositorioDeMotivos } from './modules/motivos/motivos.repository.js';
 import type { DependenciasDoRouterDeMotivos } from './modules/motivos/motivos.routes.js';
 import { criarAssinadorCloudinary } from './modules/proofs/proofs.cloudinary.js';
-import { criarRepositorioDePagamentos } from './modules/proofs/proofs.repository.js';
+import {
+  criarConferenciaDeAdmin,
+  criarRepositorioDePagamentos,
+} from './modules/proofs/proofs.repository.js';
 import type { DependenciasDoRouterDeProofs } from './modules/proofs/proofs.routes.js';
 
 /**
@@ -32,6 +35,8 @@ export function montarDependencias(): DependenciasDaApi {
   // configuração. Duas instâncias só dariam a chance de divergirem.
   const midia = criarAssinadorCloudinary(env.cloudinary);
   const agoraEmSegundos = (): number => Math.round(Date.now() / 1000);
+  // Uma só conferência de admin para comprovante e justificativa (§ 13.5).
+  const admin = criarConferenciaDeAdmin(supabase);
 
   return {
     supabase,
@@ -41,11 +46,13 @@ export function montarDependencias(): DependenciasDaApi {
       pagamentos: criarRepositorioDePagamentos(supabase),
       agoraEmSegundos,
       politicaDeAcesso: env.politicaDeAcessoAComprovante,
+      admin,
     },
     justifications: {
       supabase,
       midia,
       justificativas: criarRepositorioDeJustificativas(supabase),
+      admin,
       agoraEmSegundos,
     },
     motivos: {

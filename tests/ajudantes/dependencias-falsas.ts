@@ -7,6 +7,7 @@ import type {
 import type { RegistroDeAnexoDeMotivo } from '../../src/modules/motivos/motivos.service.js';
 import type {
   AssinadorDeMidia,
+  ConferenciaDeAdmin,
   PoliticaDeAcesso,
   RegistroDePagamento,
 } from '../../src/modules/proofs/proofs.service.js';
@@ -76,6 +77,8 @@ export interface Espioes {
   buscasPorJustificativa: { justificationId: string; authorization: string }[];
   perguntasDePermissao: { motivoId: string; authorization: string }[];
   buscasPorAnexoDeMotivo: { anexoId: string; authorization: string }[];
+  /** Segunda barreira (§ 13.5): cada `is_admin` perguntado, pelo token. */
+  perguntasDeAdmin: string[];
   tokensVerificados: string[];
 }
 
@@ -132,6 +135,9 @@ export interface OpcoesDasDependencias {
 
   /** Segunda barreira de autorização. Padrão: `rls`, como em produção. */
   politicaDeAcesso?: PoliticaDeAcesso;
+
+  /** Resposta de `is_admin` (§ 13.5). Padrão: `false`. */
+  ehAdmin?: boolean;
 }
 
 export function criarDependenciasFalsas(
@@ -140,6 +146,12 @@ export function criarDependenciasFalsas(
 ): DependenciasDaApi {
   const supabase = criarSupabaseFalso(espioes);
   const midia = criarMidiaFalsa();
+  const admin: ConferenciaDeAdmin = {
+    ehAdmin(authorization) {
+      espioes.perguntasDeAdmin.push(authorization);
+      return Promise.resolve(opcoes.ehAdmin ?? false);
+    },
+  };
 
   return {
     supabase,
@@ -165,6 +177,7 @@ export function criarDependenciasFalsas(
       },
       agoraEmSegundos: () => AGORA_EM_SEGUNDOS,
       politicaDeAcesso: opcoes.politicaDeAcesso ?? 'rls',
+      admin,
     },
     justifications: {
       supabase,
@@ -214,7 +227,11 @@ export function criarDependenciasFalsas(
           };
           return Promise.resolve(linhas[justificationId] ?? null);
         },
+        // A RLS falsa só devolve linhas do próprio dono: a barreira nem chega
+        // a perguntar. Os casos de outra pessoa estão no teste do service.
+        podeDecidir: () => Promise.resolve(false),
       },
+      admin,
       agoraEmSegundos: () => AGORA_EM_SEGUNDOS,
     },
     motivos: {
@@ -252,6 +269,7 @@ export function criarEspioes(): Espioes {
     buscasPorJustificativa: [],
     perguntasDePermissao: [],
     buscasPorAnexoDeMotivo: [],
+    perguntasDeAdmin: [],
     tokensVerificados: [],
   };
 }
