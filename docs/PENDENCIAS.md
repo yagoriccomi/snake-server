@@ -207,6 +207,11 @@ houver, me diga como o papel é identificado e eu implemento a checagem de verda
 
 > **2026-09-25:** hoje se sabe como o banco modela o admin: `profiles.role` e
 > `public.is_admin()`. A checagem de verdade virou o item **5.5** do roadmap.
+>
+> **2026-10-02:** implementada pela § 13.5 do contrato (PR do 5.5). Para a linha de
+> outra pessoa, o servidor pergunta `rpc/is_admin` (comprovante) ou `is_admin` e
+> `pode_decidir_justificativa` (justificativa), com o token de quem pede. Sem um
+> `true`, `403` e alarme. Fica resolvida quando o PR for mesclado.
 
 **Referência:** achado A-1 do [`../REVIEW.md`](../REVIEW.md), seção 4 de
 [`ARQUITETURA.md`](ARQUITETURA.md).

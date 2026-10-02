@@ -165,8 +165,11 @@ Autenticado (dono ou admin). Body `{ "paymentId": "<uuid>" }`.
 
 1. Lê o pagamento com o **token do chamador**; a RLS libera só para dono ou
    admin. Vazio → `403`.
-2. `conferirDono` compara o `user_id` devolvido com o do token — segunda
-   barreira, que **alarma** se a RLS liberar dado alheio.
+2. `conferirLeitorLegitimo` compara o `user_id` devolvido com o do token — segunda
+   barreira (contrato § 13.5). Se a linha for de outra pessoa, pergunta ao banco
+   `rpc/is_admin` com o token do chamador; sem um `true`, responde `403` e **alarma**
+   em nível `error`. Com `POLITICA_ACESSO_COMPROVANTE=somente-dono`, nem pergunta:
+   `403` direto.
 3. Se `proof_provider` **não for** `cloudinary`, responde `403`.
 4. Assina a URL de visualização.
 
@@ -189,7 +192,7 @@ Parece redundante, já que a coluna guarda esse mesmo valor. Não é:
 > A coluna é **gravável pelo aluno** no próprio pagamento — a RLS libera, porque
 > a linha é dele. Se o servidor assinasse o valor gravado, bastaria apontá-lo
 > para `comprovantes/<outro_aluno>/<outro_pagamento>` e pedir a URL do **próprio**
-> pagamento. `conferirDono` passaria: o que está adulterado não é o dono, é o
+> pagamento. `conferirLeitorLegitimo` passaria: o que está adulterado não é o dono, é o
 > ponteiro. O aluno receberia o comprovante de outra pessoa com uma URL válida.
 
 Essa barreira existia de graça no Supabase Storage: a RLS de `storage.objects`
@@ -333,15 +336,20 @@ Autenticado. Body `{ "justificationId": "<uuid>", "pagina"?: number }`.
 > duas leituras acima são recusadas pelo PostgREST e as rotas respondem `403` —
 > inclusive o `view-url` do legado. Decisão do dono em 25/09: seguir o contrato.
 
-#### Por que não há `conferirDono` aqui
+#### A segunda barreira aqui (contrato § 13.5)
 
-Nos comprovantes, a RLS liberar a linha de outra pessoa é anomalia — só um admin
-legítimo explica. Aqui é o caminho **normal**: o professor revisa a justificativa
-do aluno. Um alarme de "não é o dono" dispararia a cada revisão e ensinaria todo
-mundo a ignorá-lo. A barreira que continua valendo é a **derivação do caminho**:
-enquanto a justificativa está pendente o aluno edita `proof_public_id`, e assinar
-o valor gravado repetiria o achado C-2. O valor gravado só **escolhe** entre os
-caminhos derivados; nunca é assinado sem ser um deles.
+Ler a justificativa de outra pessoa é o caminho **normal** do professor que revisa.
+Por isso a barreira não alarma por "não é o dono": para a linha de outra pessoa,
+ela pergunta ao banco, com o token do chamador e pelas **mesmas funções da RLS**,
+se ele é leitor legítimo. Primeiro `rpc/is_admin` (corpo `{}`); se der `false`,
+`rpc/pode_decidir_justificativa` (corpo `{"p_id": "<justificationId>"}`). Só um
+`true` libera. Senão, `403` e alarme em nível `error`, sem PII. Depois da decisão,
+`pode_decidir_justificativa` devolve `false`, e só o dono e o admin leem, como na RLS.
+
+A outra barreira continua valendo: a **derivação do caminho**. Enquanto a
+justificativa está pendente, o aluno edita `proof_public_id`, e assinar o valor
+gravado repetiria o achado C-2. O valor gravado só **escolhe** entre os caminhos
+derivados; nunca é assinado sem ser um deles.
 
 ### Eliminação (LGPD)
 
