@@ -38,10 +38,10 @@ interface Cenario {
   paraVisualizar?: RegistroDeJustificativa | null;
   paraAssinar?: JustificativaParaAssinar | null;
   paginas?: number;
-  /** Resposta de `is_admin` (§ 13.5). */
-  ehAdmin?: boolean;
-  /** Resposta de `pode_decidir_justificativa` (§ 13.5). */
-  podeDecidir?: boolean;
+  /** Resposta de `is_admin` (§ 13.5); um `HttpError` simula a falha do Supabase. */
+  ehAdmin?: boolean | HttpError;
+  /** Resposta de `pode_decidir_justificativa` (§ 13.5), idem. */
+  podeDecidir?: boolean | HttpError;
 }
 
 function criarCenario({
@@ -89,6 +89,7 @@ function criarCenario({
     },
     async podeDecidir(justificationId, authorization) {
       registro.perguntasDeDecisao.push({ justificationId, authorization });
+      if (podeDecidir instanceof HttpError) throw podeDecidir;
       return podeDecidir;
     },
   };
@@ -99,6 +100,7 @@ function criarCenario({
     admin: {
       async ehAdmin(authorization) {
         registro.perguntasDeAdmin.push(authorization);
+        if (ehAdmin instanceof HttpError) throw ehAdmin;
         return ehAdmin;
       },
     },
@@ -446,5 +448,46 @@ describe('justifications.service — segunda barreira (contrato § 13.5)', () =>
     await service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR);
 
     expect(escritas.join('')).not.toContain('RLS liberou');
+  });
+
+  describe('o Supabase falhou ao responder (D20)', () => {
+    const FALHAS = [
+      new HttpError(
+        502,
+        'supabase_invalid_response',
+        'O servidor de dados respondeu de forma inesperada',
+      ),
+      new HttpError(503, 'supabase_unreachable', 'Não foi possível falar com o servidor de dados'),
+      new HttpError(504, 'supabase_timeout', 'O servidor de dados demorou demais para responder'),
+    ];
+
+    it.each(FALHAS)(
+      'deveResponder_$status_QuandoIsAdminFalhaSemPerguntarSePodeDecidir',
+      async (falha) => {
+        const escritas = capturarStderr();
+        const { service, registro } = criarCenario({
+          paraVisualizar: linhaDeOutroAluno(),
+          ehAdmin: falha,
+          podeDecidir: true,
+        });
+
+        await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toBe(falha);
+        expect(registro.perguntasDeDecisao).toEqual([]);
+        expect(registro.publicIdsVisualizados).toEqual([]);
+        expect(escritas.join('')).not.toContain('RLS liberou');
+      },
+    );
+
+    it.each(FALHAS)('deveResponder_$status_QuandoPodeDecidirFalha', async (falha) => {
+      const escritas = capturarStderr();
+      const { service, registro } = criarCenario({
+        paraVisualizar: linhaDeOutroAluno(),
+        podeDecidir: falha,
+      });
+
+      await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toBe(falha);
+      expect(registro.publicIdsVisualizados).toEqual([]);
+      expect(escritas.join('')).not.toContain('RLS liberou');
+    });
   });
 });

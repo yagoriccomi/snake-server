@@ -156,7 +156,9 @@ ou bloquearia o administrador de verdade.
 
 Por isso o servidor **pergunta ao banco**, com o token de quem pede, pela mesma
 função que a RLS usa: `rpc/is_admin` (contrato § 13.5, item 5.5). Só um `true`
-explícito libera; recusa, função ausente ou resposta estranha contam como "não". A
+explícito libera; `false` ou o token recusado (401/403) contam como "não". Se o banco
+falhar (função ausente, resposta estranha, fora do ar, tempo esgotado), a resposta é
+`502`, `503` ou `504`, conforme a falha, sem alarme e sem liberar nada (D20). A
 variável escolhe a postura:
 
 | `POLITICA_ACESSO_COMPROVANTE` | Comportamento |

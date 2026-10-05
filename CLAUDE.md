@@ -178,8 +178,9 @@ sem `vi.mock` e sem variável de ambiente de mentira. [#45]
   mas mora em outro sistema. `conferirLeitorLegitimo` compara o `user_id` devolvido pela
   consulta com o do token; se divergirem, pergunta ao banco, com o token de quem pede,
   pelas mesmas funções da RLS (`rpc/is_admin` no comprovante; `is_admin` e
-  `pode_decidir_justificativa` na justificativa). Sem um `true`, `403` e **alarme em
-  nível `error`**. `POLITICA_ACESSO_COMPROVANTE=somente-dono` nega sem perguntar. [#55]
+  `pode_decidir_justificativa` na justificativa). Com `false`, `403` e **alarme em
+  nível `error`**; se o banco falhar, `502`/`503`/`504` pela D20, sem alarme e sem
+  liberar. `POLITICA_ACESSO_COMPROVANTE=somente-dono` nega sem perguntar. [#55]
 - **Comprovante é PII financeira:** sempre `type=authenticated` (privado), visto
   só por URL assinada. Nunca em log. [#63]
 - Validação de todo input com Zod; filtros do PostgREST por `URLSearchParams`,

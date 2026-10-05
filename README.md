@@ -346,7 +346,10 @@ nos logs:
 | `404` | Rota inexistente |
 | `413` | Corpo da requisição acima do limite |
 | `429` | Requisições demais em pouco tempo |
+| `500` | Erro inesperado no servidor |
+| `502` | O banco respondeu de forma inesperada ao confirmar quem pode ver o arquivo |
 | `503` | Supabase ou Cloudinary indisponíveis |
+| `504` | O banco demorou demais para confirmar quem pode ver o arquivo |
 
 ## ☁️ Publicando na Render
 

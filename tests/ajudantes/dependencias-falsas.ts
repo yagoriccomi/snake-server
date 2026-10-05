@@ -1,4 +1,5 @@
 import type { DependenciasDaApi } from '../../src/composition-root.js';
+import { HttpError } from '../../src/lib/http-error.js';
 import type { ClienteSupabase, UsuarioAutenticado } from '../../src/lib/supabase.js';
 import type {
   JustificativaParaAssinar,
@@ -92,6 +93,7 @@ export function criarSupabaseFalso(espioes: Espioes): ClienteSupabase {
     // Os módulos recebem os seus leitores prontos (ver `criarDependenciasFalsas`);
     // nenhum chama RPC por este dublê.
     chamarRpcComoChamador: () => Promise.resolve(null),
+    confirmarPermissaoComoChamador: () => Promise.resolve(false),
 
     async consultarComoChamador<T>(
       _tabela: string,
@@ -136,8 +138,11 @@ export interface OpcoesDasDependencias {
   /** Segunda barreira de autorização. Padrão: `rls`, como em produção. */
   politicaDeAcesso?: PoliticaDeAcesso;
 
-  /** Resposta de `is_admin` (§ 13.5). Padrão: `false`. */
-  ehAdmin?: boolean;
+  /**
+   * Resposta de `is_admin` (§ 13.5). Padrão: `false`. Um `HttpError` simula
+   * a falha do Supabase (D20).
+   */
+  ehAdmin?: boolean | HttpError;
 }
 
 export function criarDependenciasFalsas(
@@ -149,6 +154,7 @@ export function criarDependenciasFalsas(
   const admin: ConferenciaDeAdmin = {
     ehAdmin(authorization) {
       espioes.perguntasDeAdmin.push(authorization);
+      if (opcoes.ehAdmin instanceof HttpError) return Promise.reject(opcoes.ehAdmin);
       return Promise.resolve(opcoes.ehAdmin ?? false);
     },
   };

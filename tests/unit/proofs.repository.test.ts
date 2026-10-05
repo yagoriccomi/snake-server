@@ -37,6 +37,9 @@ function criarClienteEspiao(resposta: unknown[] | (() => never)) {
     chamarRpcComoChamador<T>(): Promise<T | null> {
       throw new Error('O repositório de pagamentos não chama RPC.');
     },
+    confirmarPermissaoComoChamador(): Promise<boolean> {
+      throw new Error('O repositório de pagamentos não chama RPC.');
+    },
     consultarComoChamador<T>(
       tabela: string,
       filtros: Record<string, string>,

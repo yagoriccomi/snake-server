@@ -1,5 +1,9 @@
 import { TIMEOUT_REQUISICAO_EXTERNA_MS } from '../config/constants.js';
-import { dependenciaIndisponivel } from './http-error.js';
+import {
+  dependenciaIndisponivel,
+  respostaInvalidaDaDependencia,
+  tempoEsgotadoDaDependencia,
+} from './http-error.js';
 import { logger } from './logger.js';
 
 /**
@@ -50,6 +54,59 @@ export interface ClienteSupabase {
     argumentos: Record<string, unknown>,
     authorization: string,
   ): Promise<T | null>;
+
+  /**
+   * Pergunta a uma RPC de permissão se o chamador pode. `true` só quando o
+   * banco responde o booleano `true`; `false` quando responde `false` ou
+   * recusa o token (401/403). Qualquer outra coisa é falha do Supabase, e
+   * falha nunca vira "pode" nem "não pode": vira 502, 503 ou 504 (D20).
+   */
+  confirmarPermissaoComoChamador(
+    funcao: string,
+    argumentos: Record<string, unknown>,
+    authorization: string,
+  ): Promise<boolean>;
+}
+
+/** Recusa do token pelo PostgREST: a resposta é "não pode", não falha. */
+const STATUS_SEM_PERMISSAO: readonly number[] = [401, 403];
+
+/** O gateway do Supabase avisa que o banco está fora do ar. */
+const STATUS_FORA_DO_AR: readonly number[] = [502, 503];
+
+/** O gateway do Supabase desistiu de esperar o banco. */
+const STATUS_TEMPO_ESGOTADO = 504;
+
+/** Nome que o `AbortSignal.timeout` dá ao erro quando o prazo vence. */
+const NOME_DO_ERRO_DE_TIMEOUT = 'TimeoutError';
+
+const MENSAGEM_FORA_DO_AR = 'Não foi possível falar com o servidor de dados';
+const MENSAGEM_TEMPO_ESGOTADO = 'O servidor de dados demorou demais para responder';
+const MENSAGEM_RESPOSTA_INVALIDA = 'O servidor de dados respondeu de forma inesperada';
+
+function foraDoAr(options?: { cause?: unknown }) {
+  return dependenciaIndisponivel(MENSAGEM_FORA_DO_AR, 'supabase_unreachable', options);
+}
+
+function tempoEsgotado(options?: { cause?: unknown }) {
+  return tempoEsgotadoDaDependencia(MENSAGEM_TEMPO_ESGOTADO, 'supabase_timeout', options);
+}
+
+function respostaInvalida(options?: { cause?: unknown }) {
+  return respostaInvalidaDaDependencia(
+    MENSAGEM_RESPOSTA_INVALIDA,
+    'supabase_invalid_response',
+    options,
+  );
+}
+
+// `DOMException` nem sempre passa por `instanceof Error`; o nome basta.
+function ehTimeout(causa: unknown): boolean {
+  return (
+    typeof causa === 'object' &&
+    causa !== null &&
+    (causa as { name?: unknown }).name === NOME_DO_ERRO_DE_TIMEOUT
+  );
 }
 
 interface RespostaUsuarioSupabase {
@@ -69,9 +126,10 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
    * conexão do app até o cliente desistir — e nós nem ficamos sabendo.
    *
    * Sem `corpo`, é uma leitura (GET); com `corpo`, a chamada de uma RPC (POST
-   * com JSON).
+   * com JSON). Falha de rede ou timeout sobe crua: quem chama decide o que
+   * ela vira.
    */
-  async function chamar(url: string, authorization: string, corpo?: unknown): Promise<Response> {
+  function enviar(url: string, authorization: string, corpo?: unknown): Promise<Response> {
     const cabecalhos: Record<string, string> = {
       apikey: config.anonKey,
       Authorization: authorization,
@@ -81,19 +139,23 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
       corpo === undefined ? { method: 'GET' } : { method: 'POST', body: JSON.stringify(corpo) };
     if (corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
 
+    return fetch(url, {
+      ...requisicao,
+      headers: cabecalhos,
+      signal: AbortSignal.timeout(TIMEOUT_REQUISICAO_EXTERNA_MS),
+    });
+  }
+
+  /**
+   * As rotas fora da segunda barreira ainda tratam rede e timeout como um
+   * 503 só: a troca pelos códigos da D20 espera a v6 do contrato (C15).
+   */
+  async function chamar(url: string, authorization: string, corpo?: unknown): Promise<Response> {
     try {
-      return await fetch(url, {
-        ...requisicao,
-        headers: cabecalhos,
-        signal: AbortSignal.timeout(TIMEOUT_REQUISICAO_EXTERNA_MS),
-      });
+      return await enviar(url, authorization, corpo);
     } catch (causa) {
       logger.error('Falha de rede ao chamar o Supabase', { erro: causa });
-      throw dependenciaIndisponivel(
-        'Não foi possível falar com o servidor de dados',
-        'supabase_unreachable',
-        { cause: causa },
-      );
+      throw foraDoAr({ cause: causa });
     }
   }
 
@@ -181,6 +243,47 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
       }
 
       return (await resposta.json()) as T;
+    },
+
+    /**
+     * Mesmo transporte da RPC acima, mas sem o atalho "4xx vira `null`": numa
+     * barreira de permissão, função ausente ou formato estranho não podem se
+     * passar por "não pode" e disparar o alarme de acesso indevido. [#9][#93]
+     */
+    async confirmarPermissaoComoChamador(funcao, argumentos, authorization) {
+      let resposta: Response;
+      try {
+        resposta = await enviar(
+          montarUrl(`/rest/v1/rpc/${encodeURIComponent(funcao)}`),
+          authorization,
+          argumentos,
+        );
+      } catch (causa) {
+        logger.error('Falha ao chamar a RPC de permissão', { funcao, erro: causa });
+        throw ehTimeout(causa) ? tempoEsgotado({ cause: causa }) : foraDoAr({ cause: causa });
+      }
+
+      if (!resposta.ok) {
+        logger.warn('PostgREST recusou a RPC de permissão', { funcao, status: resposta.status });
+
+        if (STATUS_SEM_PERMISSAO.includes(resposta.status)) return false;
+        if (resposta.status === STATUS_TEMPO_ESGOTADO) throw tempoEsgotado();
+        if (STATUS_FORA_DO_AR.includes(resposta.status)) throw foraDoAr();
+        throw respostaInvalida();
+      }
+
+      let corpo: unknown;
+      try {
+        corpo = await resposta.json();
+      } catch (causa) {
+        throw respostaInvalida({ cause: causa });
+      }
+
+      if (typeof corpo !== 'boolean') {
+        logger.warn('RPC de permissão respondeu fora do formato', { funcao, tipo: typeof corpo });
+        throw respostaInvalida();
+      }
+      return corpo;
     },
   };
 }

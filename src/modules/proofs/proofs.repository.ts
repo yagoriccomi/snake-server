@@ -36,19 +36,14 @@ export function criarRepositorioDePagamentos(supabase: ClienteSupabase): LeitorD
  * `rpc/is_admin` com o token de quem pede (contrato § 13.5), corpo `{}`. O
  * servidor não ganha papel próprio: é o banco que diz quem é admin, pela
  * mesma função da RLS.
+ *
+ * Só o booleano `true` libera. Falha do Supabase (fora do ar, tempo esgotado,
+ * resposta estranha) sobe como 502/503/504 e nunca abre a barreira (D20).
  */
 export function criarConferenciaDeAdmin(supabase: ClienteSupabase): ConferenciaDeAdmin {
   return {
-    async ehAdmin(authorization) {
-      const resposta = await supabase.chamarRpcComoChamador<unknown>(
-        RPC_IS_ADMIN,
-        {},
-        authorization,
-      );
-
-      // Só o booleano `true` libera: a barreira nunca abre por recusa,
-      // função ausente ou resposta em formato estranho. [#9]
-      return resposta === true;
+    ehAdmin(authorization) {
+      return supabase.confirmarPermissaoComoChamador(RPC_IS_ADMIN, {}, authorization);
     },
   };
 }

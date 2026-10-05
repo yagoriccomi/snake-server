@@ -49,16 +49,14 @@ export function criarRepositorioDeJustificativas(
       );
     },
 
-    async podeDecidir(justificationId, authorization) {
-      const resposta = await supabase.chamarRpcComoChamador<unknown>(
+    // Só o booleano `true` libera; falha do Supabase sobe como 502/503/504,
+    // nunca como "pode" (D20).
+    podeDecidir(justificationId, authorization) {
+      return supabase.confirmarPermissaoComoChamador(
         RPC_PODE_DECIDIR_JUSTIFICATIVA,
         { p_id: justificationId },
         authorization,
       );
-
-      // Só o booleano `true` libera. Num banco antigo a função não existe, o
-      // PostgREST recusa (4xx) e a resposta é `null`: nega, nunca 5xx. [#9]
-      return resposta === true;
     },
   };
 }

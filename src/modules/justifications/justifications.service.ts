@@ -58,7 +58,10 @@ export interface LeitorDeJustificativas {
     justificationId: string,
     authorization: string,
   ): Promise<JustificativaParaAssinar | null>;
-  /** `pode_decidir_justificativa` com o token de quem pede: só `true` libera. */
+  /**
+   * `pode_decidir_justificativa` com o token de quem pede: só `true` libera.
+   * Falha do Supabase rejeita (502/503/504), como em `ehAdmin`.
+   */
   podeDecidir(justificationId: string, authorization: string): Promise<boolean>;
 }
 

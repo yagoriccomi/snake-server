@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { criarApp } from '../../src/app.js';
+import { HttpError } from '../../src/lib/http-error.js';
 import {
   AGORA_EM_SEGUNDOS,
   PAGAMENTO_DE_OUTRO,
@@ -391,6 +392,39 @@ describe('POST /v1/proofs/view-url — segunda barreira (contrato § 13.5)', () 
 
     expect(resposta.status).toBe(200);
     expect(espioesLocais.perguntasDeAdmin).toEqual([TOKEN_VALIDO]);
+  });
+});
+
+describe('POST /v1/proofs/view-url — o Supabase falhou na segunda barreira (D20)', () => {
+  /** RLS que libera o pagamento alheio e `is_admin` que não chega a responder. */
+  function appComFalhaNoIsAdmin(falha: HttpError) {
+    return criarApp(
+      criarDependenciasFalsas(criarEspioes(), {
+        ehAdmin: falha,
+        buscarPagamento: () =>
+          Promise.resolve({
+            user_id: '99999999-8888-4777-a666-555555555555',
+            proof_provider: 'cloudinary',
+            proof_public_id: 'comprovantes/qualquer',
+          }),
+      }),
+    );
+  }
+
+  it.each([
+    [502, 'supabase_invalid_response', 'O servidor de dados respondeu de forma inesperada'],
+    [503, 'supabase_unreachable', 'Não foi possível falar com o servidor de dados'],
+    [504, 'supabase_timeout', 'O servidor de dados demorou demais para responder'],
+  ])('deveResponder_%i_ComCodigoEMensagemPropriosSemUrl', async (status, code, mensagem) => {
+    const resposta = await request(appComFalhaNoIsAdmin(new HttpError(status, code, mensagem)))
+      .post('/v1/proofs/view-url')
+      .set('Authorization', TOKEN_VALIDO)
+      .send({ paymentId: PAGAMENTO_DE_OUTRO });
+
+    expect(resposta.status).toBe(status);
+    expect(resposta.body).toMatchObject({ code, error: mensagem });
+    expect(resposta.body.traceId).toEqual(expect.any(String));
+    expect(resposta.body.url).toBeUndefined();
   });
 });
 

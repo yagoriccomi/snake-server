@@ -212,6 +212,9 @@ houver, me diga como o papel é identificado e eu implemento a checagem de verda
 > outra pessoa, o servidor pergunta `rpc/is_admin` (comprovante) ou `is_admin` e
 > `pode_decidir_justificativa` (justificativa), com o token de quem pede. Sem um
 > `true`, `403` e alarme. Fica resolvida quando o PR for mesclado.
+>
+> **2026-10-05:** ajustada à D20. Falha do banco não é mais "não": vira `502`, `503`
+> ou `504`, sem alarme e sem liberar. O `403` e o alarme ficam só para o `false`.
 
 **Referência:** achado A-1 do [`../REVIEW.md`](../REVIEW.md), seção 4 de
 [`ARQUITETURA.md`](ARQUITETURA.md).

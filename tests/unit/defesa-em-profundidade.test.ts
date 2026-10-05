@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { HttpError } from '../../src/lib/http-error.js';
 import {
   criarProofsService,
   type AssinadorDeMidia,
@@ -231,6 +232,48 @@ describe('política `rls` — padrão: o admin passa, confirmado pelo banco (§ 
     await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR))).rejects.toThrow();
 
     expect(escritas.join('')).toContain('"politica":"rls"');
+  });
+});
+
+describe('política `rls` — o Supabase falhou ao responder `is_admin` (D20)', () => {
+  const pagamentoAlheio: RegistroDePagamento = {
+    user_id: DONO,
+    proof_provider: 'cloudinary',
+    proof_public_id: 'comprovantes/a/b',
+  };
+
+  const FALHAS = [
+    new HttpError(
+      502,
+      'supabase_invalid_response',
+      'O servidor de dados respondeu de forma inesperada',
+    ),
+    new HttpError(503, 'supabase_unreachable', 'Não foi possível falar com o servidor de dados'),
+    new HttpError(504, 'supabase_timeout', 'O servidor de dados demorou demais para responder'),
+  ];
+
+  function adminQueFalha(falha: HttpError): ConferenciaDeAdmin {
+    return { ehAdmin: () => Promise.reject(falha) };
+  }
+
+  it.each(FALHAS)('deveResponder_$status_EmVezDe403', async (falha) => {
+    capturarStderr();
+    const service = montar('rls', pagamentoAlheio, adminQueFalha(falha));
+
+    await expect(
+      service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR)),
+    ).rejects.toMatchObject({ status: falha.status, code: falha.code });
+  });
+
+  it.each(FALHAS)('naoDeveEmitirOAlarmeDeAcessoIndevido_$status', async (falha) => {
+    // Falha do Supabase não diz nada sobre a RLS: alarmar aqui seria acusar
+    // um acesso indevido que ninguém tentou.
+    const escritas = capturarStderr();
+    const service = montar('rls', pagamentoAlheio, adminQueFalha(falha));
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR))).rejects.toThrow();
+
+    expect(escritas.join('')).not.toContain('RLS liberou');
   });
 });
 

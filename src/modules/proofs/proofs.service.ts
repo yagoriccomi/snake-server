@@ -96,8 +96,9 @@ export interface LeitorDePagamentos {
 
 /**
  * Pergunta ao banco, com o token de quem pede, se ele é admin (contrato
- * § 13.5). Só um `true` explícito vale: recusa, função ausente ou resposta
- * estranha contam como "não". Compartilhada com a justificativa. [#20]
+ * § 13.5). `true` só quando o banco confirma; `false` quando nega ou recusa
+ * o token. Falha do Supabase rejeita a promessa (502/503/504): não é "não",
+ * e por isso não dispara o alarme (D20). Compartilhada com a justificativa. [#20]
  */
 export interface ConferenciaDeAdmin {
   ehAdmin(authorization: string): Promise<boolean>;

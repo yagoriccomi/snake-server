@@ -283,3 +283,137 @@ describe('chamarRpcComoChamador', () => {
     expect(urlChamada().pathname).not.toContain('/auth/v1');
   });
 });
+
+describe('confirmarPermissaoComoChamador — segunda barreira (D20)', () => {
+  const ARGUMENTOS = { p_id: '00000000-0000-4000-8000-000000000000' };
+
+  function confirmar() {
+    return cliente.confirmarPermissaoComoChamador(
+      'pode_decidir_justificativa',
+      ARGUMENTOS,
+      AUTORIZACAO,
+    );
+  }
+
+  it('deveChamarARpcPorPostComOsArgumentosEOTokenDoChamador', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa(true));
+
+    await confirmar();
+
+    const opcoes = fetchFalso.mock.calls[0]?.[1] as RequestInit;
+    expect(urlChamada().pathname).toBe('/rest/v1/rpc/pode_decidir_justificativa');
+    expect(opcoes.method).toBe('POST');
+    expect(JSON.parse(opcoes.body as string)).toEqual(ARGUMENTOS);
+    expect((opcoes.headers as Record<string, string>).Authorization).toBe(AUTORIZACAO);
+  });
+
+  it.each([true, false])('deveDevolverOBooleanoQueOBancoRespondeu_%s', async (valor) => {
+    fetchFalso.mockResolvedValue(respostaFalsa(valor));
+
+    await expect(confirmar()).resolves.toBe(valor);
+  });
+
+  it.each([401, 403])('deveNegarSemFalhaQuandoOPostgrestRecusaOToken_%i', async (status) => {
+    // Recusa do token é "não pode": é o único caso, além de `false`, que leva
+    // ao 403 e ao alarme.
+    fetchFalso.mockResolvedValue(respostaFalsa({ code: '42501' }, status));
+
+    await expect(confirmar()).resolves.toBe(false);
+  });
+
+  it.each(['true', 1, null, {}, [true]])(
+    'deveLancar502QuandoORetornoNaoEhBooleano_%j',
+    async (corpo) => {
+      fetchFalso.mockResolvedValue(respostaFalsa(corpo));
+
+      await expect(confirmar()).rejects.toMatchObject({
+        status: 502,
+        code: 'supabase_invalid_response',
+        message: 'O servidor de dados respondeu de forma inesperada',
+      });
+    },
+  );
+
+  it('deveLancar502QuandoOCorpoNaoEhJson', async () => {
+    fetchFalso.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError('Unexpected token')),
+    });
+
+    await expect(confirmar()).rejects.toMatchObject({
+      status: 502,
+      code: 'supabase_invalid_response',
+    });
+  });
+
+  it.each([
+    [404, 'a função ainda não existe (PGRST202)'],
+    [400, 'argumento recusado'],
+    [500, 'erro interno do banco'],
+  ])('deveLancar502QuandoOPostgrestResponde_%i_%s', async (status) => {
+    fetchFalso.mockResolvedValue(respostaFalsa({ code: 'qualquer' }, status));
+
+    await expect(confirmar()).rejects.toMatchObject({
+      status: 502,
+      code: 'supabase_invalid_response',
+    });
+  });
+
+  it.each([502, 503])('deveLancar503QuandoOGatewayAvisaQueOBancoCaiu_%i', async (status) => {
+    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'down' }, status));
+
+    await expect(confirmar()).rejects.toMatchObject({
+      status: 503,
+      code: 'supabase_unreachable',
+      message: 'Não foi possível falar com o servidor de dados',
+    });
+  });
+
+  it('deveLancar503QuandoARedeFalha', async () => {
+    fetchFalso.mockRejectedValue(new TypeError('fetch failed'));
+
+    await expect(confirmar()).rejects.toMatchObject({
+      status: 503,
+      code: 'supabase_unreachable',
+    });
+  });
+
+  it('deveLancar504QuandoOGatewayDesisteDeEsperarOBanco', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'timeout' }, 504));
+
+    await expect(confirmar()).rejects.toMatchObject({
+      status: 504,
+      code: 'supabase_timeout',
+      message: 'O servidor de dados demorou demais para responder',
+    });
+  });
+
+  it('deveLancar504QuandoOPrazoDaChamadaVence', async () => {
+    fetchFalso.mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
+
+    await expect(confirmar()).rejects.toMatchObject({
+      status: 504,
+      code: 'supabase_timeout',
+    });
+  });
+
+  it('naoDeveVazarODetalheDoUpstreamNaMensagemDoErro', async () => {
+    fetchFalso.mockRejectedValue(new TypeError('getaddrinfo ENOTFOUND projeto.supabase.co'));
+
+    const erro = await confirmar().catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(HttpError);
+    expect((erro as HttpError).message).not.toContain('ENOTFOUND');
+  });
+});
+
+describe('as outras rotas seguem no 503 até a v6 (C15)', () => {
+  it('deveManter503ParaOTimeoutNaConsultaComum', async () => {
+    fetchFalso.mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
+
+    await expect(
+      cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO),
+    ).rejects.toMatchObject({ status: 503, code: 'supabase_unreachable' });
+  });
+});

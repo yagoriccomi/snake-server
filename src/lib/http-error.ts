@@ -42,6 +42,24 @@ export const dependenciaIndisponivel = (
   options?: { cause?: unknown },
 ): HttpError => new HttpError(503, code, mensagem, options);
 
+/**
+ * A dependência respondeu, mas fora do combinado: erro interno dela, função
+ * ausente, formato que não é o esperado. É 502, não 503 — ela está no ar, e
+ * tentar de novo em seguida não deve resolver.
+ */
+export const respostaInvalidaDaDependencia = (
+  mensagem: string,
+  code: string,
+  options?: { cause?: unknown },
+): HttpError => new HttpError(502, code, mensagem, options);
+
+/** A dependência não respondeu dentro do tempo-limite. */
+export const tempoEsgotadoDaDependencia = (
+  mensagem: string,
+  code: string,
+  options?: { cause?: unknown },
+): HttpError => new HttpError(504, code, mensagem, options);
+
 export function ehHttpError(valor: unknown): valor is HttpError {
   return valor instanceof HttpError;
 }

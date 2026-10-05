@@ -30,6 +30,9 @@ function criarCliente(respostaDaRpc: unknown, linhas: unknown[] = []) {
     buscarUsuarioPeloToken(): Promise<UsuarioAutenticado | null> {
       throw new Error('O repositório de motivos não deve resolver identidade.');
     },
+    confirmarPermissaoComoChamador(): Promise<boolean> {
+      throw new Error('O repositório de motivos não passa pela segunda barreira.');
+    },
     consultarComoChamador<T>(
       tabela: string,
       filtros: Record<string, string>,

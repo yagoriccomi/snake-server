@@ -167,9 +167,11 @@ Autenticado (dono ou admin). Body `{ "paymentId": "<uuid>" }`.
    admin. Vazio → `403`.
 2. `conferirLeitorLegitimo` compara o `user_id` devolvido com o do token — segunda
    barreira (contrato § 13.5). Se a linha for de outra pessoa, pergunta ao banco
-   `rpc/is_admin` com o token do chamador; sem um `true`, responde `403` e **alarma**
-   em nível `error`. Com `POLITICA_ACESSO_COMPROVANTE=somente-dono`, nem pergunta:
-   `403` direto.
+   `rpc/is_admin` com o token do chamador; com `false` (ou o token recusado),
+   responde `403` e **alarma** em nível `error`. Se o banco falhar, responde `502`
+   (resposta inválida), `503` (fora do ar ou rede) ou `504` (tempo esgotado), sem
+   alarme e sem liberar (D20). Com `POLITICA_ACESSO_COMPROVANTE=somente-dono`, nem
+   pergunta: `403` direto.
 3. Se `proof_provider` **não for** `cloudinary`, responde `403`.
 4. Assina a URL de visualização.
 
@@ -343,7 +345,8 @@ Por isso a barreira não alarma por "não é o dono": para a linha de outra pess
 ela pergunta ao banco, com o token do chamador e pelas **mesmas funções da RLS**,
 se ele é leitor legítimo. Primeiro `rpc/is_admin` (corpo `{}`); se der `false`,
 `rpc/pode_decidir_justificativa` (corpo `{"p_id": "<justificationId>"}`). Só um
-`true` libera. Senão, `403` e alarme em nível `error`, sem PII. Depois da decisão,
+`true` libera. Com `false` nas duas, `403` e alarme em nível `error`, sem PII. Se o
+banco falhar, `502`, `503` ou `504`, como no comprovante, sem alarme. Depois da decisão,
 `pode_decidir_justificativa` devolve `false`, e só o dono e o admin leem, como na RLS.
 
 A outra barreira continua valendo: a **derivação do caminho**. Enquanto a

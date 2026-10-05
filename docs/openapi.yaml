@@ -157,7 +157,9 @@ paths:
 
         Quem pode ver é decidido pelas regras de acesso do banco (RLS), com o **seu**
         token: o dono do pagamento ou um administrador. Se o pagamento não for seu, o
-        servidor ainda confirma no banco (`is_admin`) que você é administrador. Se você
+        servidor ainda confirma no banco (`is_admin`) que você é administrador. Se o
+        banco falhar ao confirmar, a resposta é `502`, `503` ou `504`, conforme a falha,
+        e nada é liberado. Se você
         não tiver direito, a resposta é `403` — a mesma resposta que você receberia se o pagamento não
         existisse. A indistinção é proposital: separar os dois casos entregaria a um
         curioso uma forma de descobrir quais pagamentos existem.
@@ -260,8 +262,12 @@ paths:
           $ref: '#/components/responses/RequisicoesDemais'
         '500':
           $ref: '#/components/responses/ErroInterno'
+        '502':
+          $ref: '#/components/responses/RespostaInvalidaDoBanco'
         '503':
           $ref: '#/components/responses/ServicoIndisponivel'
+        '504':
+          $ref: '#/components/responses/BancoSemResposta'
 
   /v1/justifications/view-url:
     post:
@@ -273,7 +279,8 @@ paths:
         token: o dono, quem pode decidir a justificativa enquanto ela está pendente, e o
         administrador. Se a justificativa não for sua, o servidor ainda confirma no banco
         (`is_admin` e, se não for admin, `pode_decidir_justificativa`). Sem direito, sem
-        anexo ou com anexo fora da Cloudinary: `403`.
+        anexo ou com anexo fora da Cloudinary: `403`. Se o banco falhar ao confirmar:
+        `502`, `503` ou `504`, conforme a falha, e nada é liberado.
 
         O endereço é assinado sobre um dos caminhos **derivados** da justificativa
         (`justificativas/<user_id>/<id>`, `…/<id>-2` ou, na justificativa de aula,
@@ -309,8 +316,12 @@ paths:
           $ref: '#/components/responses/RequisicoesDemais'
         '500':
           $ref: '#/components/responses/ErroInterno'
+        '502':
+          $ref: '#/components/responses/RespostaInvalidaDoBanco'
         '503':
           $ref: '#/components/responses/ServicoIndisponivel'
+        '504':
+          $ref: '#/components/responses/BancoSemResposta'
 
   /v1/motivos/sign-upload:
     post:
@@ -648,6 +659,8 @@ components:
             - internal_error
             - supabase_unreachable
             - supabase_error
+            - supabase_invalid_response
+            - supabase_timeout
           examples: [forbidden]
         traceId:
           type: string
@@ -813,4 +826,36 @@ components:
               value:
                 error: Servidor de dados indisponível
                 code: supabase_error
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    RespostaInvalidaDoBanco:
+      description: |
+        Só nos `view-url` de comprovante e de justificativa, quando o servidor confirma
+        no banco quem pode ler a linha de outra pessoa: o Supabase respondeu, mas fora do
+        combinado (erro interno, função ausente ou retorno que não é `true`/`false`).
+        Nada é liberado. Tentar de novo em seguida não deve resolver.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            respostaInvalida:
+              value:
+                error: O servidor de dados respondeu de forma inesperada
+                code: supabase_invalid_response
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    BancoSemResposta:
+      description: |
+        Só nos `view-url` de comprovante e de justificativa, na mesma confirmação: o
+        Supabase não respondeu dentro do prazo. Nada é liberado. Vale tentar de novo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            tempoEsgotado:
+              value:
+                error: O servidor de dados demorou demais para responder
+                code: supabase_timeout
                 traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c

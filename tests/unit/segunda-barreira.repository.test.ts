@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { HttpError } from '../../src/lib/http-error.js';
 import type { ClienteSupabase, UsuarioAutenticado } from '../../src/lib/supabase.js';
 import { criarRepositorioDeJustificativas } from '../../src/modules/justifications/justifications.repository.js';
 import { criarConferenciaDeAdmin } from '../../src/modules/proofs/proofs.repository.js';
@@ -7,8 +8,10 @@ import { criarConferenciaDeAdmin } from '../../src/modules/proofs/proofs.reposit
 /**
  * As duas RPCs da segunda barreira (contrato § 13.5), pelos repositórios
  * REAIS sobre um cliente Supabase simulado. O que se prova: o nome e o corpo
- * de cada chamada, o token de quem pede e que só o booleano `true` libera —
- * a barreira nunca abre por recusa, função ausente ou formato estranho. [#45][#55]
+ * de cada chamada, o token de quem pede, que a resposta do banco passa
+ * intacta e que a falha do Supabase sobe em vez de virar "pode" ou "não
+ * pode". A classificação 502/503/504 é testada no cliente real
+ * (`supabase.test.ts`). [#45][#55]
  */
 
 const JUSTIFICATIVA = '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
@@ -20,7 +23,7 @@ interface ChamadaDeRpc {
   authorization: string;
 }
 
-function criarCliente(respostaDaRpc: unknown, falha?: Error) {
+function criarCliente(permitido: boolean, falha?: HttpError) {
   const rpcs: ChamadaDeRpc[] = [];
 
   const cliente: ClienteSupabase = {
@@ -30,23 +33,24 @@ function criarCliente(respostaDaRpc: unknown, falha?: Error) {
     consultarComoChamador<T>(): Promise<T[]> {
       throw new Error('A barreira não lê tabela.');
     },
-    chamarRpcComoChamador<T>(
-      funcao: string,
-      argumentos: Record<string, unknown>,
-      authorization: string,
-    ): Promise<T | null> {
+    chamarRpcComoChamador<T>(): Promise<T | null> {
+      throw new Error('A barreira não usa a RPC que transforma 4xx em nulo.');
+    },
+    confirmarPermissaoComoChamador(funcao, argumentos, authorization) {
       rpcs.push({ funcao, argumentos, authorization });
       if (falha) return Promise.reject(falha);
-      return Promise.resolve(respostaDaRpc as T | null);
+      return Promise.resolve(permitido);
     },
   };
 
   return { cliente, rpcs };
 }
 
-// `null` é o que o cliente devolve para um 4xx, inclusive a função que não
-// existe num banco antigo.
-const RESPOSTAS_QUE_NEGAM = [false, null, 'true', 1, {}, [true]];
+const FALHAS_DO_SUPABASE = [
+  new HttpError(502, 'supabase_invalid_response', 'resposta inválida'),
+  new HttpError(503, 'supabase_unreachable', 'fora do ar'),
+  new HttpError(504, 'supabase_timeout', 'tempo esgotado'),
+];
 
 describe('criarConferenciaDeAdmin', () => {
   it('deveChamarIsAdminComCorpoVazioEOTokenDeQuemPede', async () => {
@@ -57,26 +61,16 @@ describe('criarConferenciaDeAdmin', () => {
     expect(rpcs).toEqual([{ funcao: 'is_admin', argumentos: {}, authorization: AUTORIZACAO }]);
   });
 
-  it('deveConfirmarSoQuandoOBancoRespondeTrue', async () => {
-    const { cliente } = criarCliente(true);
+  it.each([true, false])('deveDevolverARespostaDoBanco_%s', async (permitido) => {
+    const { cliente } = criarCliente(permitido);
 
-    await expect(criarConferenciaDeAdmin(cliente).ehAdmin(AUTORIZACAO)).resolves.toBe(true);
+    await expect(criarConferenciaDeAdmin(cliente).ehAdmin(AUTORIZACAO)).resolves.toBe(permitido);
   });
 
-  it.each(RESPOSTAS_QUE_NEGAM)('deveNegarQuandoOBancoResponde_%j', async (resposta) => {
-    const { cliente } = criarCliente(resposta);
+  it.each(FALHAS_DO_SUPABASE)('devePropagarAFalha_$status_EmVezDeLiberarOuNegar', async (falha) => {
+    const { cliente } = criarCliente(true, falha);
 
-    await expect(criarConferenciaDeAdmin(cliente).ehAdmin(AUTORIZACAO)).resolves.toBe(false);
-  });
-
-  it('devePropagarAFalhaDoUpstreamEmVezDeLiberar', async () => {
-    // 5xx ou rede viram 503 no cliente: a barreira não abre, e a falha não se
-    // disfarça de "sem permissão".
-    const { cliente } = criarCliente(null, new Error('supabase_error'));
-
-    await expect(criarConferenciaDeAdmin(cliente).ehAdmin(AUTORIZACAO)).rejects.toThrow(
-      'supabase_error',
-    );
+    await expect(criarConferenciaDeAdmin(cliente).ehAdmin(AUTORIZACAO)).rejects.toBe(falha);
   });
 });
 
@@ -95,19 +89,19 @@ describe('criarRepositorioDeJustificativas — podeDecidir', () => {
     ]);
   });
 
-  it('deveConfirmarSoQuandoOBancoRespondeTrue', async () => {
-    const { cliente } = criarCliente(true);
+  it.each([true, false])('deveDevolverARespostaDoBanco_%s', async (permitido) => {
+    const { cliente } = criarCliente(permitido);
 
     await expect(
       criarRepositorioDeJustificativas(cliente).podeDecidir(JUSTIFICATIVA, AUTORIZACAO),
-    ).resolves.toBe(true);
+    ).resolves.toBe(permitido);
   });
 
-  it.each(RESPOSTAS_QUE_NEGAM)('deveNegarQuandoOBancoResponde_%j', async (resposta) => {
-    const { cliente } = criarCliente(resposta);
+  it.each(FALHAS_DO_SUPABASE)('devePropagarAFalha_$status_EmVezDeLiberarOuNegar', async (falha) => {
+    const { cliente } = criarCliente(true, falha);
 
     await expect(
       criarRepositorioDeJustificativas(cliente).podeDecidir(JUSTIFICATIVA, AUTORIZACAO),
-    ).resolves.toBe(false);
+    ).rejects.toBe(falha);
   });
 });
