@@ -1,6 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
-import { naoAutenticado } from '../lib/http-error.js';
+import { naoAutenticado, sessaoInvalida } from '../lib/http-error.js';
 import { logger } from '../lib/logger.js';
 import type { ClienteSupabase } from '../lib/supabase.js';
 
@@ -37,7 +37,7 @@ export function criarRequireUser(supabase: ClienteSupabase): RequestHandler {
 
     if (!usuario) {
       logger.warn('Token recusado pelo Supabase', { traceId: req.traceId });
-      next(naoAutenticado('Sessão inválida', 'bad_token'));
+      next(sessaoInvalida());
       return;
     }
 

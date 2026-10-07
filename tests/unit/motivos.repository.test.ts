@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { respostaInvalidaDaDependencia } from '../../src/lib/http-error.js';
 import type { ClienteSupabase, UsuarioAutenticado } from '../../src/lib/supabase.js';
 import { criarRepositorioDeMotivos } from '../../src/modules/motivos/motivos.repository.js';
 
 /**
  * O repositório REAL do módulo motivos, sobre um cliente Supabase simulado.
- * O que se prova aqui é a tradução do que o banco respondeu — em especial o
- * banco antigo, que ainda não tem `pode_anexar_ao_motivo`. [#45][#48]
+ * O que se prova aqui é a tradução do que o banco respondeu — e que a falha do
+ * Supabase sobe como falha, nunca como "não pode". [#45][#48]
  */
 
 const MOTIVO = '4c3d2e1f-0a9b-4c8d-9e7f-6a5b4c3d2e1f';
@@ -23,7 +24,8 @@ interface Registro {
   }[];
 }
 
-function criarCliente(respostaDaRpc: unknown, linhas: unknown[] = []) {
+/** `respostaDaRpc` é o booleano do banco, ou o erro que o cliente lançaria. */
+function criarCliente(respostaDaRpc: boolean | Error, linhas: unknown[] = []) {
   const registro: Registro = { rpcs: [], consultas: [] };
 
   const cliente: ClienteSupabase = {
@@ -39,13 +41,15 @@ function criarCliente(respostaDaRpc: unknown, linhas: unknown[] = []) {
       registro.consultas.push({ tabela, filtros, colunas, authorization });
       return Promise.resolve(linhas as T[]);
     },
-    chamarRpcComoChamador<T>(
+    confirmarPermissaoComoChamador(
       funcao: string,
       argumentos: Record<string, unknown>,
       authorization: string,
-    ): Promise<T | null> {
+    ): Promise<boolean> {
       registro.rpcs.push({ funcao, argumentos, authorization });
-      return Promise.resolve(respostaDaRpc as T | null);
+      return respostaDaRpc instanceof Error
+        ? Promise.reject(respostaDaRpc)
+        : Promise.resolve(respostaDaRpc);
     },
   };
 
@@ -73,27 +77,25 @@ describe('criarRepositorioDeMotivos — podeAnexar', () => {
     expect(await repositorio.podeAnexar(MOTIVO, AUTORIZACAO)).toBe(true);
   });
 
-  it('deveNegarQuandoOBancoAntigoAindaNaoTemAFuncao', async () => {
-    // O cliente devolve `null` para a recusa 4xx (PGRST202). O servidor vai
-    // ao ar antes das migrations (contrato § 14): isto é 403, não 5xx.
-    const { repositorio } = criarCliente(null);
+  it('deveNegarQuandoOBancoRespondeFalse', async () => {
+    const { repositorio } = criarCliente(false);
 
     expect(await repositorio.podeAnexar(MOTIVO, AUTORIZACAO)).toBe(false);
   });
 
-  it.each([[false], ['true'], [1], [[true]], [{ pode: true }]])(
-    'deveNegarQualquerRespostaQueNaoSejaOBooleanoTrue (%j)',
-    async (resposta) => {
-      const { repositorio } = criarCliente(resposta);
+  it('deveDeixarAFalhaDoSupabaseSubirEmVezDeNegar', async () => {
+    // Função ausente (banco antes do G3) ou resposta fora do formato: o
+    // cliente lança 502, e isso não pode virar o 403 de "não pode" (§ 13.6).
+    const falha = respostaInvalidaDaDependencia('falhou', 'supabase_invalid_response');
+    const { repositorio } = criarCliente(falha);
 
-      expect(await repositorio.podeAnexar(MOTIVO, AUTORIZACAO)).toBe(false);
-    },
-  );
+    await expect(repositorio.podeAnexar(MOTIVO, AUTORIZACAO)).rejects.toBe(falha);
+  });
 });
 
 describe('criarRepositorioDeMotivos — buscarAnexo', () => {
   it('deveConsultarATabelaEAsColunasDoContratoComOTokenDoChamador', async () => {
-    const { repositorio, registro } = criarCliente(null, []);
+    const { repositorio, registro } = criarCliente(false, []);
 
     await repositorio.buscarAnexo(ANEXO, AUTORIZACAO);
 
@@ -108,7 +110,7 @@ describe('criarRepositorioDeMotivos — buscarAnexo', () => {
   });
 
   it('deveDevolverNuloQuandoARlsNaoLiberaALinha', async () => {
-    const { repositorio } = criarCliente(null, []);
+    const { repositorio } = criarCliente(false, []);
 
     expect(await repositorio.buscarAnexo(ANEXO, AUTORIZACAO)).toBeNull();
   });

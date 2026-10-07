@@ -1,4 +1,4 @@
-import { semAcesso } from '../../lib/http-error.js';
+import { conflito, semAcesso } from '../../lib/http-error.js';
 import {
   FORMATOS_DE_ANEXO,
   PROVEDOR_CLOUDINARY,
@@ -23,6 +23,18 @@ import { PASTA_MOTIVOS } from './motivos.constants.js';
  * deriva o caminho. [#20]
  */
 
+/**
+ * A única recusa do `view-url` que conta algo da linha: chega depois da RLS,
+ * então só quem pode ler o anexo a vê (contrato § 13.6). O anexo de motivo
+ * sempre tem arquivo, por isso não há 404 aqui: provedor nulo é o mesmo
+ * "não está na Cloudinary".
+ */
+const anexoNoArmazenamentoAntigo = () =>
+  conflito(
+    'Este anexo está no armazenamento antigo e não abre por aqui',
+    'motivo_attachment_not_on_cloudinary',
+  );
+
 export interface RegistroDeAnexoDeMotivo {
   id: string;
   uploaded_by: string;
@@ -33,7 +45,7 @@ export interface RegistroDeAnexoDeMotivo {
 
 /** Contrato de acesso ao banco — a implementação real passa pelo token do chamador. */
 export interface RepositorioDeMotivos {
-  /** `true` só quando o banco responde `true`; recusa, erro 4xx ou banco antigo são `false`. */
+  /** O booleano do banco. Falha do Supabase sobe como 502, 503 ou 504, nunca como `false`. */
   podeAnexar(motivoId: string, authorization: string): Promise<boolean>;
   buscarAnexo(anexoId: string, authorization: string): Promise<RegistroDeAnexoDeMotivo | null>;
 }
@@ -95,7 +107,7 @@ export function criarMotivosService(deps: DependenciasDeMotivos) {
       }
 
       if (anexo.provider !== PROVEDOR_CLOUDINARY) {
-        throw semAcesso();
+        throw anexoNoArmazenamentoAntigo();
       }
 
       // Caminho DERIVADO de colunas que o autor não altera, nunca lido de

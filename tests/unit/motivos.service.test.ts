@@ -146,12 +146,14 @@ describe('motivos.service — obterUrlDeVisualizacao', () => {
   });
 
   it.each([['supabase_storage'], [null]])(
-    'deveNegarQuandoOProvedorNaoEhCloudinary (%s)',
+    'deveResponder409QuandoOProvedorNaoEhCloudinary (%s)',
     async (provider) => {
       const { service } = criarCenario({ anexo: anexoDe({ provider }) });
 
       await expect(service.obterUrlDeVisualizacao(ANEXO, CHAMADOR)).rejects.toMatchObject({
-        status: 403,
+        status: 409,
+        code: 'motivo_attachment_not_on_cloudinary',
+        message: 'Este anexo está no armazenamento antigo e não abre por aqui',
       });
     },
   );

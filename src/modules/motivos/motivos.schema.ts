@@ -1,4 +1,6 @@
-import { z } from 'zod';
+import type { z } from 'zod';
+
+import { corpoJson, paginaDoDocumento, uuidObrigatorio } from '../../lib/esquemas.js';
 
 /**
  * Validação de entrada do módulo. Nada vindo do cliente é usado antes de
@@ -8,26 +10,17 @@ import { z } from 'zod';
  * arquivo na Cloudinary e o filtro do PostgREST. Um valor arbitrário, em
  * qualquer um dos três, é uma porta aberta. [#51][#52]
  */
-export const corpoDeAssinaturaDeMotivo = z.object({
-  motivoId: z
-    .string({ required_error: 'motivoId é obrigatório' })
-    .trim()
-    .uuid('motivoId precisa ser um UUID válido'),
-  anexoId: z
-    .string({ required_error: 'anexoId é obrigatório' })
-    .trim()
-    .uuid('anexoId precisa ser um UUID válido'),
+export const corpoDeAssinaturaDeMotivo = corpoJson({
+  motivoId: uuidObrigatorio('motivoId'),
+  anexoId: uuidObrigatorio('anexoId'),
 });
 
 export type CorpoDeAssinaturaDeMotivo = z.infer<typeof corpoDeAssinaturaDeMotivo>;
 
 /** Visualização do anexo. Teto de 999 páginas, pelo mesmo motivo dos comprovantes. [#65] */
-export const corpoDeVisualizacaoDeMotivo = z.object({
-  anexoId: z
-    .string({ required_error: 'anexoId é obrigatório' })
-    .trim()
-    .uuid('anexoId precisa ser um UUID válido'),
-  pagina: z.coerce.number().int().min(1).max(999).optional(),
+export const corpoDeVisualizacaoDeMotivo = corpoJson({
+  anexoId: uuidObrigatorio('anexoId'),
+  pagina: paginaDoDocumento,
 });
 
 export type CorpoDeVisualizacaoDeMotivo = z.infer<typeof corpoDeVisualizacaoDeMotivo>;
