@@ -2,6 +2,7 @@ import { TIMEOUT_REQUISICAO_EXTERNA_MS } from '../config/constants.js';
 import {
   dependenciaIndisponivel,
   respostaInvalidaDaDependencia,
+  sessaoInvalida,
   tempoEsgotadoDaDependencia,
 } from './http-error.js';
 import { logger } from './logger.js';
@@ -56,10 +57,10 @@ export interface ClienteSupabase {
   ): Promise<T | null>;
 
   /**
-   * Pergunta a uma RPC de permissão se o chamador pode. `true` só quando o
-   * banco responde o booleano `true`; `false` quando responde `false` ou
-   * recusa o token (401/403). Qualquer outra coisa é falha do Supabase, e
-   * falha nunca vira "pode" nem "não pode": vira 502, 503 ou 504 (D20).
+   * Pergunta a uma RPC de permissão se o chamador pode. `true` ou `false` só
+   * quando o banco responde esse booleano. O token recusado pelo PostgREST
+   * (401) é 401 `bad_token`; qualquer outra coisa é falha do Supabase, e falha
+   * nunca vira "pode" nem "não pode": vira 502, 503 ou 504 (contrato § 13.5).
    */
   confirmarPermissaoComoChamador(
     funcao: string,
@@ -68,8 +69,11 @@ export interface ClienteSupabase {
   ): Promise<boolean>;
 }
 
-/** Recusa do token pelo PostgREST: a resposta é "não pode", não falha. */
-const STATUS_SEM_PERMISSAO: readonly number[] = [401, 403];
+/**
+ * O PostgREST recusou o token: a sessão venceu. Não é "não pode" (o 403 com
+ * alarme acusaria de acesso indevido quem só precisa entrar de novo).
+ */
+const STATUS_TOKEN_RECUSADO = 401;
 
 /** O gateway do Supabase avisa que o banco está fora do ar. */
 const STATUS_FORA_DO_AR: readonly number[] = [502, 503];
@@ -266,7 +270,7 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
       if (!resposta.ok) {
         logger.warn('PostgREST recusou a RPC de permissão', { funcao, status: resposta.status });
 
-        if (STATUS_SEM_PERMISSAO.includes(resposta.status)) return false;
+        if (resposta.status === STATUS_TOKEN_RECUSADO) throw sessaoInvalida();
         if (resposta.status === STATUS_TEMPO_ESGOTADO) throw tempoEsgotado();
         if (STATUS_FORA_DO_AR.includes(resposta.status)) throw foraDoAr();
         throw respostaInvalida();

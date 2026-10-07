@@ -25,6 +25,12 @@ export const naoAutenticado = (mensagem = 'Não autenticado', code = 'no_token')
   new HttpError(401, code, mensagem);
 
 /**
+ * O Auth ou o PostgREST recusou o token (contrato § 13.6): a sessão venceu ou
+ * nunca valeu. Um lugar só para os dois, para o cliente ler o mesmo `code`.
+ */
+export const sessaoInvalida = (): HttpError => naoAutenticado('Sessão inválida', 'bad_token');
+
+/**
  * Autenticado, mas sem direito ao recurso.
  * A mensagem é deliberadamente vaga: distinguir "não existe" de "não é seu"
  * entrega ao atacante um oráculo de enumeração. [#55]

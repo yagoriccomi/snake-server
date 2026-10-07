@@ -313,12 +313,16 @@ describe('confirmarPermissaoComoChamador — segunda barreira (D20)', () => {
     await expect(confirmar()).resolves.toBe(valor);
   });
 
-  it.each([401, 403])('deveNegarSemFalhaQuandoOPostgrestRecusaOToken_%i', async (status) => {
-    // Recusa do token é "não pode": é o único caso, além de `false`, que leva
-    // ao 403 e ao alarme.
-    fetchFalso.mockResolvedValue(respostaFalsa({ code: '42501' }, status));
+  it('deveLancar401BadTokenQuandoOPostgrestRecusaOToken', async () => {
+    // Sessão vencida não é "não pode": só o `false` leva ao 403 e ao alarme
+    // (contrato § 13.5, errata da v6).
+    fetchFalso.mockResolvedValue(respostaFalsa({ code: 'PGRST301' }, 401));
 
-    await expect(confirmar()).resolves.toBe(false);
+    await expect(confirmar()).rejects.toMatchObject({
+      status: 401,
+      code: 'bad_token',
+      message: 'Sessão inválida',
+    });
   });
 
   it.each(['true', 1, null, {}, [true]])(
@@ -349,6 +353,7 @@ describe('confirmarPermissaoComoChamador — segunda barreira (D20)', () => {
 
   it.each([
     [404, 'a função ainda não existe (PGRST202)'],
+    [403, 'falta o grant de execute (42501)'],
     [400, 'argumento recusado'],
     [500, 'erro interno do banco'],
   ])('deveLancar502QuandoOPostgrestResponde_%i_%s', async (status) => {
