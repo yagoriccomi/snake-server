@@ -351,8 +351,9 @@ nos logs:
 3. Em **Environment**, cadastre as variáveis da tabela acima. Marque
    `CLOUDINARY_API_SECRET` como *secret*.
 4. Confirme o **Health Check Path** como `/health`.
-5. Em **Settings → Build & Deploy**, deixe o **Auto-Deploy** em **After CI Checks Pass**
-   (ver [Como publica](#como-publica)). Faça o mesmo no Cron Job `snakethai-media-cleanup`.
+5. Em **Settings → Build & Deploy**, deixe o **Auto-Deploy** em **On Commit**
+   (ver [Como publica](#como-publica)). Quando o Cron Job `snakethai-media-cleanup` for
+   criado, faça o mesmo nele.
 6. Publique e copie o endereço gerado (`https://….onrender.com`) para a variável
    `EXPO_PUBLIC_API_URL` do aplicativo.
 
@@ -377,16 +378,15 @@ Toda alteração passa por uma esteira automática antes de chegar ao ar
 
 ### Como publica
 
-Quem publica é a **própria Render**, e só depois da esteira: o `render.yaml` declara
-`autoDeployTrigger: checksPass` no serviço web e no Cron Job de limpeza. A cada commit
-na `main`, a Render espera **todas** as verificações acima passarem; se uma falhar,
-aquele commit não vai ao ar. Um caminho só até produção, e ele passa pela esteira.
-No serviço web, a Render ainda só troca de versão quando o `/health` da nova responde;
-se não responder, a anterior continua no ar.
+Quem publica é a **própria Render**, a cada commit na `main`, sem esperar a esteira
+(no painel, **Auto-Deploy: On Commit**). A proteção está antes: a `main` só muda por
+merge de PR, e um PR só é mesclado com **todas** as verificações acima verdes. Por
+isso, nunca envie commit direto para a `main`. No serviço web, a Render ainda só troca
+de versão quando o `/health` da nova responde; se não responder, a anterior continua
+no ar.
 
-No painel, isso aparece como **Auto-Deploy: After CI Checks Pass**, nos dois serviços.
-Se os serviços não foram criados pelo Blueprint, o `render.yaml` não chega a eles:
-confira a opção no painel de cada um.
+Os serviços não foram criados pelo Blueprint, então o `render.yaml` não chega ao
+painel: ele documenta a configuração, e o que vale é a opção de cada serviço no painel.
 
 **Para reverter uma publicação:** painel da Render → o serviço → aba *Deploys* →
 botão *Rollback* na versão anterior.

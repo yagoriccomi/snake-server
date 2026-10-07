@@ -87,9 +87,10 @@ algum momento você quiser fechar o código, saiba que isso só vale daí para f
 ### ~~P-4. Cadastrar os segredos e variáveis no GitHub~~ — sem efeito (28/09)
 
 > **2026-09-28:** o dono escolheu a **opção B** da Fase 1 do `ROADMAP-server.md`: quem
-> publica é a Render, com `autoDeployTrigger: checksPass` (só depois de todos os checks
-> do GitHub passarem). O job "Publicar na Render" saiu do `ci.yml`, e o secret e a
-> variável abaixo não são mais usados. O texto fica como histórico.
+> publica é a Render, pelo Auto-Deploy do painel (desde 07/10, *On Commit* por decisão
+> do dono, D33: a proteção é mesclar só com o CI todo verde). O job "Publicar na Render"
+> saiu do `ci.yml`, e o secret e a variável abaixo não são mais usados. O texto fica
+> como histórico.
 >
 > **2026-09-25:** continua aberta. É a opção A da Fase 1 do `ROADMAP-server.md`
 > ("quem publica em produção"), que o dono decidiu escolher depois. Até lá, todo merge
@@ -117,7 +118,7 @@ não publicar silenciosamente sem gate.
 ### ~~P-5. Criar o ambiente `producao` no GitHub~~ — sem efeito (28/09)
 
 > **2026-09-28:** sem efeito junto com a P-4 (opção B): o job de deploy que usava o
-> ambiente saiu do `ci.yml`. A aprovação humana é o merge na `main`.
+> ambiente saiu do `ci.yml`. A aprovação humana é o merge na `main`, só com o CI verde.
 >
 > **2026-09-25:** continua aberta, junto com a P-4 (Fase 1 do roadmap).
 
@@ -277,6 +278,11 @@ apagado não lança erro. **217 testes** cobrindo a lógica do worker.
 
 ⚠️ **Custo:** Cron Jobs na Render não têm plano gratuito. O `render.yaml` já usa o
 mais barato (`starter`) — confirme o valor no painel antes do primeiro deploy.
+
+⚠️ **(07/10) O Cron Job não existe no painel**, então nenhum arquivo foi apagado de fato
+até hoje: a fila acumula. Decisão do dono (D34): criá-lo **antes de o app ter alunos de
+verdade**, junto com a troca da `service_role` (itens 5.1 e 5.2 do `ROADMAP-server.md`).
+Os dados de hoje são fictícios.
 
 **O que ainda falta, e é decisão sua, não técnica:**
 
@@ -499,7 +505,7 @@ também **≠ garantido**:
 | --- | --- | --- |
 | Esteira de CI | ✅ Roda no GitHub em todo PR e merge desde setembro | — |
 | CodeQL | ✅ Roda no GitHub | — |
-| Publicação pela Render | `autoDeployTrigger: checksPass` no `render.yaml` (opção B, 28/09) | Conferir no painel que os dois serviços estão em *After CI Checks Pass* (itens 1.2 e 1.3 do roadmap) |
+| Publicação pela Render | ✅ Auto-Deploy *On Commit* no `snakethai-api`, conferido pelo dono no painel em 07/10 (D33); o `render.yaml` não chega ao painel (sem Blueprint) | O Cron Job `snakethai-media-cleanup` não existe (item 5.2, D34) |
 | Build no runner | ✅ Job "Imagem Docker" constrói e sobe a imagem no GitHub | — |
 | Rotas `/v1` de ponta a ponta | O app usa comprovantes e justificativas em produção | O envio **pela web** (web → servidor → Cloudinary) nunca rodou: item 2.3 do roadmap |
 
@@ -510,7 +516,7 @@ também **≠ garantido**:
 A ordem agora vive no [`ROADMAP-server.md`](../ROADMAP-server.md). Das pendências deste
 documento, as que ainda dependem do dono:
 
-1. **P-4** e **P-5** — a Fase 1 (quem publica em produção).
+1. ~~**P-4** e **P-5**~~ — sem efeito desde 28/09 (opção B); o painel foi conferido em 07/10 (D33).
 2. ~~**P-2**~~ — riscada em 01/10: a chave nunca circulou (D16, item 5.4).
 3. **P-11** — prazo decidido (90 dias, D14, item 5.3); falta o dono preencher os Dados dos termos (G5).
 4. **P-9** — vira código no item 5.5.

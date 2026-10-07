@@ -6,10 +6,11 @@
 #  teste. Aqui está a barreira: código que não passa não é
 #  publicado. [#49][#76]
 #
-#  Quem publica é a própria Render, com `autoDeployTrigger: checksPass`
-#  (render.yaml): ela espera TODOS os checks deste commit na `main`
-#  passarem. Por isso não há job de deploy aqui — um job que falhasse
-#  (como o antigo, sem o secret do deploy hook) travaria toda publicação.
+#  Quem publica é a própria Render, a cada commit na `main` (Auto-Deploy
+#  "On Commit", D33). Ela não espera esta esteira: a barreira é a regra
+#  de só mesclar um PR com TODOS os checks dele verdes. Por isso não há
+#  job de deploy aqui — o antigo falhava em todo push na `main` (faltava
+#  o secret do deploy hook) e deixava o CI vermelho sem publicar nada.
 # =============================================================
 
 name: CI

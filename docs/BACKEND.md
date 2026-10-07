@@ -452,9 +452,10 @@ comprovantes existentes — está em
 [`DEPLOY.md`](DEPLOY.md), na ordem de execução.
 
 Em resumo: `render.yaml` com `runtime: docker` (a Render constrói a **mesma**
-imagem que roda local), health check em `/health` e **`autoDeployTrigger: checksPass`**
-no serviço web e no Cron Job: a Render publica cada commit da `main`, mas só depois de
-todos os checks da esteira passarem. Um caminho só até produção, e ele passa pelos gates.
+imagem que roda local), health check em `/health` e **`autoDeployTrigger: commit`**
+(no painel, *On Commit*, D33): a Render publica cada commit da `main` assim que ele
+chega. A barreira é mesclar na `main` só com todos os checks da esteira verdes. Os
+serviços não foram criados pelo Blueprint: o `render.yaml` documenta, e o painel manda.
 
 ## 11. Lado do app
 

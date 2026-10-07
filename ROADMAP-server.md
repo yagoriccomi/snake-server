@@ -1,7 +1,8 @@
 # Roadmap — snake-server (API na Render)
 
 > **Atualizado em:** 2026-10-07, com as decisões do dono de 29/09 a 07/10 (D6, D7, D14, D16,
-> D19, D20, D24, D25, D27, C10, C12, C15 e C19 em `handoffs/COORDENACAO.md`) e o contrato v6.
+> D19, D20, D24, D25, D27, D29, D31, D33, D34, C10, C12, C15 e C19 em `handoffs/COORDENACAO.md`)
+> e o contrato v6.
 > **Complementa** o [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md): aquele registra **por que**
 > algo ficou pendente; este diz **em que ordem** resolver.
 > **Repositórios irmãos:** [`snake-thai/ROADMAP-thai.md`](../snake-thai/ROADMAP-thai.md) (app e banco,
@@ -21,11 +22,11 @@
 
 | | |
 | --- | --- |
-| **Em produção** | `snakethai-api` na Render (plano free), em `https://snake-server-3j25.onrender.com`: `/health`, `/v1/proofs/*`, `/v1/justifications/*` e `/v1/motivos/*`. Último merge na `main`: **PR #29** (`6c2e17e`, 29/09, a Fase 4). **Conferido sem token em 29/09: o #29 já está no ar** (`/v1/motivos/sign-upload` → 401, e `{justificationId}` → 401, onde o servidor antigo daria 404 e 400), embora o CI do merge tenha falhado no job de deploy: a Render publica **por commit**, sem esperar os checks |
-| **Worker** | Cron Job `snakethai-media-cleanup` (LGPD), declarado no `render.yaml`. **Não se sabe se existe no painel** |
+| **Em produção** | `snakethai-api` na Render (plano free), em `https://snake-server-3j25.onrender.com`: `/health`, `/v1/proofs/*`, `/v1/justifications/*` e `/v1/motivos/*`. Último merge na `main`: **PR #41** (`8e654ec`, 07/10, o CVE do `proxy-addr`). **Conferido pelo dono no painel em 07/10:** o `8e654ec` está no ar (último deploy às 15:24, sucesso), e o Auto-Deploy está em **On Commit**, que fica (D33): a Render publica cada commit da `main` sem esperar os checks, e a barreira é só mesclar com o CI todo verde. O `render.yaml` não chega ao painel (sem Blueprint) |
+| **Worker** | Cron Job `snakethai-media-cleanup` (LGPD), declarado no `render.yaml`. **Não existe no painel** (conferido pelo dono em 07/10): nenhum arquivo é apagado de fato até ele ser criado, antes de ter alunos de verdade, junto com o 5.1 (D34) |
 | **Clientes** | O app Android (sem `Origin`) e, desde 23/09, o **`snake-web`**, o **primeiro cliente de navegador**. `ALLOWED_ORIGIN` conferido pelo dono em 24/09 |
 | **Cópia local** | Na branch `chore/ambiente-dev-local`, já mesclada (PR #16). A `main` local está atrás da remota, que já tem o PR #22 |
-| **PRs abertos** | **Fase 1 (opção B)**: tira o job de deploy do `ci.yml` e põe `autoDeployTrigger: checksPass` no `render.yaml` (itens 1.2 e 1.3). **#36** (log do D7) e **#37** (5.5, ajustado à D20). Do Dependabot: #23, #25, #35 e #38 (o #35, `node` 22.23-alpine, substituiu o #32; o #38 substituiu o #33 em 05/10), **abertos por decisão do dono (D1, C12): sem merge e sem fechar**. **Merges autorizados para quando o dono disser que fez o painel (D19, D24, D27):** o #34, depois o PR da D27 (`attempt` desligado até o G4), "G2 aberto" e o #36. O **#37 espera o G4** (D24). O PR da D20 nas outras rotas pede confirmação (C15) |
+| **PRs abertos** | **#34** (Fase 1, opção B, com o gatilho *On Commit* da D33): tira do `ci.yml` o job de deploy, que falha desde 26/09, e documenta o painel no `render.yaml` (itens 1.2 e 1.3). **#39** (D27), **#36** (log do D7), **#40** (D20 nas outras rotas) e **#37** (5.5, ajustado à D20). **O dono fez o painel em 07/10:** a ordem é #34 → #39 → "G2 aberto" → #36 → #40 (D31), sem pedir de novo; depois do #40, a `main` vai ao #37, que espera o G4 (D24). Do Dependabot: #23, #25, #35 e #38 (o #35, `node` 22.23-alpine, substituiu o #32; o #38 substituiu o #33 em 05/10), **abertos por decisão do dono (D1, C12): sem merge e sem fechar**. **Merges autorizados para quando o dono disser que fez o painel (D19, D24, D27):** o #34, depois o PR da D27 (`attempt` desligado até o G4), "G2 aberto" e o #36. O **#37 espera o G4** (D24). O PR da D20 nas outras rotas pede confirmação (C15) |
 | **Contrato** | `snake-thai/docs/CONTRATO.md` **v6** na `origin/main` do `snake-thai` (#88, `48d8b20`, 06/10; ler sempre por `git show origin/main:docs/CONTRATO.md`, regra C2). A v4 trouxe a § 13.5 (5.5); a v5 deixou `pode_decidir_justificativa` mais restrita, com a mesma assinatura; a v6 traz a § 13.6 (política de erros e códigos de cada rota, D20), a errata da § 13.5 e a § 15 dos clientes. O **G0** abriu em 25/09; o **G2** é deste servidor (Fase 4) |
 | **Fundação** | Git, GitHub, Husky, commitlint, lint, typecheck e testes no pre-commit. Jira **recusado** em 2026-08-21, e não se pergunta de novo |
 
@@ -35,7 +36,9 @@
    (`SUPABASE_ANON_KEY: Required`): a menos que o painel tenha essa variável a mais, **nunca
    apagou nada**. Correção no **PR #31**, **mesclado em 25/09** (`5a72cc4`). Ver o item 5.2.
 
-1. **O CI da `main` está vermelho em todo merge desde 14/09**, inclusive no do PR #22 (25/09). O
+1. **(07/10) Resolvido pelo #34 e pelo painel (D33).** O job "Publicar na Render" sai do
+   `ci.yml`, e quem publica é o Auto-Deploy *On Commit*, conferido pelo dono. Histórico:
+   **o CI da `main` está vermelho em todo merge desde 14/09**, inclusive no do PR #22 (25/09). O
    job "Publicar na Render" falha com `Secret RENDER_DEPLOY_HOOK_URL não configurado` (conferido
    nos PRs #14, #15 e #16). Os deploys anteriores saíram **por outro caminho**, provavelmente o
    Auto-Deploy do painel, **mas ninguém conferiu se ele está ligado**: por isso não se sabe se o
@@ -76,6 +79,10 @@ só cresce por módulo quando houver um requisito que exija segredo ou terceiro.
 
 ## Fase 1 — ⚠️ Um caminho só até produção (decisão sua)
 
+> **(07/10) Painel conferido pelo dono, D33:** o `snakethai-api` publica por **On Commit** e
+> assim fica; os serviços não vieram do Blueprint, então o `render.yaml` não chega ao painel;
+> o Cron Job não existe (D34, item 5.2). O texto abaixo é o histórico da escolha.
+
 Hoje o job "Publicar na Render" do `ci.yml` falha em **todo** push na `main`, porque o secret
 `RENDER_DEPLOY_HOOK_URL` não existe no GitHub, e o deploy sai mesmo assim por outro caminho.
 **Não se sabe se o Auto-Deploy do painel está ligado:** o `render.yaml` declara
@@ -92,14 +99,22 @@ As duas saídas possíveis:
 | Opção | O que fazer | Consequência |
 | --- | --- | --- |
 | **A — o gate publica** (recomendada) | 👤 Cadastrar o secret `RENDER_DEPLOY_HOOK_URL` e a variável `RENDER_SERVICE_URL` no GitHub. Criar o Environment `producao` com revisor obrigatório. **Desligar o Auto-Deploy no painel da Render** | Só publica o que passou por lint, tipos, testes, CodeQL, auditoria e imagem. O CI volta a ficar verde |
-| **B — o painel publica** (escolhida em 28/09) | Apagar o job `deploy` do `ci.yml` e assumir o Auto-Deploy, com o gatilho *After CI Checks Pass* (`autoDeployTrigger: checksPass`) | Com esse gatilho, só publica o commit cujos checks passaram, e o worker é publicado do mesmo jeito. Sem ele (*On Commit*), publicaria com ou sem teste verde |
+| **B — o painel publica** (escolhida em 28/09) | Apagar o job `deploy` do `ci.yml` e assumir o Auto-Deploy, com o gatilho *After CI Checks Pass* (`autoDeployTrigger: checksPass`) | Com esse gatilho, só publica o commit cujos checks passaram, e o worker é publicado do mesmo jeito. Sem ele (*On Commit*), publicaria com ou sem teste verde. **07/10 (D33):** o dono manteve *On Commit*; a proteção é mesclar só com o CI todo verde |
 
 - [x] **1.1** 👤 Escolher A ou B. **28/09: opção B, o painel publica** (D3 em
   `handoffs/COORDENACAO.md`), com o gatilho `checksPass` (regra C4): a Render publica cada
   commit da `main`, mas só depois de **todos** os checks do GitHub passarem (a documentação
   conta como aprovado `success`, `neutral` e `skipped`). Por isso o job de deploy **tem de**
   sair do `ci.yml`: vermelho, travaria toda publicação. P-4 e P-5 ficam sem efeito.
-- [ ] **1.2** 👤 **(29/09) No `snakethai-api`, o Auto-Deploy está ligado por commit**: o #29
+  **07/10 (D33):** o gatilho fica *On Commit* (`autoDeployTrigger: commit`), por decisão do
+  dono. O job sai do `ci.yml` do mesmo jeito, porque falha desde 26/09 sem publicar nada.
+- [x] **1.2** 👤 **Respondido pelo dono no painel em 07/10:** (1) o Auto-Deploy do
+  `snakethai-api` está em **On Commit**; (2) os serviços **não** vieram do Blueprint, então o
+  `render.yaml` não chega ao painel; (3) o commit no ar é o `8e654ec` (merge do #41); (4) o
+  Cron Job `snakethai-media-cleanup` **não existe**; (5) o último deploy da API foi em 07/10,
+  às 15:24, com sucesso; (6) o dono **não** quer *After CI Checks Pass*: fica *On Commit*
+  (D33). O `9e95b39` do lote de 25/09 é anterior ao `8e654ec`, então já está no ar.
+  Texto de 29/09: **no `snakethai-api`, o Auto-Deploy está ligado por commit**: o #29
   foi ao ar com o CI vermelho (ver "Onde estamos"). Como o `render.yaml` diz `autoDeploy: false`,
   o serviço provavelmente **não é gerido pelo Blueprint**, e a opção precisa ser trocada à mão
   para *After CI Checks Pass*, no serviço web e no Cron Job. Texto original: painel da Render,
@@ -108,9 +123,11 @@ As duas saídas possíveis:
   ar** (lista de deploys). Se o `9e95b39` (merge do PR #22) não aparecer no `snakethai-api`,
   **o lote de 25/09 não foi publicado**: publique pelo caminho escolhido no 1.1 (⚠️) antes do
   item 3.7.
-- [ ] **1.3** 🤖 No merge do PR da opção B, confirmar que o CI da `main` ficou verde
-  **inteiro** (já sem o job "Publicar na Render") e que a Render publicou aquele commit só
-  **depois** dos checks, nos dois serviços (a lista de deploys do painel mostra o commit).
+- [x] **1.3** 🤖 **Redefinido pela D33 (07/10):** no merge do #34, o CI da `main` fica verde
+  **inteiro** (já sem o job "Publicar na Render") e a Render publica aquele commit por *On
+  Commit*, só no serviço web, porque o Cron Job não existe. A prova do merge (CI da `main`,
+  `/health` e as conferências do § 14) fica no Registro. Texto original: confirmar que a
+  Render publicou o commit só **depois** dos checks, nos dois serviços.
 
 > A Fase 3 acabou saindo antes desta (PR #22, 25/09). O primeiro merge depois da escolha é que
 > prova o caminho novo.
@@ -285,7 +302,8 @@ do que **já está** em produção, vêm **primeiro**, antes do resto da Fase 4.
   29/09** (`6c2e17e`, autorizado no D1).
 - [ ] **4.7** — **O #29 está no ar** (conferência sem token de 29/09, no Registro). Falta, para
   escrever "G2 aberto": o dono confirmar no painel que o **Cron Job** roda um commit com o 4.1 e
-  o 4.8 (item 1.2) e as conferências do § 14 registradas depois disso. Desde o merge, o
+  o 4.8 (item 1.2) e as conferências do § 14 registradas depois disso. **07/10 (D34):** o Cron
+  Job não existe, e o G2 abre **sem ele**, num PR de docs próprio depois do merge do #39. Desde o merge, o
   `view-url` de justificativas responde 403 até as migrations do `snake-thai` (aviso abaixo).
 
 **4.1 — Worker valida o caminho antes de apagar.** ✅ PR #28, mesclado em 25/09 (`7a73c83`).
@@ -458,7 +476,7 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | # | Item | Quem | Observação |
 | --- | --- | --- | --- |
 | 5.1 | ⚠️ **Nova `service_role` no Cron Job de limpeza** | 👤 | **Decisão do dono: girar só quando o app for usado de verdade** (os dados de hoje são fictícios). Na hora: girar a chave no Supabase (item 3.1 do roadmap do app) e trocar em Render → `snakethai-media-cleanup` → `SUPABASE_SERVICE_ROLE_KEY`. **O serviço web nunca recebe essa chave**; o servidor se recusa a tratá-la como atalho |
-| 5.2 | **O Cron Job existe e roda?** | 👤 | **(25/09) Com só as variáveis do `render.yaml`, ele morria ao iniciar (`SUPABASE_ANON_KEY: Required`); correção no PR #31, mesclado em 25/09. No painel, veja se o último "Run" falhou com essa mensagem.** Pendência da T7. Sem ele, **nenhum arquivo é apagado de fato**: nem de conta excluída, nem de comprovante recusado, nem (v3) o anexo que passou dos 180 dias (D54), que sai do banco e fica na Cloudinary. É plano pago (`starter`); confirme o custo. Prova: o último "Run" no painel e as linhas da `media_deletion_queue` marcadas como processadas |
+| 5.2 | ✅ **Respondido em 07/10: o Cron Job não existe** (conferido pelo dono no painel). **D34:** nenhum arquivo é apagado de fato até o dono criá-lo, **antes de ter alunos de verdade, junto com o 5.1**; ao criar, Auto-Deploy *On Commit* (D33) e as variáveis do `render.yaml`. Os dados de hoje são fictícios. **O Cron Job existe e roda?** | 👤 | **(25/09) Com só as variáveis do `render.yaml`, ele morria ao iniciar (`SUPABASE_ANON_KEY: Required`); correção no PR #31, mesclado em 25/09. No painel, veja se o último "Run" falhou com essa mensagem.** Pendência da T7. Sem ele, **nenhum arquivo é apagado de fato**: nem de conta excluída, nem de comprovante recusado, nem (v3) o anexo que passou dos 180 dias (D54), que sai do banco e fica na Cloudinary. É plano pago (`starter`); confirme o custo. Prova: o último "Run" no painel e as linhas da `media_deletion_queue` marcadas como processadas |
 | 5.3 | ✅ **Decidido em 01/10: 90 dias (D14).** **Prazo de guarda do comprovante** | 👤 | O valor vive no banco (`academy_settings.proof_retention_days`) e entra pelo `{{prazo_comprovantes}}` dos Dados dos termos, quando o dono os preencher (G5, item 3.6 do app); este worker só apaga o que a varredura enfileira (`retencao_expirada`). Nada muda no código daqui. O registro do pagamento continua por 5 anos mais o exercício. Os anexos de motivo e de justificativa já têm prazo (180 dias, `attachment_retention_days`) |
 | 5.4 | ~~**P-2 — girar a `CLOUDINARY_API_SECRET`** se ela algum dia circulou no app ou no chat~~ | 👤 | ✅ **Riscado em 01/10 (D16):** o dono confirmou que a chave nunca circulou |
 | 5.5 | **Em PR: #37** (02/10), destravado por inteiro na C10, pela § 13.5 do contrato (v4). **P-9 — segunda barreira de verdade** | 🤖 `executar-projeto` | Só quando a linha não é de quem chama: `rpc/is_admin` no comprovante; `rpc/is_admin` e, se der `false`, `rpc/pode_decidir_justificativa` na justificativa, sempre com o token de quem pede. Qualquer resposta diferente de `true` é 403 e alarme. Sem RPC nova. O 4.8 do app está na `main` (#69), então as duas partes andam. Em PR próprio; o merge publica e só vem depois do #34 (D6) |
@@ -504,7 +522,7 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | Decisão | Recomendação | Onde |
 | --- | --- | --- |
 | `typescript` 6 | Integrar sozinho, se o gate e a imagem passarem | 3.5 |
-| Custo do Cron Job de limpeza (plano `starter`) | Manter: é o que cumpre a LGPD e a guarda de 180 dias | 5.2 |
+| ~~Custo do Cron Job de limpeza (plano `starter`)~~ | ✅ **D34 (07/10):** criar antes de ter alunos de verdade, junto com o 5.1; até lá, nada é apagado | 5.2 |
 | Plano Advanced da Cloudinary (URL que expira) | Só se o custo compensar | Fase 7 |
 
 ## Fora deste roadmap, de propósito
@@ -561,3 +579,4 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | 2026-10-07 | **Decisões do dono de 06/10 e 07/10 registradas, e o sinal da v6.** **Contrato v6 na `main` do `snake-thai`** (#88, `48d8b20`, 06/10): § 13.6 (política de erros e códigos de cada rota, D20), errata da § 13.5 (falha do Supabase é 502/503/504, nunca 403; o alarme só no 403), § 15 (o APK 1.8/1.9 e a web `main` não decidem pelo status nem pelo `code`: nada quebra e nenhum código antigo é mantido) e § 17. Respostas do dono que a v6 traz: função ou coluna ausente é **502**, e o Auth fora do ar ao validar o token deixa de dar 401 `bad_token` e passa a 503 (504/502). **A v6 destrava a C15.** **D24:** o **#37 espera o G4** (as migrations da 2.0.0 em produção): depois do painel, só o #34 e o #36 entram sem pedir de novo; o #37 entra depois do `db-push-prod.bat` da 2.0.0, com o CI verde e a v6 na `main`, sem pedir de novo. O 5.5 não trava a 2.0.0. **D25:** os handoffs passam a `snake-server\handoff\loop\NNN - DD_MM_AAAA <resumo>.md` (fora do Git por `.git/info/exclude`); os antigos ficam em `academy\handoffs\snake-server\`. **D27:** a leitura de `attempt` no `view-url` de justificativa (`COLUNAS_DA_JUSTIFICATIVA`) fica desligada até o G4, num PR próprio a partir da `main`; quando o dono disser que fez o painel, a ordem passa a ser o **#34**, **esse PR**, **"G2 aberto"** e o **#36**, cada um com o CI verde e a `main` trazida, sem pedir de novo. **C19 (ordem no servidor):** rodar de novo o CI do #37 (os jobs caíram na fila de 15 minutos de 05/10); depois, cada um no seu PR: a D27; no #37, `pode_decidir_justificativa` desligada até o G4 e 401 `bad_token` (e não 403) quando o PostgREST recusa o token; e a D20 nas outras rotas, com confirmação do dono (C15). O PR da D27 e o #37 mexem no mesmo módulo: quando um entrar na `main`, a `main` vai para o outro. |
 | 2026-10-07 | **C19 executada até onde não depende do dono.** **(0)** O CI do #37 rodou de novo: "Qualidade e testes", "CodeQL" e "Imagem Docker" verdes; "Segurança e licenças" reprova, como em todo PR aberto, porque o `npm audit` acusa o `proxy-addr` 1.1.0–2.0.7 (GHSA-jqcg-44mw-7w3h, crítico), dependência do Express. Achado alheio à C19, **pergunta ao dono** se abre um PR próprio para corrigir. **(2) PR #39** (D27, `fix/attempt-desligado-ate-g4`): o `view-url` de justificativa não pede `attempt` até o G4, com teste; CI verde fora a Segurança. **(3) #37** com a `main` trazida e os ajustes da v6: `pode_decidir_justificativa` desligada até o G4 e 401 `bad_token` quando o PostgREST recusa o token; CI verde fora a Segurança; **continua esperando o G4** (D24). **(4) PR #40** (D20 nas outras rotas, `fix/d20-erros-das-rotas`, a partir da `main`): as linhas "muda" da § 13.6, cada erro com o seu código (falha do Supabase em 502/503/504, `bad_input` com a frase do problema, `bad_request`, 429 com `traceId`, e os 404/409 de comprovante, justificativa e motivo depois de confirmado o dono); 483 testes; OpenAPI, README e `BACKEND.md` atualizados. Leva o commit do #39. A § 15 foi conferida de novo: o APK (`chamarApi`) só repete em falha de rede e a web trata `>= 500` como "acordando"; nada quebra. **O merge do #40 pede a confirmação do dono** (C15); depois dele, o #37 traz a `main` (conflitos em `supabase.ts` e nos services). |
 | 2026-10-07 | **D29 e D31 do dono (07/10).** **D29:** o CVE do `proxy-addr` (GHSA-jqcg-44mw-7w3h) ganha PR próprio, só com o `npm audit fix`, e o merge fica liberado com o CI verde, **antes** de qualquer outro merge do servidor; depois, a `main` vai para os PRs abertos. **Feito:** PR **#41** (`fix/cve-proxy-addr`): só o `package-lock.json` (`proxy-addr` 2.0.7 → 2.0.8; o mesmo comando subiu o `source-map-js`, de desenvolvimento, de 1.2.1 para 1.2.2); `npm audit --omit=dev --audit-level=high` com 0 vulnerabilidades, 395 testes, CI todo verde; **mesclado** (`8e654ec`), com o deploy na Render como em todo merge na `main`. A `main` foi trazida, um de cada vez, para o #34, o #36, o #37, o #39 e o #40. **D31:** o #40 está liberado e entra no fim do fluxo do painel. Depois de "fiz o painel", a ordem é: CVE (já feito) → **#34** → **#39** → **"G2 aberto"** → **#36** → **#40**, cada um com o CI verde e a `main` trazida, sem pedir de novo. Depois do #40, o **#37** traz a `main` e espera o G4 (D24). O painel ainda não foi feito: #34, #39, #36 e #40 seguem abertos. |
+| 2026-10-07 | **O dono fez o painel (D33 e D34).** Respostas: (1) Auto-Deploy do `snakethai-api` em **On Commit**; (2) sem Blueprint, então o `render.yaml` não chega ao painel; (3) no ar, o `8e654ec` (merge do #41); (4) o Cron Job `snakethai-media-cleanup` **não existe**; (5) último deploy da API em 07/10, 15:24, com sucesso; (6) o dono **não** quer *After CI Checks Pass*. **D33:** fica *On Commit*. O #34 continua tirando do `ci.yml` o job "Publicar na Render" (falha desde 26/09 por falta do secret) e passa a declarar `autoDeployTrigger: commit` no `render.yaml`, com o comentário de que a proteção é mesclar só com o CI todo verde e de que o arquivo não chega ao painel; README, `DEPLOY.md`, `BACKEND.md`, `REVIEW.md` e `PENDENCIAS.md` alinhados. Itens **1.2** e **1.3** fechados. **D34:** o G2 abre em 07/10 **sem o Cron Job**, num PR de docs depois do #39; nenhum arquivo é apagado até o dono criá-lo, antes de ter alunos de verdade, junto com o 5.1. Item **5.2** fechado. A ordem dos merges, sem pedir de novo (D31): #34 → #39 → "G2 aberto" → #36 → #40; depois, a `main` vai ao #37 (G4, D24). |

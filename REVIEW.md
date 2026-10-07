@@ -54,7 +54,7 @@ Aplicado logo após esta auditoria, na mesma sessão de trabalho:
 | --- | --- | --- |
 | **C-1** LGPD — ciclo de vida | ⏸️ **Aguardando decisão** | Criar a rota de exclusão é escopo novo; pendente de aval explícito. |
 | **A-1** `user_id` ignorado | ✅ **Corrigido** | Segunda barreira em `proofs.service.ts`, com política configurável. |
-| **A-2** deploy sem CI | ✅ **Corrigido** | Esteira em `.github/workflows/ci.yml` como gate único; desde 28/09 a Render publica só depois dos checks (`autoDeployTrigger: checksPass`). |
+| **A-2** deploy sem CI | ✅ **Corrigido** | Esteira em `.github/workflows/ci.yml` como gate único; a Render publica cada commit da `main` (On Commit, D33 de 07/10), e só se mescla na `main` com o CI todo verde. |
 | **M-1** rate limit em memória | ✅ **Mitigado** | Limitação documentada no código + limite extra por rota sensível. |
 | **M-2** `extrairPublicId` | ⏸️ **Aguardando** | Depende de confirmar o schema real com o time do app. |
 | **M-3** repositório sem cobertura | ➡️ **Pendente** | Fica para uma próxima rodada de testes. |

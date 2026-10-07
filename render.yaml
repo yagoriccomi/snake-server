@@ -21,13 +21,15 @@ services:
     # Endpoint trivial e sem I/O: acorda rápido depois da hibernação. [#82]
     healthCheckPath: /health
 
-    # Um caminho só até produção: a Render publica cada commit da `main`,
-    # mas SÓ depois de todos os checks do GitHub passarem (lint, tipos,
-    # testes, auditoria, CodeQL e a imagem). Commit com check vermelho não
-    # é publicado. Nunca use `commit` aqui: ele publica sem esperar a
-    # esteira, e o mais rápido dos caminhos seria justamente o sem gate.
-    # [#49][#77]
-    autoDeployTrigger: checksPass
+    # A Render publica cada commit da `main` assim que ele chega, sem esperar
+    # os checks (no painel: Auto-Deploy "On Commit", decisão do dono em
+    # 07/10, D33). A proteção é outra: a `main` só muda por merge de PR, e
+    # só se mescla com a esteira TODA verde (lint, tipos, testes, auditoria,
+    # CodeQL e a imagem). Por isso nunca há push direto na `main`. [#49][#77]
+    #
+    # Este arquivo não chega ao painel: os serviços não foram criados pelo
+    # Blueprint. O que vale é a opção do painel; aqui ela fica documentada.
+    autoDeployTrigger: commit
 
     envVars:
       - key: NODE_ENV
@@ -89,11 +91,12 @@ services:
     schedule: '0 3 * * *'
     dockerCommand: node dist/jobs/media-cleanup/media-cleanup.js
 
-    # O mesmo gatilho do serviço web: sem ele, o Cron Job fica no padrão da
-    # Render e pode publicar sem esperar a esteira, ou nunca receber as
-    # correções do worker. As duas coisas já foram dúvida aqui (itens 1.2
-    # e 5.2 do ROADMAP-server.md). [#49][#77]
-    autoDeployTrigger: checksPass
+    # ⚠️ Este Cron Job NÃO existe no painel (conferido pelo dono em 07/10):
+    # até ele ser criado, nenhum arquivo é apagado de fato. Será criado
+    # antes de o app ter alunos de verdade, junto com a troca da
+    # `service_role` (itens 5.1 e 5.2 do ROADMAP-server.md, D34). Ao criar,
+    # use o mesmo gatilho do serviço web, para receber as correções do worker.
+    autoDeployTrigger: commit
 
     envVars:
       - key: SUPABASE_URL
