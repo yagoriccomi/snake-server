@@ -321,17 +321,20 @@ juntos, ou nenhum, é `400`.
 ### `POST /v1/justifications/view-url`
 Autenticado. Body `{ "justificationId": "<uuid>", "pagina"?: number }`.
 
-1. Lê `id, user_id, class_id, attempt, proof_provider, proof_public_id` com o
-   **token do chamador**; a RLS libera para o dono, quem pode decidir a
+1. Lê `id, user_id, class_id, proof_provider, proof_public_id` (mais `attempt`,
+   depois do G4) com o **token do chamador**; a RLS libera para o dono, quem pode decidir a
    justificativa pendente e o admin. Vazio ou sem anexo → `403`.
 2. Se `proof_provider` **não for** `cloudinary`, responde `403`.
 3. Calcula os caminhos derivados (`justificativas/<user_id>/<id>`, `…/<id>-2` e, com
    `class_id`, `…/<class_id>`) e assina o que for **igual** a `proof_public_id`. Se
    nenhum for, `403`.
 
-> **Banco antigo:** `attempt` só existe depois das migrations da v3. Até elas, as
-> duas leituras acima são recusadas pelo PostgREST e as rotas respondem `403` —
-> inclusive o `view-url` do legado. Decisão do dono em 25/09: seguir o contrato.
+> **Antes do G4:** `attempt` só existe depois da migration 4.1 da v3. Até ela estar
+> em produção (G4), o `view-url` não pede a coluna — os caminhos derivados não a
+> usam — e o anexo abre para quem a RLS libera (D27, contrato § 13.6). A chave é
+> `MIGRATIONS_DO_G4_EM_PRODUCAO`, em `justifications.constants.ts`, ligada num PR
+> próprio quando o G4 estiver confirmado. O `sign-upload` com `{ justificationId }`
+> pede `attempt` sempre: só o APK 2.0.0 o chama, e ele sai depois do G4.
 
 #### Por que não há `conferirDono` aqui
 
@@ -447,14 +450,15 @@ Para adicionar um módulo, siga o passo a passo do `CLAUDE.md`.
 
 ## 10. Deploy
 
-O passo a passo operacional — secrets do GitHub, variáveis da Render, ambiente
-com aprovação manual e a migração dos comprovantes existentes — está em
+O passo a passo operacional — variáveis e Auto-Deploy na Render e a migração dos
+comprovantes existentes — está em
 [`DEPLOY.md`](DEPLOY.md), na ordem de execução.
 
 Em resumo: `render.yaml` com `runtime: docker` (a Render constrói a **mesma**
-imagem que roda local), health check em `/health` e **`autoDeploy: false`** de
-propósito — com ele ligado existiriam dois caminhos até produção, e o mais rápido
-seria justamente o que ignora todos os gates da esteira.
+imagem que roda local), health check em `/health` e **`autoDeployTrigger: commit`**
+(no painel, *On Commit*, D33): a Render publica cada commit da `main` assim que ele
+chega. A barreira é mesclar na `main` só com todos os checks da esteira verdes. Os
+serviços não foram criados pelo Blueprint: o `render.yaml` documenta, e o painel manda.
 
 ## 11. Lado do app
 
