@@ -215,6 +215,10 @@ houver, me diga como o papel é identificado e eu implemento a checagem de verda
 >
 > **2026-10-05:** ajustada à D20. Falha do banco não é mais "não": vira `502`, `503`
 > ou `504`, sem alarme e sem liberar. O `403` e o alarme ficam só para o `false`.
+>
+> **2026-10-07:** ajustada à v6 do contrato. O token recusado pelo banco vira `401
+> bad_token`, e na justificativa a barreira fica desligada até o G4 (D27), porque
+> `pode_decidir_justificativa` ainda não existe em produção.
 
 **Referência:** achado A-1 do [`../REVIEW.md`](../REVIEW.md), seção 4 de
 [`ARQUITETURA.md`](ARQUITETURA.md).

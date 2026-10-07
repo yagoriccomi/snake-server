@@ -14,9 +14,10 @@
   - **comprovante:** `rpc/is_admin`;
   - **justificativa:** `rpc/is_admin`, e, se der `false`, `rpc/pode_decidir_justificativa`.
 
-  `false` (ou o token recusado, 401/403) dá **403** e um alarme (`error`, sem PII). Falha
-  do Supabase dá **502**, **503** ou **504**, sem alarme (D20, ajuste de 05/10).
-  Nada é liberado em nenhum caso.
+  `false` dá **403** e um alarme (`error`, sem PII). O token recusado pelo PostgREST (401)
+  dá **401** `bad_token`. Falha do Supabase dá **502**, **503** ou **504**, sem alarme
+  (D20, ajuste de 05/10; errata da v6 em 07/10). Nada é liberado em nenhum caso.
+  Na justificativa, a barreira fica **desligada até o G4** (D27, contrato § 13.5).
 - **Como validar:** testes unitários dos services e dos repositórios; integração pelo app inteiro;
   gate local e CI verdes.
 
@@ -46,8 +47,9 @@
    | O que o Supabase fez | Resposta | Código | Mensagem |
    | --- | --- | --- | --- |
    | `true` | serve | — | — |
-   | `false`, ou recusou o token (401/403) | 403 e alarme | `forbidden` | Sem acesso |
-   | Retorno que não é booleano, JSON inválido, 400, 404 (função ausente) ou 500 | 502 | `supabase_invalid_response` | O servidor de dados respondeu de forma inesperada |
+   | `false` | 403 e alarme | `forbidden` | Sem acesso |
+   | Recusou o token (401) | 401 | `bad_token` | Sessão inválida |
+   | Retorno que não é booleano, JSON inválido, 400, 403 (sem grant), 404 (função ausente) ou 500 | 502 | `supabase_invalid_response` | O servidor de dados respondeu de forma inesperada |
    | Rede caiu, ou o gateway respondeu 502/503 | 503 | `supabase_unreachable` | Não foi possível falar com o servidor de dados |
    | Prazo de 10 s vencido, ou o gateway respondeu 504 | 504 | `supabase_timeout` | O servidor de dados demorou demais para responder |
 
@@ -90,11 +92,14 @@
   inteiros.
 - **Repositórios:** o nome e o corpo de cada RPC (`{}` e `{ p_id }`); a resposta passa intacta e
   a falha sobe.
-- **Cliente Supabase (D20):** `true`/`false`; 401/403 → `false`; não booleano, JSON inválido,
-  400, 404 e 500 → 502; 502/503 e rede → 503; 504 e prazo vencido → 504; a mensagem não vaza o
+- **Cliente Supabase (D20, v6):** `true`/`false`; 401 → 401 `bad_token`; não booleano, JSON
+  inválido, 400, 403, 404 e 500 → 502; 502/503 e rede → 503; 504 e prazo vencido → 504; a mensagem não vaza o
   detalhe do upstream; a consulta comum continua com 503 no timeout.
 - **Justificativa (D20):** falha no `is_admin` não pergunta `pode_decidir`; falha em qualquer
   uma das duas sobe sem alarme.
+- **Justificativa antes do G4 (D27):** com `migrationsDoG4EmProducao` desligada, a linha de
+  outra pessoa é servida sem perguntar nada ao banco e sem alarme; a derivação do caminho
+  continua recusando o anexo apontado para outro arquivo.
 
 ## Riscos e rollback
 

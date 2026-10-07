@@ -42,6 +42,8 @@ interface Cenario {
   ehAdmin?: boolean | HttpError;
   /** Resposta de `pode_decidir_justificativa` (§ 13.5), idem. */
   podeDecidir?: boolean | HttpError;
+  /** Padrão: ligada, o estado em que a segunda barreira roda. */
+  migrationsDoG4EmProducao?: boolean;
 }
 
 function criarCenario({
@@ -50,6 +52,7 @@ function criarCenario({
   paginas = 1,
   ehAdmin = false,
   podeDecidir = false,
+  migrationsDoG4EmProducao = true,
 }: Cenario = {}) {
   const registro = {
     assinados: [] as ParametrosDeUpload[],
@@ -104,6 +107,7 @@ function criarCenario({
         return ehAdmin;
       },
     },
+    migrationsDoG4EmProducao,
     agoraEmSegundos: () => AGORA,
   });
 
@@ -488,6 +492,52 @@ describe('justifications.service — segunda barreira (contrato § 13.5)', () =>
       await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toBe(falha);
       expect(registro.publicIdsVisualizados).toEqual([]);
       expect(escritas.join('')).not.toContain('RLS liberou');
+    });
+  });
+
+  describe('desligada até o G4 (contrato § 13.5, D27)', () => {
+    it('deveServirALinhaDeOutraPessoaSoComARlsSemPerguntarNadaAoBanco', async () => {
+      // Antes do G4, `pode_decidir_justificativa` não existe em produção: a
+      // rota segue como antes da barreira, e o professor continua lendo.
+      const { service, registro } = criarCenario({
+        paraVisualizar: linhaDeOutroAluno(),
+        migrationsDoG4EmProducao: false,
+      });
+
+      await service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR);
+
+      expect(registro.perguntasDeAdmin).toEqual([]);
+      expect(registro.perguntasDeDecisao).toEqual([]);
+      expect(registro.publicIdsVisualizados).toEqual([DO_OUTRO]);
+    });
+
+    it('naoDeveEmitirAlarmeNemResponderAFalhaDoBancoQueNaoFoiPerguntado', async () => {
+      const escritas = capturarStderr();
+      const { service } = criarCenario({
+        paraVisualizar: linhaDeOutroAluno(),
+        ehAdmin: new HttpError(503, 'supabase_unreachable', 'fora do ar'),
+        podeDecidir: new HttpError(502, 'supabase_invalid_response', 'função ausente'),
+        migrationsDoG4EmProducao: false,
+      });
+
+      await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).resolves.toBeDefined();
+      expect(escritas.join('')).not.toContain('RLS liberou');
+    });
+
+    it('deveContinuarConferindoOCaminhoDerivadoDaLinhaDeOutraPessoa', async () => {
+      // Desligar a barreira não desliga a defesa do caminho (C-2).
+      const { service, registro } = criarCenario({
+        paraVisualizar: comAnexo({
+          user_id: OUTRO_ALUNO,
+          proof_public_id: `justificativas/${USUARIO_DO_TOKEN}/${JUSTIFICATIVA}`,
+        }),
+        migrationsDoG4EmProducao: false,
+      });
+
+      await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject({
+        status: 403,
+      });
+      expect(registro.publicIdsVisualizados).toEqual([]);
     });
   });
 });

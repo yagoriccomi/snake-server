@@ -179,8 +179,9 @@ sem `vi.mock` e sem variável de ambiente de mentira. [#45]
   consulta com o do token; se divergirem, pergunta ao banco, com o token de quem pede,
   pelas mesmas funções da RLS (`rpc/is_admin` no comprovante; `is_admin` e
   `pode_decidir_justificativa` na justificativa). Com `false`, `403` e **alarme em
-  nível `error`**; se o banco falhar, `502`/`503`/`504` pela D20, sem alarme e sem
-  liberar. `POLITICA_ACESSO_COMPROVANTE=somente-dono` nega sem perguntar. [#55]
+  nível `error`**; token recusado, `401 bad_token`; se o banco falhar, `502`/`503`/`504`
+  pela D20, sem alarme e sem liberar. `POLITICA_ACESSO_COMPROVANTE=somente-dono` nega
+  sem perguntar. Na justificativa, desligada até o G4 (`MIGRATIONS_DO_G4_EM_PRODUCAO`). [#55]
 - **Comprovante é PII financeira:** sempre `type=authenticated` (privado), visto
   só por URL assinada. Nunca em log. [#63]
 - Validação de todo input com Zod; filtros do PostgREST por `URLSearchParams`,

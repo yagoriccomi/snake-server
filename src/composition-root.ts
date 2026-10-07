@@ -54,6 +54,7 @@ export function montarDependencias(): DependenciasDaApi {
       midia,
       justificativas: criarRepositorioDeJustificativas(supabase, MIGRATIONS_DO_G4_EM_PRODUCAO),
       admin,
+      migrationsDoG4EmProducao: MIGRATIONS_DO_G4_EM_PRODUCAO,
       agoraEmSegundos,
     },
     motivos: {

@@ -1,6 +1,7 @@
 import type { DependenciasDaApi } from '../../src/composition-root.js';
 import { HttpError } from '../../src/lib/http-error.js';
 import type { ClienteSupabase, UsuarioAutenticado } from '../../src/lib/supabase.js';
+import { MIGRATIONS_DO_G4_EM_PRODUCAO } from '../../src/modules/justifications/justifications.constants.js';
 import type {
   JustificativaParaAssinar,
   RegistroDeJustificativa,
@@ -238,6 +239,9 @@ export function criarDependenciasFalsas(
         podeDecidir: () => Promise.resolve(false),
       },
       admin,
+      // Como em produção. A RLS falsa só devolve linhas do dono, então os dois
+      // estados da chave estão no teste do service.
+      migrationsDoG4EmProducao: MIGRATIONS_DO_G4_EM_PRODUCAO,
       agoraEmSegundos: () => AGORA_EM_SEGUNDOS,
     },
     motivos: {

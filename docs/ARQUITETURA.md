@@ -156,9 +156,11 @@ ou bloquearia o administrador de verdade.
 
 Por isso o servidor **pergunta ao banco**, com o token de quem pede, pela mesma
 função que a RLS usa: `rpc/is_admin` (contrato § 13.5, item 5.5). Só um `true`
-explícito libera; `false` ou o token recusado (401/403) contam como "não". Se o banco
-falhar (função ausente, resposta estranha, fora do ar, tempo esgotado), a resposta é
-`502`, `503` ou `504`, conforme a falha, sem alarme e sem liberar nada (D20). A
+explícito libera; só o `false` conta como "não". O token recusado pelo banco (401) é
+sessão vencida, não acesso indevido: vira `401 bad_token`, como no login. Se o banco
+falhar (função ausente, permissão de execução ausente, resposta estranha, fora do ar,
+tempo esgotado), a resposta é `502`, `503` ou `504`, conforme a falha, sem alarme e sem
+liberar nada (contrato § 13.5). A
 variável escolhe a postura:
 
 | `POLITICA_ACESSO_COMPROVANTE` | Comportamento |
@@ -171,7 +173,8 @@ variável escolhe a postura:
 > foi recusado. Você fica sabendo por alerta, não por incidente. [#55]
 >
 > A justificativa segue a mesma ideia, com `is_admin` e, se der `false`,
-> `pode_decidir_justificativa` (veja `BACKEND.md`).
+> `pode_decidir_justificativa` (veja `BACKEND.md`). Lá a barreira fica **desligada até
+> o G4**, porque a função ainda não existe em produção.
 
 ### Por que `403` e não `404`
 

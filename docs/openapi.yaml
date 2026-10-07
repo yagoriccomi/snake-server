@@ -279,8 +279,10 @@ paths:
         token: o dono, quem pode decidir a justificativa enquanto ela está pendente, e o
         administrador. Se a justificativa não for sua, o servidor ainda confirma no banco
         (`is_admin` e, se não for admin, `pode_decidir_justificativa`). Sem direito, sem
-        anexo ou com anexo fora da Cloudinary: `403`. Se o banco falhar ao confirmar:
-        `502`, `503` ou `504`, conforme a falha, e nada é liberado.
+        anexo ou com anexo fora da Cloudinary: `403`. Se o banco recusar o token ao
+        confirmar: `401` (`bad_token`). Se o banco falhar ao confirmar: `502`, `503` ou
+        `504`, conforme a falha, e nada é liberado. Até o G4, essa confirmação fica
+        desligada e vale só a RLS.
 
         O endereço é assinado sobre um dos caminhos **derivados** da justificativa
         (`justificativas/<user_id>/<id>`, `…/<id>-2` ou, na justificativa de aula,

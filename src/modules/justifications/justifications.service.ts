@@ -70,6 +70,11 @@ export interface DependenciasDeJustificativas {
   midia: AssinadorDeMidia;
   justificativas: LeitorDeJustificativas;
   admin: ConferenciaDeAdmin;
+  /**
+   * `MIGRATIONS_DO_G4_EM_PRODUCAO`, injetada para o teste cobrir os dois
+   * estados. Desligada, a segunda barreira não roda: ver `conferirLeitorLegitimo`.
+   */
+  migrationsDoG4EmProducao: boolean;
   /** Injetado para o teste congelar o tempo em vez de esperar por ele. */
   agoraEmSegundos: () => number;
 }
@@ -106,11 +111,17 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
    * quem pode decidi-la. Para a linha de outra pessoa, o servidor confere com
    * as MESMAS funções da RLS, na ordem do contrato (o admin custa uma chamada
    * só). Nenhuma confirmou: a RLS liberou o que não devia. [#55]
+   *
+   * Até o G4, `pode_decidir_justificativa` não existe em produção: chamá-la
+   * daria 502 ao professor que hoje lê o atestado pela RLS. Sem ela, o
+   * `is_admin` sozinho não separa o professor de um vazamento, então a rota
+   * segue só com a RLS, como antes da barreira (contrato § 13.5, D27).
    */
   async function conferirLeitorLegitimo(
     justificativa: RegistroDeJustificativa,
     chamador: Chamador,
   ): Promise<void> {
+    if (!deps.migrationsDoG4EmProducao) return;
     if (justificativa.user_id === chamador.userId) return;
     if (await deps.admin.ehAdmin(chamador.authorization)) return;
     if (await deps.justificativas.podeDecidir(justificativa.id, chamador.authorization)) return;
