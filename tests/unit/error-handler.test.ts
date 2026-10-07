@@ -55,16 +55,35 @@ describe('classificarErro', () => {
       expect(resultado.nivel).toBe('warn');
     });
 
-    it('naoDeveExporOsDetalhesDoZodNaMensagemDoCliente', () => {
-      // Os `issues` ajudam o operador, mas descrevem a estrutura interna
-      // esperada — não vão para quem chamou.
-      const schema = z.object({ segredoInterno: z.string().min(10) });
+    it('deveResponderComAFraseDoPrimeiroProblemaDoEsquema', () => {
+      // Contrato § 13.6: o aluno lê o que corrigir, uma frase por problema.
+      const schema = z.object({
+        paymentId: z.string({ required_error: 'paymentId é obrigatório' }),
+        pagina: z.number({ required_error: 'pagina precisa estar entre 1 e 999' }),
+      });
+      const falha = schema.safeParse({});
+      const resultado = classificarErro((falha as { error: ZodError }).error);
+
+      expect(resultado.mensagem).toBe('paymentId é obrigatório');
+    });
+
+    it('deveLevarOsProblemasApenasParaOContextoDeLog', () => {
+      // Os `issues` descrevem a estrutura interna esperada: ajudam o
+      // operador, mas não vão para quem chamou.
+      const schema = z.object({ segredoInterno: z.string().min(10, 'texto curto demais') });
       const falha = schema.safeParse({ segredoInterno: 'x' });
       const resultado = classificarErro((falha as { error: ZodError }).error);
 
-      expect(resultado.mensagem).toBe('Dados inválidos na requisição');
+      expect(resultado.mensagem).toBe('texto curto demais');
       expect(resultado.mensagem).not.toContain('segredoInterno');
       expect(resultado.contexto?.problemas).toBeDefined();
+    });
+
+    it('deveUsarAFrasePadraoQuandoOErroNaoTrazProblema', () => {
+      const resultado = classificarErro(new z.ZodError([]));
+
+      expect(resultado.code).toBe('bad_input');
+      expect(resultado.mensagem).toBe('Dados inválidos na requisição');
     });
   });
 
@@ -89,6 +108,37 @@ describe('classificarErro', () => {
 
       expect(resultado.status).toBe(413);
       expect(resultado.code).toBe('payload_too_large');
+    });
+
+    it.each([
+      ['charset não suportado', 'charset.unsupported', 415],
+      ['requisição abortada', 'request.aborted', 400],
+      ['parâmetros demais', 'parameters.too.many', 413],
+    ])('deveResponder400BadRequestQuandoOExpressAcusa_%s', (_rotulo, type, status) => {
+      // O 4xx que o servidor não identifica é o genérico da categoria, não 500.
+      const erro = Object.assign(new Error('detalhe interno do parser'), { type, status });
+
+      const resultado = classificarErro(erro);
+
+      expect(resultado).toMatchObject({
+        status: 400,
+        code: 'bad_request',
+        mensagem: 'Requisição inválida',
+        nivel: 'warn',
+      });
+      expect(resultado.contexto).toEqual({ tipo: type, statusOriginal: status });
+    });
+
+    it('deveLerOStatusCodeQuandoOErroNaoTrazStatus', () => {
+      const erro = Object.assign(new Error('qualquer'), { statusCode: 400 });
+
+      expect(classificarErro(erro).code).toBe('bad_request');
+    });
+
+    it.each([[500], ['400'], [399]])('naoDeveTratarComoErroDoClienteOStatus_%j', (status) => {
+      const erro = Object.assign(new Error('qualquer'), { status });
+
+      expect(classificarErro(erro).status).toBe(500);
     });
 
     it('naoDeveConfundirErroComPropriedadeTypeNaoTextual', () => {

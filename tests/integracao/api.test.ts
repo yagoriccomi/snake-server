@@ -163,6 +163,28 @@ describe('validação de entrada — a barreira antes da rede', () => {
 
     expect(resposta.status).toBe(400);
     expect(resposta.body.code).toBe('bad_input');
+    expect(resposta.body.error).toBe('paymentId é obrigatório');
+  });
+
+  it('deveDizerQualCampoFaltouQuandoARequisicaoVemSemCorpo', async () => {
+    const resposta = await request(app)
+      .post('/v1/proofs/sign-upload')
+      .set('Authorization', TOKEN_VALIDO);
+
+    expect(resposta.status).toBe(400);
+    expect(resposta.body).toMatchObject({ code: 'bad_input', error: 'paymentId é obrigatório' });
+  });
+
+  it('deveResponder400BadRequestQuandoOCharsetNaoESuportado', async () => {
+    // Hoje caía em 500; é o cliente que errou, e o genérico da categoria é 400.
+    const resposta = await request(app)
+      .post('/v1/proofs/sign-upload')
+      .set('Authorization', TOKEN_VALIDO)
+      .set('Content-Type', 'application/json; charset=klingon')
+      .send(JSON.stringify({ paymentId: PAGAMENTO_DO_DONO }));
+
+    expect(resposta.status).toBe(400);
+    expect(resposta.body).toMatchObject({ code: 'bad_request', error: 'Requisição inválida' });
   });
 
   it.each([
@@ -215,8 +237,14 @@ describe('validação de entrada — a barreira antes da rede', () => {
 
       const resposta = await request(app).post(rota).send({});
 
+      // O 429 sai pelo handler único, com o traceId (contrato § 13.6).
       expect(resposta.status).toBe(429);
-      expect(resposta.body.code).toBe('rate_limited');
+      expect(resposta.body).toEqual({
+        error: 'Muitas requisições. Tente de novo em instantes.',
+        code: 'rate_limited',
+        traceId: expect.any(String) as string,
+      });
+      expect(resposta.headers['ratelimit-policy']).toBeDefined();
     },
   );
 

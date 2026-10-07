@@ -1,5 +1,5 @@
 import cors from 'cors';
-import express, { type Express } from 'express';
+import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 
@@ -11,9 +11,19 @@ import {
   RATE_LIMIT_MAX_REQUISICOES,
 } from './config/constants.js';
 import { env } from './config/env.js';
+import { HttpError } from './lib/http-error.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { requestContext } from './middleware/request-context.js';
 import { criarV1Router } from './routes/v1.js';
+
+/**
+ * O 429 dos limitadores passa pelo handler único, como todo erro: sai com o
+ * `traceId` e no mesmo formato, com o mesmo `code` e a mesma mensagem de
+ * antes (contrato § 13.6). Os cabeçalhos `RateLimit` já foram postos. [#93]
+ */
+function recusarPorExcessoDeRequisicoes(_req: Request, _res: Response, next: NextFunction): void {
+  next(new HttpError(429, 'rate_limited', 'Muitas requisições. Tente de novo em instantes.'));
+}
 
 /**
  * Monta a aplicação Express.
@@ -93,7 +103,7 @@ export function criarApp(deps: DependenciasDaApi = montarDependencias()): Expres
     max: RATE_LIMIT_MAX_REQUISICOES,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: { error: 'Muitas requisições. Tente de novo em instantes.', code: 'rate_limited' },
+    handler: recusarPorExcessoDeRequisicoes,
   });
 
   const limitadorDeComprovantes = rateLimit({
@@ -101,7 +111,7 @@ export function criarApp(deps: DependenciasDaApi = montarDependencias()): Expres
     max: RATE_LIMIT_MAX_COMPROVANTES,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: { error: 'Muitas requisições. Tente de novo em instantes.', code: 'rate_limited' },
+    handler: recusarPorExcessoDeRequisicoes,
   });
 
   app.use(limitadorGlobal);
