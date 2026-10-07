@@ -31,7 +31,8 @@ export interface RegistroDeJustificativa {
   user_id: string;
   /** Nulo na justificativa da semana (`scope = 'week'`). */
   class_id: string | null;
-  attempt: number;
+  /** Só vem com as migrations do G4 em produção; os caminhos derivados não a usam. */
+  attempt?: number;
   proof_provider: string | null;
   /** Escolhe entre os caminhos derivados; nunca é assinado sem ser um deles. */
   proof_public_id: string | null;
