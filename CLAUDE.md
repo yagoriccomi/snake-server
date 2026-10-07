@@ -304,6 +304,7 @@ tests/
 │   ├── supabase.test.ts               # montagem da URL e da RPC = defesa contra injeção
 │   ├── proofs.*.test.ts               # adaptador REAL (assina local), regra e repositório
 │   ├── justifications.service.test.ts # as duas formas e o caminho derivado
+│   ├── justifications.repository.test.ts # colunas pedidas antes e depois do G4
 │   ├── motivos.*.test.ts              # regra e repositório (banco antigo = 403)
 │   ├── defesa-em-profundidade.test.ts # segunda barreira dos comprovantes
 │   └── media-cleanup.*.test.ts        # fila, validação, três tipos, órfãos, ambiente
