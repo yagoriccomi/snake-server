@@ -74,11 +74,17 @@ describe('criarConferenciaDeAdmin', () => {
   });
 });
 
+// A chave do G4 só escolhe as colunas do `view-url`; `podeDecidir` não depende dela.
+const G4_EM_PRODUCAO = true;
+
 describe('criarRepositorioDeJustificativas — podeDecidir', () => {
   it('deveChamarPodeDecidirJustificativaComPIdEOTokenDeQuemPede', async () => {
     const { cliente, rpcs } = criarCliente(true);
 
-    await criarRepositorioDeJustificativas(cliente).podeDecidir(JUSTIFICATIVA, AUTORIZACAO);
+    await criarRepositorioDeJustificativas(cliente, G4_EM_PRODUCAO).podeDecidir(
+      JUSTIFICATIVA,
+      AUTORIZACAO,
+    );
 
     expect(rpcs).toEqual([
       {
@@ -93,7 +99,10 @@ describe('criarRepositorioDeJustificativas — podeDecidir', () => {
     const { cliente } = criarCliente(permitido);
 
     await expect(
-      criarRepositorioDeJustificativas(cliente).podeDecidir(JUSTIFICATIVA, AUTORIZACAO),
+      criarRepositorioDeJustificativas(cliente, G4_EM_PRODUCAO).podeDecidir(
+        JUSTIFICATIVA,
+        AUTORIZACAO,
+      ),
     ).resolves.toBe(permitido);
   });
 
@@ -101,7 +110,10 @@ describe('criarRepositorioDeJustificativas — podeDecidir', () => {
     const { cliente } = criarCliente(true, falha);
 
     await expect(
-      criarRepositorioDeJustificativas(cliente).podeDecidir(JUSTIFICATIVA, AUTORIZACAO),
+      criarRepositorioDeJustificativas(cliente, G4_EM_PRODUCAO).podeDecidir(
+        JUSTIFICATIVA,
+        AUTORIZACAO,
+      ),
     ).rejects.toBe(falha);
   });
 });

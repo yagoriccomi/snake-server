@@ -1,6 +1,7 @@
 import type { ClienteSupabase } from '../../lib/supabase.js';
 import {
   COLUNAS_DA_JUSTIFICATIVA,
+  COLUNAS_DA_JUSTIFICATIVA_ANTES_DO_G4,
   COLUNAS_PARA_ASSINAR_JUSTIFICATIVA,
   RPC_PODE_DECIDIR_JUSTIFICATIVA,
   TABELA_JUSTIFICATIVAS,
@@ -17,10 +18,18 @@ import type {
  * Não há decisão de permissão aqui: a consulta vai com o token do chamador e a
  * RLS filtra. Lista vazia significa "a RLS não liberou" (ou, num banco antigo,
  * que uma coluna pedida ainda não existe) — quem interpreta isso é o service.
+ *
+ * `migrationsDoG4EmProducao` vem do composition root, e não da constante
+ * importada aqui, para o teste provar os dois estados sem trocar módulo. [#45]
  */
 export function criarRepositorioDeJustificativas(
   supabase: ClienteSupabase,
+  migrationsDoG4EmProducao: boolean,
 ): LeitorDeJustificativas {
+  const colunasDaJustificativa = migrationsDoG4EmProducao
+    ? COLUNAS_DA_JUSTIFICATIVA
+    : COLUNAS_DA_JUSTIFICATIVA_ANTES_DO_G4;
+
   async function buscar<T>(justificationId: string, colunas: string, authorization: string) {
     const linhas = await supabase.consultarComoChamador<T>(
       TABELA_JUSTIFICATIVAS,
@@ -36,7 +45,7 @@ export function criarRepositorioDeJustificativas(
     buscarPorId(justificationId, authorization) {
       return buscar<RegistroDeJustificativa>(
         justificationId,
-        COLUNAS_DA_JUSTIFICATIVA,
+        colunasDaJustificativa,
         authorization,
       );
     },

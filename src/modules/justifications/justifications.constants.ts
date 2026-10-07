@@ -13,16 +13,30 @@ export const PASTA_JUSTIFICATIVAS = 'justificativas';
 export const TABELA_JUSTIFICATIVAS = 'absence_justifications';
 
 /**
+ * As migrations do G4 (contrato § 14: `attempt`, do 4.1, e
+ * `pode_decidir_justificativa`, do 4.8) já estão em produção?
+ *
+ * O servidor vai ao ar antes delas. Pedir uma coluna que o banco ainda não tem
+ * dá 502 a quem hoje lê o anexo pela RLS (contrato § 13.6, D27). Uma constante,
+ * e não uma variável de ambiente, porque ligar é um passo de código revisado,
+ * no mesmo PR que confere o G4, e não um campo esquecido no painel. [#3][#84]
+ */
+export const MIGRATIONS_DO_G4_EM_PRODUCAO = false;
+
+/**
  * Leitura do `view-url` (contrato § 13.2). `id`, `user_id` e `class_id` entram
  * porque os caminhos possíveis do anexo são DERIVADOS deles; o
  * `proof_public_id` gravado só escolhe entre esses caminhos. Ver o service.
- *
- * `attempt` só existe depois das migrations da v3: num banco antigo esta
- * leitura é recusada e o `view-url` responde 403 até as migrations rodarem.
- * Decisão do dono em 25/09 (seguir o contrato como está).
  */
 export const COLUNAS_DA_JUSTIFICATIVA =
   'id,user_id,class_id,attempt,proof_provider,proof_public_id';
+
+/**
+ * A mesma leitura antes do G4, sem `attempt`. O `view-url` não usa a coluna
+ * (ela não entra nos caminhos derivados), então desligar é só não pedi-la.
+ */
+export const COLUNAS_DA_JUSTIFICATIVA_ANTES_DO_G4 =
+  'id,user_id,class_id,proof_provider,proof_public_id';
 
 /**
  * Leitura do `sign-upload` com `{ justificationId }` (contrato § 13.2): o

@@ -1,6 +1,7 @@
 import { env } from './config/env.js';
 import { criarClienteSupabase } from './lib/supabase.js';
 import type { ClienteSupabase } from './lib/supabase.js';
+import { MIGRATIONS_DO_G4_EM_PRODUCAO } from './modules/justifications/justifications.constants.js';
 import { criarRepositorioDeJustificativas } from './modules/justifications/justifications.repository.js';
 import type { DependenciasDoRouterDeJustificativas } from './modules/justifications/justifications.routes.js';
 import { criarRepositorioDeMotivos } from './modules/motivos/motivos.repository.js';
@@ -51,7 +52,7 @@ export function montarDependencias(): DependenciasDaApi {
     justifications: {
       supabase,
       midia,
-      justificativas: criarRepositorioDeJustificativas(supabase),
+      justificativas: criarRepositorioDeJustificativas(supabase, MIGRATIONS_DO_G4_EM_PRODUCAO),
       admin,
       agoraEmSegundos,
     },
