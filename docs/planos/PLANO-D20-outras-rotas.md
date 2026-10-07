@@ -58,3 +58,8 @@
 - O merge publica na Render. A volta é reverter o merge: nenhuma migration, nenhuma variável nova.
 - O #37 vai precisar trazer a `main` depois deste merge; os conflitos esperados são em
   `src/lib/supabase.ts`, nos services de comprovante e de justificativa e nos dublês de teste.
+
+## Estado (07/10/2026)
+
+Os quatro passos feitos, um commit cada, com 483 testes passando e o `redocly lint` limpo. O
+merge espera a confirmação do dono.

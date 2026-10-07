@@ -144,8 +144,12 @@ paths:
           $ref: '#/components/responses/RequisicoesDemais'
         '500':
           $ref: '#/components/responses/ErroInterno'
+        '502':
+          $ref: '#/components/responses/RespostaInvalidaDoBanco'
         '503':
           $ref: '#/components/responses/ServicoIndisponivel'
+        '504':
+          $ref: '#/components/responses/BancoSemResposta'
 
   /v1/proofs/view-url:
     post:
@@ -161,13 +165,16 @@ paths:
         existisse. A indistinção é proposital: separar os dois casos entregaria a um
         curioso uma forma de descobrir quais pagamentos existem.
 
-        **Também responde `403` quando o comprovante ainda está no Supabase Storage**
-        (`proof_provider` diferente de `cloudinary`). Durante a migração existem
-        arquivos nos dois provedores, e este endpoint só assina os da Cloudinary.
-        Assinar um identificador de outro sistema devolveria uma URL bem formada
-        apontando para um arquivo inexistente — link quebrado, em silêncio, sobre
-        dado financeiro. Nesse caso, o cliente deve usar a URL assinada do próprio
-        Storage.
+        Só depois de confirmar que você pode ver o pagamento, a resposta conta o que há
+        com ele:
+
+        - `404` (`proof_not_found`) — o pagamento não tem comprovante.
+        - `409` (`proof_not_on_cloudinary`) — o comprovante ainda está no Supabase
+          Storage. Durante a migração existem arquivos nos dois provedores, e este
+          endpoint só assina os da Cloudinary. Assinar um identificador de outro
+          sistema devolveria uma URL bem formada apontando para um arquivo
+          inexistente — link quebrado, em silêncio, sobre dado financeiro. Nesse
+          caso, o cliente usa a URL assinada do próprio Storage.
 
         O caminho do arquivo é **derivado** do pagamento (`comprovantes/<user_id>/<paymentId>`),
         não lido da coluna: o valor gravado é editável por quem é dono da linha, e
@@ -197,14 +204,50 @@ paths:
           $ref: '#/components/responses/NaoAutenticado'
         '403':
           $ref: '#/components/responses/SemAcesso'
+        '404':
+          description: |
+            O pagamento é seu (ou você é administrador), mas não tem comprovante.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                semComprovante:
+                  value:
+                    error: Este pagamento não tem comprovante
+                    code: proof_not_found
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+        '409':
+          description: |
+            O comprovante está no armazenamento antigo (Supabase Storage).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                armazenamentoAntigo:
+                  value:
+                    error: Este comprovante está no armazenamento antigo e não abre por aqui
+                    code: proof_not_on_cloudinary
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
         '413':
           $ref: '#/components/responses/CorpoGrandeDemais'
         '429':
           $ref: '#/components/responses/RequisicoesDemais'
         '500':
           $ref: '#/components/responses/ErroInterno'
+        '502':
+          $ref: '#/components/responses/RespostaInvalidaDoBanco'
         '503':
           $ref: '#/components/responses/ServicoIndisponivel'
+        '504':
+          $ref: '#/components/responses/BancoSemResposta'
 
   /v1/justifications/sign-upload:
     post:
@@ -218,9 +261,11 @@ paths:
           todos os aparelhos atualizarem. Assina `justificativas/<usuário do token>/<classId>`
           sem consultar o banco, com os mesmos campos de sempre.
         - **`{ justificationId }`** — lê a justificativa com o **seu** token e só assina se
-          ela for sua, estiver pendente e ainda não tiver anexo; senão, `403`. O nome do
-          arquivo é o `justificationId` na primeira tentativa e `<justificationId>-2` no
-          reenvio. A assinatura inclui `overwrite=false` e `allowed_formats`: envie os dois
+          ela for sua; se não for, ou não existir, `403`. Sendo sua, `409` se já foi
+          decidida (`justification_not_pending`) ou se já tem anexo
+          (`justification_already_has_attachment`). O nome do arquivo é o
+          `justificationId` na primeira tentativa e `<justificationId>-2` no reenvio;
+          tentativa fora de 1 e 2 é resposta fora do combinado do banco, `502`. A assinatura inclui `overwrite=false` e `allowed_formats`: envie os dois
           à Cloudinary exatamente como vieram, ou o envio é recusado.
 
         A pasta vem sempre do usuário do token, nunca do corpo.
@@ -253,14 +298,40 @@ paths:
           $ref: '#/components/responses/NaoAutenticado'
         '403':
           $ref: '#/components/responses/SemAcesso'
+        '409':
+          description: |
+            Só na forma `{ justificationId }`, e só para o dono: a justificativa não aceita
+            anexo agora.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                jaDecidida:
+                  value:
+                    error: Esta justificativa já foi decidida e não aceita anexo
+                    code: justification_not_pending
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+                jaTemAnexo:
+                  value:
+                    error: Esta justificativa já tem anexo
+                    code: justification_already_has_attachment
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
         '413':
           $ref: '#/components/responses/CorpoGrandeDemais'
         '429':
           $ref: '#/components/responses/RequisicoesDemais'
         '500':
           $ref: '#/components/responses/ErroInterno'
+        '502':
+          $ref: '#/components/responses/RespostaInvalidaDoBanco'
         '503':
           $ref: '#/components/responses/ServicoIndisponivel'
+        '504':
+          $ref: '#/components/responses/BancoSemResposta'
 
   /v1/justifications/view-url:
     post:
@@ -270,11 +341,15 @@ paths:
       description: |
         Quem pode ver é decidido pelas regras de acesso do banco (RLS), com o **seu**
         token: o dono, quem pode decidir a justificativa enquanto ela está pendente, e o
-        administrador. Sem direito, sem anexo ou com anexo fora da Cloudinary: `403`.
+        administrador. Sem direito, ou justificativa inexistente: `403`. Para quem pode
+        ler: `404` (`justification_attachment_not_found`) se não há anexo e `409`
+        (`justification_attachment_not_on_cloudinary`) se ele está no armazenamento
+        antigo.
 
         O endereço é assinado sobre um dos caminhos **derivados** da justificativa
         (`justificativas/<user_id>/<id>`, `…/<id>-2` ou, na justificativa de aula,
-        `…/<class_id>`): o que for igual ao anexo gravado. Se nenhum for, `403`.
+        `…/<class_id>`): o que for igual ao anexo gravado. Se nenhum for, `409`
+        (`justification_attachment_path_mismatch`), sem assinar nada.
       requestBody:
         required: true
         content:
@@ -300,14 +375,55 @@ paths:
           $ref: '#/components/responses/NaoAutenticado'
         '403':
           $ref: '#/components/responses/SemAcesso'
+        '404':
+          description: |
+            Você pode ler a justificativa, mas ela não tem anexo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                semAnexo:
+                  value:
+                    error: Esta justificativa não tem anexo
+                    code: justification_attachment_not_found
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+        '409':
+          description: |
+            Você pode ler a justificativa, mas o anexo não abre por aqui.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                armazenamentoAntigo:
+                  value:
+                    error: Este anexo está no armazenamento antigo e não abre por aqui
+                    code: justification_attachment_not_on_cloudinary
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+                foraDoLugar:
+                  value:
+                    error: O anexo desta justificativa não está no lugar esperado
+                    code: justification_attachment_path_mismatch
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
         '413':
           $ref: '#/components/responses/CorpoGrandeDemais'
         '429':
           $ref: '#/components/responses/RequisicoesDemais'
         '500':
           $ref: '#/components/responses/ErroInterno'
+        '502':
+          $ref: '#/components/responses/RespostaInvalidaDoBanco'
         '503':
           $ref: '#/components/responses/ServicoIndisponivel'
+        '504':
+          $ref: '#/components/responses/BancoSemResposta'
 
   /v1/motivos/sign-upload:
     post:
@@ -319,7 +435,8 @@ paths:
         troca permanente de aula.
 
         **Antes de assinar**, pergunta ao banco, com o **seu** token, se você pode anexar
-        a esse motivo (`pode_anexar_ao_motivo`). Sem o `true`, `403`.
+        a esse motivo (`pode_anexar_ao_motivo`). Com o `false`, `403`. Se o banco falhar
+        ao responder, `502`, `503` ou `504`, conforme a falha, e nada é assinado.
 
         Assina `motivos/<usuário do token>/<anexoId>`, com `overwrite=false` e
         `allowed_formats` (imagem ou PDF): envie os dois à Cloudinary exatamente como
@@ -357,8 +474,12 @@ paths:
           $ref: '#/components/responses/RequisicoesDemais'
         '500':
           $ref: '#/components/responses/ErroInterno'
+        '502':
+          $ref: '#/components/responses/RespostaInvalidaDoBanco'
         '503':
           $ref: '#/components/responses/ServicoIndisponivel'
+        '504':
+          $ref: '#/components/responses/BancoSemResposta'
 
   /v1/motivos/view-url:
     post:
@@ -367,7 +488,8 @@ paths:
       operationId: obterUrlDeMotivo
       description: |
         Quem pode ver é decidido pelas regras de acesso do banco (RLS) sobre o anexo, com
-        o **seu** token. Anexo invisível para você, ou fora da Cloudinary: `403`.
+        o **seu** token. Anexo invisível para você, ou inexistente: `403`. Para quem pode
+        ler, anexo fora da Cloudinary: `409` (`motivo_attachment_not_on_cloudinary`).
 
         O caminho é **derivado** de quem enviou e do identificador do anexo
         (`motivos/<uploaded_by>/<anexoId>`), nunca lido da coluna gravada.
@@ -396,14 +518,34 @@ paths:
           $ref: '#/components/responses/NaoAutenticado'
         '403':
           $ref: '#/components/responses/SemAcesso'
+        '409':
+          description: |
+            Você pode ler o anexo, mas ele está no armazenamento antigo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                armazenamentoAntigo:
+                  value:
+                    error: Este anexo está no armazenamento antigo e não abre por aqui
+                    code: motivo_attachment_not_on_cloudinary
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
         '413':
           $ref: '#/components/responses/CorpoGrandeDemais'
         '429':
           $ref: '#/components/responses/RequisicoesDemais'
         '500':
           $ref: '#/components/responses/ErroInterno'
+        '502':
+          $ref: '#/components/responses/RespostaInvalidaDoBanco'
         '503':
           $ref: '#/components/responses/ServicoIndisponivel'
+        '504':
+          $ref: '#/components/responses/BancoSemResposta'
 
 components:
   securitySchemes:
@@ -634,17 +776,27 @@ components:
           description: Código estável, próprio para tratamento automático.
           enum:
             - bad_input
+            - bad_request
             - malformed_json
             - no_token
             - bad_token_format
             - bad_token
             - forbidden
             - route_not_found
+            - proof_not_found
+            - proof_not_on_cloudinary
+            - justification_not_pending
+            - justification_already_has_attachment
+            - justification_attachment_not_found
+            - justification_attachment_not_on_cloudinary
+            - justification_attachment_path_mismatch
+            - motivo_attachment_not_on_cloudinary
             - payload_too_large
             - rate_limited
             - internal_error
+            - supabase_invalid_response
             - supabase_unreachable
-            - supabase_error
+            - supabase_timeout
           examples: [forbidden]
         traceId:
           type: string
@@ -657,9 +809,12 @@ components:
         O corpo enviado não passou na validação.
 
         - `bad_input` — um identificador está ausente ou não é um UUID, a página
-          está fora de 1 a 999, ou (na justificativa) vieram `classId` e
-          `justificationId` juntos ou nenhum dos dois.
+          está fora de 1 a 999, o corpo não é um objeto, ou (na justificativa) vieram
+          `classId` e `justificationId` juntos ou nenhum dos dois. O `error` diz qual
+          foi o problema, numa frase.
         - `malformed_json` — o corpo não é um JSON válido.
+        - `bad_request` — outro defeito da requisição, percebido antes de ler o corpo
+          (por exemplo, um `charset` que o servidor não conhece).
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -671,7 +826,7 @@ components:
             paymentIdInvalido:
               summary: paymentId fora do formato UUID
               value:
-                error: Dados inválidos na requisição
+                error: paymentId precisa ser um UUID válido
                 code: bad_input
                 traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
             jsonQuebrado:
@@ -679,6 +834,12 @@ components:
               value:
                 error: JSON inválido
                 code: malformed_json
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+            requisicaoInvalida:
+              summary: charset desconhecido
+              value:
+                error: Requisição inválida
+                code: bad_request
                 traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
 
     NaoAutenticado:
@@ -688,7 +849,8 @@ components:
         - `no_token` — o cabeçalho `Authorization` não veio.
         - `bad_token_format` — veio, mas não no formato `Bearer <token>`. Recusado
           localmente, sem consultar o Supabase.
-        - `bad_token` — o Supabase não reconheceu o token (expirado, revogado ou inválido).
+        - `bad_token` — o Supabase não reconheceu o token (expirado, revogado ou
+          inválido), na verificação da sessão ou na consulta ao banco.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -792,10 +954,8 @@ components:
 
     ServicoIndisponivel:
       description: |
-        Um serviço do qual dependemos não respondeu a tempo. Vale tentar de novo.
-
-        - `supabase_unreachable` — não foi possível alcançar o Supabase.
-        - `supabase_error` — o Supabase respondeu com erro próprio.
+        Não foi possível alcançar o Supabase, ou ele avisou que está fora do ar
+        (`supabase_unreachable`). Nada é liberado. Vale tentar de novo.
       content:
         application/json:
           schema:
@@ -806,8 +966,34 @@ components:
                 error: Não foi possível falar com o servidor de dados
                 code: supabase_unreachable
                 traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
-            erroDoUpstream:
+
+    RespostaInvalidaDoBanco:
+      description: |
+        O Supabase respondeu, mas fora do combinado: erro interno, função ou coluna
+        ausente, ou um valor que não é o esperado (`supabase_invalid_response`). Nada é
+        liberado. Tentar de novo em seguida não deve resolver.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            respostaInvalida:
               value:
-                error: Servidor de dados indisponível
-                code: supabase_error
+                error: O servidor de dados respondeu de forma inesperada
+                code: supabase_invalid_response
+                traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+
+    BancoSemResposta:
+      description: |
+        O Supabase não respondeu dentro do prazo (`supabase_timeout`). Nada é liberado.
+        Vale tentar de novo.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            tempoEsgotado:
+              value:
+                error: O servidor de dados demorou demais para responder
+                code: supabase_timeout
                 traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c

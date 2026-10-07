@@ -260,8 +260,9 @@ decidido pelas regras de acesso do banco: o dono do pagamento ou um administrado
 
 **Resposta:** `{ "url": "https://res.cloudinary.com/..." }`
 
-Responde `403` também quando o comprovante ainda está no Supabase Storage — durante
-a migração existem arquivos nos dois provedores, e este endpoint só assina os da
+Se o pagamento não existe ou não é seu, `403`. Sendo seu, `404` quando ele não tem
+comprovante e `409` quando o comprovante ainda está no Supabase Storage — durante a
+migração existem arquivos nos dois provedores, e este endpoint só assina os da
 Cloudinary. O caminho é **derivado** do pagamento, nunca lido da coluna: quem é dono
 da linha pode editá-la, e confiar no valor gravado permitiria apontar para o
 comprovante de outra pessoa.
@@ -274,8 +275,8 @@ comprovantes, a pasta é decidida pelo servidor a partir do usuário do token.
 **Envio:** exatamente um dos dois (os dois juntos, ou nenhum, dão `400`):
 
 * `{ "justificationId": "<uuid>" }` — a forma nova. O servidor lê a justificativa com
-  o seu token e só assina se ela for sua, estiver pendente e ainda não tiver anexo
-  (senão, `403`). O arquivo fica em `justificativas/<usuário>/<justificativa>`, ou
+  o seu token e só assina se ela for sua (senão, `403`), estiver pendente e ainda
+  não tiver anexo (senão, `409`, com o motivo). O arquivo fica em `justificativas/<usuário>/<justificativa>`, ou
   `…/<justificativa>-2` no reenvio.
 * `{ "classId": "<uuid>" }` — a forma antiga, do app 1.8 e da web atual, que continua
   valendo até todos atualizarem. O arquivo fica em `justificativas/<usuário>/<aula>`.
@@ -294,9 +295,12 @@ administrador.
 
 **Resposta:** `{ "url": "https://res.cloudinary.com/...", "paginas": 1, "pagina": 1 }`
 
+Se você não pode ver a justificativa, `403`. Podendo, `404` quando ela não tem anexo
+e `409` quando o anexo está no armazenamento antigo.
+
 O endereço é assinado sobre um dos caminhos **derivados** da justificativa (a
 justificativa, o reenvio ou a aula) — o que for igual ao anexo gravado. Se nenhum
-for, `403`: o aluno pode editar a coluna enquanto a justificativa está pendente, e
+for, `409`, sem assinar nada: o aluno pode editar a coluna enquanto a justificativa está pendente, e
 apontá-la para o arquivo de outra pessoa não tem efeito.
 
 ### `POST /v1/motivos/sign-upload`
@@ -320,7 +324,8 @@ pelas regras de acesso do banco.
 
 **Resposta:** `{ "url": "https://res.cloudinary.com/...", "paginas": 1, "pagina": 1 }`
 
-O caminho é **derivado** de quem enviou e do anexo, nunca lido da coluna.
+Se você não pode ver o anexo, `403`; podendo, `409` quando ele está no armazenamento
+antigo. O caminho é **derivado** de quem enviou e do anexo, nunca lido da coluna.
 
 > As rotas de arquivo (comprovantes, justificativas e motivos) somam **20 requisições
 > por minuto** num contador só, por endereço de origem, além do limite geral de 60.
@@ -336,13 +341,22 @@ nos logs:
 
 | Código HTTP | Quando acontece |
 | --- | --- |
-| `400` | Dados inválidos ou JSON malformado |
+| `400` | Dados inválidos (a mensagem diz qual), JSON malformado ou requisição inválida |
 | `401` | Sem token, ou token expirado/inválido |
-| `403` | Autenticado, mas sem direito ao arquivo (ou a anexar) |
-| `404` | Rota inexistente |
+| `403` | Autenticado, mas sem direito ao arquivo (ou a anexar), ou o registro não existe |
+| `404` | Rota inexistente, ou o registro que você pode ver não tem arquivo |
+| `409` | O registro é seu, mas não aceita a ação agora (já decidido, já anexado, arquivo no armazenamento antigo) |
 | `413` | Corpo da requisição acima do limite |
 | `429` | Requisições demais em pouco tempo |
-| `503` | Supabase ou Cloudinary indisponíveis |
+| `500` | Erro inesperado no servidor |
+| `502` | O banco respondeu de forma inesperada |
+| `503` | O banco está fora do ar ou inalcançável |
+| `504` | O banco demorou demais para responder |
+
+Cada caso tem o seu `code`, e é por ele que o app decide o que fazer; a lista
+completa está em `docs/openapi.yaml`. O `404` e o `409` só aparecem depois de
+confirmado que você pode ver o registro: para quem não pode, tudo é `403`, e assim
+ninguém descobre quais registros existem testando identificadores.
 
 ## ☁️ Publicando na Render
 
