@@ -1,4 +1,5 @@
-import { semAcesso } from '../../lib/http-error.js';
+import { conflito, naoEncontrado, semAcesso } from '../../lib/http-error.js';
+import { respostaInvalidaDoSupabase } from '../../lib/supabase.js';
 import {
   FORMATOS_DE_ANEXO,
   PROVEDOR_CLOUDINARY,
@@ -24,6 +25,27 @@ import {
  * segundo adaptador: a Cloudinary assina qualquer pasta e entrega qualquer
  * `public_id`, e duplicar essa integração seria duplicar seus defeitos. [#6][#20]
  */
+
+/**
+ * Os erros que só o dono (no `sign-upload`) ou o leitor legítimo (no
+ * `view-url`) vê, cada um com código e frase próprios (contrato § 13.6).
+ */
+const justificativaJaDecidida = () =>
+  conflito('Esta justificativa já foi decidida e não aceita anexo', 'justification_not_pending');
+const justificativaJaTemAnexo = () =>
+  conflito('Esta justificativa já tem anexo', 'justification_already_has_attachment');
+const anexoAusente = () =>
+  naoEncontrado('Esta justificativa não tem anexo', 'justification_attachment_not_found');
+const anexoNoArmazenamentoAntigo = () =>
+  conflito(
+    'Este anexo está no armazenamento antigo e não abre por aqui',
+    'justification_attachment_not_on_cloudinary',
+  );
+const anexoForaDoLugar = () =>
+  conflito(
+    'O anexo desta justificativa não está no lugar esperado',
+    'justification_attachment_path_mismatch',
+  );
 
 /** O que o `view-url` lê. */
 export interface RegistroDeJustificativa {
@@ -117,8 +139,10 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
      * Só assina a justificativa do próprio chamador, pendente e ainda sem
      * anexo; o nome do arquivo vem da tentativa. A leitura vai com o token do
      * chamador, e o `user_id` devolvido é conferido de novo aqui: o professor
-     * da aula LÊ a justificativa pela RLS, mas não anexa nela. Num banco antigo
-     * (sem `attempt`) a leitura é recusada e isto responde 403, nunca 5xx. [#55]
+     * da aula LÊ a justificativa pela RLS, mas não anexa nela: para ele, 403
+     * sem alarme. Os 409 vêm só depois, porque contam algo da linha. Num banco
+     * antigo (sem `attempt`) o PostgREST recusa a consulta, e isso sobe como
+     * 502 do cliente do Supabase. [#55]
      */
     async assinarUploadDaJustificativa(
       chamador: Chamador,
@@ -131,11 +155,13 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
 
       if (!justificativa) throw semAcesso();
       if (justificativa.user_id !== chamador.userId) throw semAcesso();
-      if (justificativa.status !== STATUS_PENDENTE) throw semAcesso();
-      if (justificativa.proof_public_id !== null) throw semAcesso();
+      if (justificativa.status !== STATUS_PENDENTE) throw justificativaJaDecidida();
+      if (justificativa.proof_public_id !== null) throw justificativaJaTemAnexo();
 
+      // O banco garante `attempt` em 1–2; outro valor é resposta fora do
+      // formato, falha do servidor de dados e não do aluno (§ 13.6).
       const nome = nomeDoAnexoDaTentativa(justificativa.id, justificativa.attempt);
-      if (nome === null) throw semAcesso();
+      if (nome === null) throw respostaInvalidaDoSupabase();
 
       return deps.midia.assinarUpload({
         folder: `${PASTA_JUSTIFICATIVAS}/${chamador.userId}`,
@@ -165,28 +191,38 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
         chamador.authorization,
       );
 
-      // Vazio ou sem anexo: 403 sem distinguir "não existe" de "não é seu" —
-      // o contrário seria um oráculo de enumeração. [#55]
-      if (!justificativa?.proof_public_id) {
+      // Vazio: 403 sem distinguir "não existe" de "não é seu" — o contrário
+      // seria um oráculo de enumeração. A linha que a RLS devolve é de leitor
+      // legítimo, e só ele lê o 404 e os 409 abaixo (§ 13.6, regra 4). [#55]
+      if (!justificativa) {
         throw semAcesso();
       }
 
-      if (justificativa.proof_provider !== PROVEDOR_CLOUDINARY) {
-        throw semAcesso();
+      // Provedor antes do public_id, pelo mesmo motivo dos comprovantes: o
+      // legado do Storage não tem public_id e não é "sem anexo".
+      if (
+        justificativa.proof_provider !== null &&
+        justificativa.proof_provider !== PROVEDOR_CLOUDINARY
+      ) {
+        throw anexoNoArmazenamentoAntigo();
+      }
+
+      if (!justificativa.proof_provider || !justificativa.proof_public_id) {
+        throw anexoAusente();
       }
 
       /*
        * O caminho assinado é sempre um dos DERIVADOS; o `proof_public_id`
        * gravado só escolhe qual. Enquanto a justificativa está pendente, o
        * próprio aluno pode alterar esse valor: apontá-lo para o anexo de outra
-       * pessoa não casa com nenhum caminho derivado e vira 403. Mesmo achado
-       * C-2 dos comprovantes. [#55]
+       * pessoa não casa com nenhum caminho derivado e vira 409, sem assinar
+       * nada. Mesmo achado C-2 dos comprovantes. [#55]
        */
       const publicId = caminhosDerivados(justificativa).find(
         (caminho) => caminho === justificativa.proof_public_id,
       );
       if (publicId === undefined) {
-        throw semAcesso();
+        throw anexoForaDoLugar();
       }
 
       return montarVisualizacao(deps.midia, publicId, pagina);

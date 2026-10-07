@@ -15,6 +15,7 @@ import {
  *
  *  1. O destino do upload vem do TOKEN, nunca do corpo da requisição.
  *  2. Quem decide o acesso é a RLS; lista vazia significa "não é seu" — 403.
+ *     Os 404 e 409 só aparecem depois de confirmado o dono (§ 13.6).
  *
  * Testado sem Express, sem SDK e sem rede: a injeção de dependência já
  * garante isso. [#41][#45]
@@ -134,27 +135,46 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
     });
   });
 
-  it('deveNegarComForbiddenQuandoOPagamentoExisteMasNaoTemComprovante', async () => {
-    const { service } = criarCenario({
-      user_id: USUARIO_DO_TOKEN,
-      proof_provider: 'cloudinary',
-      proof_public_id: null,
-    });
+  const SEM_COMPROVANTE = {
+    status: 404,
+    code: 'proof_not_found',
+    message: 'Este pagamento não tem comprovante',
+  };
+  const ARMAZENAMENTO_ANTIGO = {
+    status: 409,
+    code: 'proof_not_on_cloudinary',
+    message: 'Este comprovante está no armazenamento antigo e não abre por aqui',
+  };
+
+  it.each([
+    ['sem public_id', 'cloudinary', null],
+    ['com public_id vazio', 'cloudinary', ''],
+    ['sem provedor nem public_id', null, null],
+  ])(
+    'deveResponder404AoDonoQuandoOPagamentoNaoTemComprovante_%s',
+    async (_rotulo, proof_provider, proof_public_id) => {
+      const { service } = criarCenario({
+        user_id: USUARIO_DO_TOKEN,
+        proof_provider,
+        proof_public_id,
+      });
+
+      await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject(
+        SEM_COMPROVANTE,
+      );
+    },
+  );
+
+  it('deveResponder403EnaoO404QuandoAPoliticaSomenteDonoBarraOutraPessoa', async () => {
+    // O 404 conta que a linha existe; só o leitor legítimo pode ouvir isso.
+    const { service } = criarCenario(
+      { user_id: OUTRO_USUARIO, proof_provider: 'cloudinary', proof_public_id: null },
+      'somente-dono',
+    );
 
     await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
       status: 403,
-    });
-  });
-
-  it('deveNegarComForbiddenQuandoOComprovanteEhStringVazia', async () => {
-    const { service } = criarCenario({
-      user_id: USUARIO_DO_TOKEN,
-      proof_provider: 'cloudinary',
-      proof_public_id: '',
-    });
-
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
-      status: 403,
+      code: 'forbidden',
     });
   });
 
@@ -246,20 +266,34 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
     // Durante a convivência existem comprovantes nos DOIS provedores. Assinar
     // um path do Storage como se fosse public_id da Cloudinary devolveria um
     // link plausível e quebrado — em silêncio, para um dado financeiro.
-    // Recusar é a única resposta honesta. [#9]
+    // Recusar é a única resposta honesta, e com o motivo. [#9]
     const { service } = criarCenario({
       user_id: USUARIO_DO_TOKEN,
       proof_provider: 'supabase_storage',
       proof_public_id: 'comprovantes/x/y',
     });
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
-      status: 403,
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject(
+      ARMAZENAMENTO_ANTIGO,
+    );
+  });
+
+  it('deveResponder409EnaoO404AoLegadoDoStorageQueNaoTemPublicId', async () => {
+    // O legado do Storage tem `proof_public_id` nulo: o provedor é conferido
+    // antes, senão o aluno leria "sem comprovante" sobre um arquivo que existe.
+    const { service } = criarCenario({
+      user_id: USUARIO_DO_TOKEN,
+      proof_provider: 'supabase_storage',
+      proof_public_id: null,
     });
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject(
+      ARMAZENAMENTO_ANTIGO,
+    );
   });
 
   it('naoDevePedirUrlAoProvedorQuandoOComprovanteEhDeOutroSistema', async () => {
-    // Não basta responder 403: a assinatura não pode nem ser tentada. Um
+    // Não basta responder 409: a assinatura não pode nem ser tentada. Um
     // adaptador chamado com identificador alheio pode registrar log, gastar
     // cota ou devolver uma URL que vaze da função por outro caminho.
     const { service, registro } = criarCenario({
@@ -284,9 +318,9 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
       proof_public_id: 'algo',
     });
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
-      status: 403,
-    });
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject(
+      ARMAZENAMENTO_ANTIGO,
+    );
   });
 
   it('deveRecusarQuandoOProvedorEhNuloMesmoComPublicIdPreenchido', async () => {
@@ -300,8 +334,8 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
       proof_public_id: 'comprovantes/x/y',
     });
 
-    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject({
-      status: 403,
-    });
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR)).rejects.toMatchObject(
+      SEM_COMPROVANTE,
+    );
   });
 });
