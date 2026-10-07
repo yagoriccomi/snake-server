@@ -365,7 +365,10 @@ ninguém descobre quais registros existem testando identificadores.
 3. Em **Environment**, cadastre as variáveis da tabela acima. Marque
    `CLOUDINARY_API_SECRET` como *secret*.
 4. Confirme o **Health Check Path** como `/health`.
-5. Publique e copie o endereço gerado (`https://….onrender.com`) para a variável
+5. Em **Settings → Build & Deploy**, deixe o **Auto-Deploy** em **On Commit**
+   (ver [Como publica](#como-publica)). Quando o Cron Job `snakethai-media-cleanup` for
+   criado, faça o mesmo nele.
+6. Publique e copie o endereço gerado (`https://….onrender.com`) para a variável
    `EXPO_PUBLIC_API_URL` do aplicativo.
 
 > **Sobre a primeira chamada demorar.** No plano gratuito o serviço hiberna depois
@@ -386,37 +389,21 @@ Toda alteração passa por uma esteira automática antes de chegar ao ar
 | **Segurança** | Vulnerabilidades conhecidas, licenças das dependências e arquivos de segredo versionados por engano |
 | **CodeQL** | Varredura estática em busca de padrões inseguros no código |
 | **Imagem** | Constrói a imagem, **sobe um contêiner de verdade** e exige resposta do `/health` |
-| **Publicação** | Só na branch `main`, e só depois que todas as anteriores passam |
 
-> **Por que a publicação automática da Render está desligada.** Com ela ligada, cada
-> envio ia direto para produção — inclusive código que não passou por nenhuma dessas
-> verificações. Existiriam dois caminhos até o ar, e o mais rápido seria justamente o
-> sem conferência. Agora existe um só, e ele passa pela esteira.
+### Como publica
+
+Quem publica é a **própria Render**, a cada commit na `main`, sem esperar a esteira
+(no painel, **Auto-Deploy: On Commit**). A proteção está antes: a `main` só muda por
+merge de PR, e um PR só é mesclado com **todas** as verificações acima verdes. Por
+isso, nunca envie commit direto para a `main`. No serviço web, a Render ainda só troca
+de versão quando o `/health` da nova responde; se não responder, a anterior continua
+no ar.
+
+Os serviços não foram criados pelo Blueprint, então o `render.yaml` não chega ao
+painel: ele documenta a configuração, e o que vale é a opção de cada serviço no painel.
 
 **Para reverter uma publicação:** painel da Render → o serviço → aba *Deploys* →
 botão *Rollback* na versão anterior.
-
-### 🔐 O que precisa ser cadastrado no GitHub
-
-Nada disso pode ir para dentro de um arquivo do repositório.
-
-**Settings → Secrets and variables → Actions → aba _Secrets_:**
-
-| Nome | O que é | Onde obter |
-| --- | --- | --- |
-| `RENDER_DEPLOY_HOOK_URL` | Endereço secreto que dispara a publicação | Render → serviço → *Settings* → *Deploy Hook* → copiar a URL |
-
-**Aba _Variables_** (não são segredos, ficam visíveis no log):
-
-| Nome | O que é | Exemplo |
-| --- | --- | --- |
-| `RENDER_SERVICE_URL` | Endereço público do serviço, usado para conferir a saúde após publicar | `https://snakethai-api.onrender.com` |
-
-**E no painel da Render** (*Environment*), as variáveis da tabela acima — marcando
-`CLOUDINARY_API_SECRET` como *secret*.
-
-> Recomendado: em **Settings → Environments**, criar o ambiente `producao` e exigir
-> aprovação manual. A esteira já aponta para ele, então basta ativar a exigência.
 
 ## 📚 Documentação
 

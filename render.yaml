@@ -21,14 +21,15 @@ services:
     # Endpoint trivial e sem I/O: acorda rápido depois da hibernação. [#82]
     healthCheckPath: /health
 
-    # DESLIGADO de proposito. Com autoDeploy ligado, a Render publica a
-    # cada push - inclusive de codigo que nao passou por lint, tipo, teste,
-    # auditoria de licenca ou validacao da imagem. Existiriam dois caminhos
-    # ate producao, e o mais rapido deles seria justamente o sem gate.
+    # A Render publica cada commit da `main` assim que ele chega, sem esperar
+    # os checks (no painel: Auto-Deploy "On Commit", decisão do dono em
+    # 07/10, D33). A proteção é outra: a `main` só muda por merge de PR, e
+    # só se mescla com a esteira TODA verde (lint, tipos, testes, auditoria,
+    # CodeQL e a imagem). Por isso nunca há push direto na `main`. [#49][#77]
     #
-    # Agora o deploy e disparado pelo job `deploy` do .github/workflows/ci.yml,
-    # que so roda depois que todos os outros passam. [#49][#77]
-    autoDeploy: false
+    # Este arquivo não chega ao painel: os serviços não foram criados pelo
+    # Blueprint. O que vale é a opção do painel; aqui ela fica documentada.
+    autoDeployTrigger: commit
 
     envVars:
       - key: NODE_ENV
@@ -89,6 +90,13 @@ services:
     # suficiente para a fila não crescer entre execuções.
     schedule: '0 3 * * *'
     dockerCommand: node dist/jobs/media-cleanup/media-cleanup.js
+
+    # ⚠️ Este Cron Job NÃO existe no painel (conferido pelo dono em 07/10):
+    # até ele ser criado, nenhum arquivo é apagado de fato. Será criado
+    # antes de o app ter alunos de verdade, junto com a troca da
+    # `service_role` (itens 5.1 e 5.2 do ROADMAP-server.md, D34). Ao criar,
+    # use o mesmo gatilho do serviço web, para receber as correções do worker.
+    autoDeployTrigger: commit
 
     envVars:
       - key: SUPABASE_URL

@@ -468,14 +468,15 @@ Para adicionar um módulo, siga o passo a passo do `CLAUDE.md`.
 
 ## 10. Deploy
 
-O passo a passo operacional — secrets do GitHub, variáveis da Render, ambiente
-com aprovação manual e a migração dos comprovantes existentes — está em
+O passo a passo operacional — variáveis e Auto-Deploy na Render e a migração dos
+comprovantes existentes — está em
 [`DEPLOY.md`](DEPLOY.md), na ordem de execução.
 
 Em resumo: `render.yaml` com `runtime: docker` (a Render constrói a **mesma**
-imagem que roda local), health check em `/health` e **`autoDeploy: false`** de
-propósito — com ele ligado existiriam dois caminhos até produção, e o mais rápido
-seria justamente o que ignora todos os gates da esteira.
+imagem que roda local), health check em `/health` e **`autoDeployTrigger: commit`**
+(no painel, *On Commit*, D33): a Render publica cada commit da `main` assim que ele
+chega. A barreira é mesclar na `main` só com todos os checks da esteira verdes. Os
+serviços não foram criados pelo Blueprint: o `render.yaml` documenta, e o painel manda.
 
 ## 11. Lado do app
 
