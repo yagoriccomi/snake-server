@@ -94,6 +94,16 @@ O servidor nasce preparado para crescer:
   ver/alterar um dado, ele repassa o **token do chamador** ao PostgREST do
   Supabase; a **RLS que já existe** decide. O servidor não reimplementa
   permissão.
+- **Falhas do Supabase** (contrato § 13.6), iguais no Auth, na leitura e na RPC:
+  token recusado → `401 bad_token`; fora do ar ou inalcançável → `503
+  supabase_unreachable`; prazo vencido → `504 supabase_timeout`; qualquer outra
+  resposta fora do combinado (erro interno, função ou coluna ausente, formato
+  inesperado) → `502 supabase_invalid_response`. Nenhuma delas vira `403`: falta
+  de permissão e dependência quebrada são coisas diferentes, e misturá-las
+  esconderia o defeito.
+- **404 e 409 só depois do dono:** a linha que a RLS não devolve é `403`, sem
+  distinguir "não existe" de "não é seu". Os `404` e `409` de cada rota contam algo
+  da linha, e por isso só saem para quem pode lê-la.
 - **Regra de segredos:**
   - Segredos de terceiros (Cloudinary etc.) vivem **só** na Render.
   - **Nunca** o `SUPABASE_JWT_SECRET` (permitiria forjar tokens).
@@ -172,9 +182,13 @@ Autenticado (dono ou admin). Body `{ "paymentId": "<uuid>" }`.
    falhar, responde `502` (resposta inválida, inclusive outro 4xx), `503` (fora do ar
    ou rede) ou `504` (tempo esgotado), sem alarme e sem liberar (contrato § 13.5).
    Com `POLITICA_ACESSO_COMPROVANTE=somente-dono`, nem
-   pergunta: `403` direto.
-3. Se `proof_provider` **não for** `cloudinary`, responde `403`.
-4. Assina a URL de visualização.
+   pergunta: `403` direto. Só depois dela vêm o `404` e o `409`, que contam algo
+   sobre a linha (contrato § 13.6, regra 4).
+3. Se `proof_provider` existir e **não for** `cloudinary`, responde `409
+   proof_not_on_cloudinary`. O provedor vem antes do `public_id`: o legado do
+   Storage não tem `public_id`, e não é "sem comprovante".
+4. Sem provedor ou sem `public_id`, responde `404 proof_not_found`.
+5. Assina a URL de visualização.
 
 Resposta: `{ "url": "https://res.cloudinary.com/.../authenticated/s--...--/..." }`.
 
@@ -183,7 +197,7 @@ Resposta: `{ "url": "https://res.cloudinary.com/.../authenticated/s--...--/..." 
 Um comprovante que ainda está no Supabase Storage **não é assinável aqui**.
 Assinar assim mesmo devolveria uma URL perfeitamente formada apontando para um
 arquivo que não existe na Cloudinary — link quebrado, em silêncio, sobre dado
-financeiro. Recusar é a única resposta honesta.
+financeiro. Recusar, com o motivo, é a única resposta honesta.
 
 #### Por que o caminho é DERIVADO, e não lido (leia antes de "simplificar")
 
@@ -318,9 +332,11 @@ juntos, ou nenhum, é `400`.
   justificativas/<userId>`, `public_id = <classId>`, sem consulta ao banco e sem
   campo novo na assinatura — o APK 1.8 não envia `overwrite` nem `allowed_formats`.
 - **`{ "justificationId": "<uuid>" }`:** lê `id, user_id, status, attempt,
-  proof_public_id` com o token do chamador e só assina se `user_id` for o do token,
-  `status = 'pending'` e `proof_public_id` for nulo; senão, `403`. `public_id =
-  <id>` na tentativa 1 e `<id>-2` na 2, com `overwrite = false` e `allowed_formats =
+  proof_public_id` com o token do chamador. Sem linha, ou `user_id` diferente do
+  token, `403`. Para o dono: `status` diferente de `pending` → `409
+  justification_not_pending`; `proof_public_id` preenchido → `409
+  justification_already_has_attachment`; `attempt` fora de 1–2 → `502
+  supabase_invalid_response`. `public_id = <id>` na tentativa 1 e `<id>-2` na 2, com `overwrite = false` e `allowed_formats =
   "jpg,png,webp,heic,pdf"` dentro da assinatura. O professor da aula lê a
   justificativa pela RLS, mas não anexa nela: por isso o `user_id` é conferido aqui.
 
@@ -329,11 +345,17 @@ Autenticado. Body `{ "justificationId": "<uuid>", "pagina"?: number }`.
 
 1. Lê `id, user_id, class_id, proof_provider, proof_public_id` (mais `attempt`,
    depois do G4) com o **token do chamador**; a RLS libera para o dono, quem pode decidir a
-   justificativa pendente e o admin. Vazio ou sem anexo → `403`.
-2. Se `proof_provider` **não for** `cloudinary`, responde `403`.
-3. Calcula os caminhos derivados (`justificativas/<user_id>/<id>`, `…/<id>-2` e, com
+   justificativa pendente e o admin. Vazio → `403`.
+2. `conferirLeitorLegitimo`: se a linha for de outra pessoa, confirma no banco
+   (`is_admin` e, se não for admin, `pode_decidir_justificativa`), com as mesmas
+   respostas da segunda barreira dos comprovantes. Até o G4, fica desligada e vale
+   só a RLS (D27).
+3. Se `proof_provider` existir e **não for** `cloudinary`, responde `409
+   justification_attachment_not_on_cloudinary`.
+4. Sem provedor ou sem `proof_public_id` → `404 justification_attachment_not_found`.
+5. Calcula os caminhos derivados (`justificativas/<user_id>/<id>`, `…/<id>-2` e, com
    `class_id`, `…/<class_id>`) e assina o que for **igual** a `proof_public_id`. Se
-   nenhum for, `403`.
+   nenhum for, `409 justification_attachment_path_mismatch`, sem assinar nada.
 
 > **Antes do G4:** `attempt` só existe depois da migration 4.1 da v3. Até ela estar
 > em produção (G4), o `view-url` não pede a coluna — os caminhos derivados não a
@@ -383,9 +405,9 @@ que usa este módulo como está). Quem anexa e quem lê é decidido **no banco**
 Autenticado. Body `{ "motivoId": "<uuid>", "anexoId": "<uuid>" }`.
 
 1. Chama `rpc/pode_anexar_ao_motivo` com `{ p_motivo_id }` e o **token do chamador**.
-   Só o booleano `true` libera; qualquer outra resposta é `403`. Num banco antigo, sem
-   a função, o PostgREST responde 4xx e isso também é `403`, nunca 5xx: é o que deixa
-   o servidor ir ao ar antes das migrations (§ 14).
+   Só o booleano `true` libera; o `false` é `403`. Qualquer outra resposta, inclusive
+   a de um banco sem a função, é falha da dependência: `502`, `503` ou `504`,
+   conforme a falha (§ 13.6), e nada é assinado.
 2. Assina `folder = motivos/<userId do token>`, `public_id = <anexoId>`,
    `type = authenticated`, `overwrite = false` e `allowed_formats =
    "jpg,png,webp,heic,pdf"`.
@@ -396,7 +418,8 @@ Autenticado. Body `{ "anexoId": "<uuid>", "pagina"?: number }`.
 1. Lê `action_reason_attachments` (`id, uploaded_by, provider, public_id`) com o
    **token do chamador**; a política chama `pode_ler_motivo(reason_id)`. Linha ausente
    → `403`.
-2. Provedor diferente de `cloudinary` → `403`.
+2. Provedor diferente de `cloudinary` → `409 motivo_attachment_not_on_cloudinary`.
+   O anexo de motivo sempre tem arquivo, por isso não há `404` aqui.
 3. Deriva `motivos/<uploaded_by>/<id>` (nunca lido de `public_id`, achado C-2) e
    assina a URL.
 
@@ -469,14 +492,15 @@ Para adicionar um módulo, siga o passo a passo do `CLAUDE.md`.
 
 ## 10. Deploy
 
-O passo a passo operacional — secrets do GitHub, variáveis da Render, ambiente
-com aprovação manual e a migração dos comprovantes existentes — está em
+O passo a passo operacional — variáveis e Auto-Deploy na Render e a migração dos
+comprovantes existentes — está em
 [`DEPLOY.md`](DEPLOY.md), na ordem de execução.
 
 Em resumo: `render.yaml` com `runtime: docker` (a Render constrói a **mesma**
-imagem que roda local), health check em `/health` e **`autoDeploy: false`** de
-propósito — com ele ligado existiriam dois caminhos até produção, e o mais rápido
-seria justamente o que ignora todos os gates da esteira.
+imagem que roda local), health check em `/health` e **`autoDeployTrigger: commit`**
+(no painel, *On Commit*, D33): a Render publica cada commit da `main` assim que ele
+chega. A barreira é mesclar na `main` só com todos os checks da esteira verdes. Os
+serviços não foram criados pelo Blueprint: o `render.yaml` documenta, e o painel manda.
 
 ## 11. Lado do app
 

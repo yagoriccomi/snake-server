@@ -309,7 +309,8 @@ tests/
 │   ├── proofs.*.test.ts               # adaptador REAL (assina local), regra e repositório
 │   ├── justifications.service.test.ts # as duas formas e o caminho derivado
 │   ├── justifications.repository.test.ts # colunas pedidas antes e depois do G4
-│   ├── motivos.*.test.ts              # regra e repositório (banco antigo = 403)
+│   ├── esquemas.test.ts               # a frase de cada bad_input, por rota
+│   ├── motivos.*.test.ts              # regra e repositório (falha da RPC = 5xx)
 │   ├── defesa-em-profundidade.test.ts # segunda barreira dos comprovantes
 │   ├── segunda-barreira.repository.test.ts # is_admin e pode_decidir_justificativa
 │   └── media-cleanup.*.test.ts        # fila, validação, três tipos, órfãos, ambiente

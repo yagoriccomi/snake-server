@@ -33,9 +33,6 @@ function criarCliente(permitido: boolean, falha?: HttpError) {
     consultarComoChamador<T>(): Promise<T[]> {
       throw new Error('A barreira não lê tabela.');
     },
-    chamarRpcComoChamador<T>(): Promise<T | null> {
-      throw new Error('A barreira não usa a RPC que transforma 4xx em nulo.');
-    },
     confirmarPermissaoComoChamador(funcao, argumentos, authorization) {
       rpcs.push({ funcao, argumentos, authorization });
       if (falha) return Promise.reject(falha);

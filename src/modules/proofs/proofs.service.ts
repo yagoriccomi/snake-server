@@ -1,4 +1,4 @@
-import { semAcesso } from '../../lib/http-error.js';
+import { conflito, naoEncontrado, semAcesso } from '../../lib/http-error.js';
 import { logger } from '../../lib/logger.js';
 import {
   PASTA_COMPROVANTES,
@@ -14,6 +14,18 @@ import {
  * Os tipos abaixo são o CONTRATO que o domínio impõe à infraestrutura —
  * o adaptador da Cloudinary os implementa, não o contrário. [#20]
  */
+
+/**
+ * Os dois erros que só o leitor legítimo vê (contrato § 13.6): chegam depois
+ * de confirmado o dono, então não revelam nada a quem varre ids. [#55]
+ */
+const comprovanteAusente = () =>
+  naoEncontrado('Este pagamento não tem comprovante', 'proof_not_found');
+const comprovanteNoArmazenamentoAntigo = () =>
+  conflito(
+    'Este comprovante está no armazenamento antigo e não abre por aqui',
+    'proof_not_on_cloudinary',
+  );
 
 export interface ParametrosDeUpload {
   folder: string;
@@ -205,21 +217,30 @@ export function criarProofsService(deps: DependenciasDeProofs) {
     ): Promise<ComprovanteParaVisualizar> {
       const pagamento = await deps.pagamentos.buscarPorId(paymentId, chamador.authorization);
 
-      // Vazio ou sem comprovante: a RLS não liberou. 403 sem distinguir
-      // "não existe" de "não é seu" — o contrário seria um oráculo de
-      // enumeração para quem varre ids. [#55]
-      if (!pagamento?.proof_public_id) {
+      // Vazio: a RLS não liberou. 403 sem distinguir "não existe" de "não
+      // é seu" — o contrário seria um oráculo de enumeração para quem varre
+      // ids. [#55]
+      if (!pagamento) {
         throw semAcesso();
       }
 
-      // Comprovante de outro provedor não é assinável aqui. Recusar é a única
-      // resposta honesta: assinar assim mesmo devolveria um link quebrado
-      // apontando para um arquivo que não existe na Cloudinary. [#9]
-      if (pagamento.proof_provider !== PROVEDOR_CLOUDINARY) {
-        throw semAcesso();
-      }
-
+      // Primeiro o leitor legítimo (dono ou admin); só então o 404 e o 409,
+      // que contam algo sobre a linha e por isso são de quem pode lê-la
+      // (contrato § 13.6, regra 4).
       await conferirLeitorLegitimo(pagamento, chamador);
+
+      // Comprovante de outro provedor não é assinável aqui: assinar assim
+      // mesmo devolveria um link quebrado. O provedor vem antes do
+      // `proof_public_id` porque o legado do Storage não tem public_id, e
+      // a resposta certa para ele é "armazenamento antigo", não "sem
+      // comprovante". [#9]
+      if (pagamento.proof_provider !== null && pagamento.proof_provider !== PROVEDOR_CLOUDINARY) {
+        throw comprovanteNoArmazenamentoAntigo();
+      }
+
+      if (!pagamento.proof_provider || !pagamento.proof_public_id) {
+        throw comprovanteAusente();
+      }
 
       /*
        * O identificador é DERIVADO, nunca lido.

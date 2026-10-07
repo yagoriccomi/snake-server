@@ -16,8 +16,9 @@ import type {
  * Única camada que sabe QUE tabela guarda a justificativa e COMO consultá-la. [#22]
  *
  * Não há decisão de permissão aqui: a consulta vai com o token do chamador e a
- * RLS filtra. Lista vazia significa "a RLS não liberou" (ou, num banco antigo,
- * que uma coluna pedida ainda não existe) — quem interpreta isso é o service.
+ * RLS filtra. Lista vazia significa "a RLS não liberou" — quem interpreta
+ * isso é o service. Coluna pedida que o banco ainda não tem é recusa do
+ * PostgREST e sobe como 502 do cliente do Supabase (contrato § 13.6).
  *
  * `migrationsDoG4EmProducao` vem do composition root, e não da constante
  * importada aqui, para o teste provar os dois estados sem trocar módulo. [#45]

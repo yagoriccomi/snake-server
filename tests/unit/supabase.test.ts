@@ -38,6 +38,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Um 200 cujo corpo não é JSON: o `json()` falha como falharia o real. */
+function respostaSemJson(): Response {
+  return {
+    ok: true,
+    status: 200,
+    json: () => Promise.reject(new SyntaxError('Unexpected token < in JSON')),
+  } as Response;
+}
+
+/** O erro que o `AbortSignal.timeout` produz quando o prazo vence. */
+function erroDeTimeout(): DOMException {
+  return new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+}
+
+const SUPABASE_FORA_DO_AR = { status: 503, code: 'supabase_unreachable' };
+const SUPABASE_LENTO = { status: 504, code: 'supabase_timeout' };
+const SUPABASE_FORA_DO_FORMATO = { status: 502, code: 'supabase_invalid_response' };
+const TOKEN_RECUSADO = { status: 401, code: 'bad_token' };
+
 /** Extrai a URL que o cliente realmente pediu ao `fetch`. */
 function urlChamada(): URL {
   return new URL(String(fetchFalso.mock.calls[0]?.[0]));
@@ -65,28 +84,58 @@ describe('buscarUsuarioPeloToken', () => {
     expect(headers.apikey).toBe(CONFIG.anonKey);
   });
 
-  it('deveDevolverNuloQuandoOProvedorRecusaOToken', async () => {
-    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'invalid' }, 401));
+  it.each([[400], [401], [403], [422]])(
+    'deveDevolverNuloQuandoOAuthRecusaOTokenCom%i',
+    async (status) => {
+      // Só a recusa do token vira "Sessão inválida" (contrato § 13.6).
+      fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'invalid' }, status));
 
-    expect(await cliente.buscarUsuarioPeloToken(AUTORIZACAO)).toBeNull();
-  });
+      expect(await cliente.buscarUsuarioPeloToken(AUTORIZACAO)).toBeNull();
+    },
+  );
 
-  it('deveDevolverNuloQuandoARespostaVem200MasSemIdDeUsuario', async () => {
-    // Sem id verificado não há usuário: é o id que deriva o destino do upload.
-    fetchFalso.mockResolvedValue(respostaFalsa({ email: 'a@b.test' }));
+  it.each([
+    [502, SUPABASE_FORA_DO_AR],
+    [503, SUPABASE_FORA_DO_AR],
+    [504, SUPABASE_LENTO],
+    [500, SUPABASE_FORA_DO_FORMATO],
+  ])('deveTratarOStatus%iDoAuthComoFalhaDoSupabaseENaoComoSessaoInvalida', async (status, erro) => {
+    // Com o Supabase fora do ar, o aluno não pode ler "Sessão inválida" e
+    // sair do app à toa: o problema não é o token dele.
+    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'boom' }, status));
 
-    expect(await cliente.buscarUsuarioPeloToken(AUTORIZACAO)).toBeNull();
+    await expect(cliente.buscarUsuarioPeloToken(AUTORIZACAO)).rejects.toMatchObject(erro);
   });
 
   it.each([
+    ['sem id', { email: 'a@b.test' }],
     ['id numérico', { id: 12345 }],
     ['id nulo', { id: null }],
     ['id vazio', { id: '' }],
     ['corpo vazio', {}],
-  ])('deveDevolverNuloQuandoARespostaTem_%s', async (_rotulo, corpo) => {
+    ['corpo nulo', null],
+  ])('deveResponder502QuandoOAuthDevolve200_%s', async (_rotulo, corpo) => {
+    // Sem id verificado não há usuário: é o id que deriva o destino do upload.
+    // Mas um 200 sem id é o Auth fora do contrato, não o token recusado.
     fetchFalso.mockResolvedValue(respostaFalsa(corpo));
 
-    expect(await cliente.buscarUsuarioPeloToken(AUTORIZACAO)).toBeNull();
+    await expect(cliente.buscarUsuarioPeloToken(AUTORIZACAO)).rejects.toMatchObject(
+      SUPABASE_FORA_DO_FORMATO,
+    );
+  });
+
+  it('deveResponder502QuandoOAuthDevolveUmCorpoQueNaoEhJson', async () => {
+    fetchFalso.mockResolvedValue(respostaSemJson());
+
+    await expect(cliente.buscarUsuarioPeloToken(AUTORIZACAO)).rejects.toMatchObject(
+      SUPABASE_FORA_DO_FORMATO,
+    );
+  });
+
+  it('deveResponder504QuandoOPrazoDaChamadaVence', async () => {
+    fetchFalso.mockRejectedValue(erroDeTimeout());
+
+    await expect(cliente.buscarUsuarioPeloToken(AUTORIZACAO)).rejects.toMatchObject(SUPABASE_LENTO);
   });
 
   it('deveOmitirEmailERoleQuandoNaoVieremComoTexto', async () => {
@@ -176,27 +225,66 @@ describe('consultarComoChamador — onde a injeção seria possível', () => {
     expect((opcoes.headers as Record<string, string>).Authorization).toBe(AUTORIZACAO);
   });
 
-  it('deveDevolverListaVaziaQuandoARlsRecusaComStatus4xx', async () => {
-    // 401/403 do PostgREST = o token não passa na RLS. Quem interpreta
-    // isso como 403 é a camada de regra, não esta.
-    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'permission denied' }, 403));
+  it('deveDevolverListaVaziaQuandoARlsNaoLiberaNenhumaLinha', async () => {
+    // A RLS não recusa: ela filtra. Lista vazia é a linha que o chamador não
+    // vê, e quem a interpreta como 403 é a camada de regra, não esta.
+    fetchFalso.mockResolvedValue(respostaFalsa([]));
 
     expect(await cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO)).toEqual([]);
   });
 
-  it('deveLancar503QuandoOPostgrestRespondeErroDeServidor', async () => {
-    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'boom' }, 500));
+  it('deveResponder401QuandoOPostgrestRecusaOToken', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'JWT expired' }, 401));
 
     await expect(
       cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO),
-    ).rejects.toMatchObject({ status: 503, code: 'supabase_error' });
+    ).rejects.toMatchObject(TOKEN_RECUSADO);
   });
 
-  it('deveDevolverListaVaziaQuandoORetornoNaoEhUmArray', async () => {
-    // Contrato quebrado do upstream não pode virar `undefined.length` aqui.
-    fetchFalso.mockResolvedValue(respostaFalsa({ inesperado: true }));
+  it.each([
+    [400, SUPABASE_FORA_DO_FORMATO],
+    [403, SUPABASE_FORA_DO_FORMATO],
+    [404, SUPABASE_FORA_DO_FORMATO],
+    [500, SUPABASE_FORA_DO_FORMATO],
+    [502, SUPABASE_FORA_DO_AR],
+    [503, SUPABASE_FORA_DO_AR],
+    [504, SUPABASE_LENTO],
+  ])('deveTratarOStatus%iDoPostgrestComoFalhaENaoComoListaVazia', async (status, erro) => {
+    // Coluna ausente ou falta de `grant` como lista vazia viraria um 403 que
+    // esconde o defeito; o Supabase fora do ar, um "sem acesso" (§ 13.6).
+    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'boom' }, status));
 
-    expect(await cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO)).toEqual([]);
+    await expect(
+      cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO),
+    ).rejects.toMatchObject(erro);
+  });
+
+  it.each([
+    ['objeto', { inesperado: true }],
+    ['nulo', null],
+    ['texto', 'ok'],
+  ])('deveResponder502QuandoORetornoEh_%s_EmVezDeUmaLista', async (_rotulo, corpo) => {
+    fetchFalso.mockResolvedValue(respostaFalsa(corpo));
+
+    await expect(
+      cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO),
+    ).rejects.toMatchObject(SUPABASE_FORA_DO_FORMATO);
+  });
+
+  it('deveResponder502QuandoOCorpoDaConsultaNaoEhJson', async () => {
+    fetchFalso.mockResolvedValue(respostaSemJson());
+
+    await expect(
+      cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO),
+    ).rejects.toMatchObject(SUPABASE_FORA_DO_FORMATO);
+  });
+
+  it('deveResponder504QuandoOPrazoDaConsultaVence', async () => {
+    fetchFalso.mockRejectedValue(erroDeTimeout());
+
+    await expect(
+      cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO),
+    ).rejects.toMatchObject(SUPABASE_LENTO);
   });
 
   it('deveNormalizarBarraFinalDaUrlBaseParaNaoGerarCaminhoDuplicado', async () => {
@@ -216,13 +304,16 @@ describe('consultarComoChamador — onde a injeção seria possível', () => {
   });
 });
 
-describe('chamarRpcComoChamador', () => {
+describe('confirmarPermissaoComoChamador', () => {
+  const FUNCAO = 'pode_anexar_ao_motivo';
   const ARGUMENTOS = { p_motivo_id: '00000000-0000-4000-8000-000000000000' };
+
+  const perguntar = () => cliente.confirmarPermissaoComoChamador(FUNCAO, ARGUMENTOS, AUTORIZACAO);
 
   it('deveChamarARpcPorPostComOsArgumentosNoCorpo', async () => {
     fetchFalso.mockResolvedValue(respostaFalsa(true));
 
-    await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO);
+    await perguntar();
 
     const opcoes = fetchFalso.mock.calls[0]?.[1] as RequestInit;
     expect(urlChamada().pathname).toBe('/rest/v1/rpc/pode_anexar_ao_motivo');
@@ -235,50 +326,70 @@ describe('chamarRpcComoChamador', () => {
   it('deveRepassarOTokenDoChamadorParaQueAFuncaoDecidaPorEle', async () => {
     fetchFalso.mockResolvedValue(respostaFalsa(true));
 
-    await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO);
+    await perguntar();
 
     const opcoes = fetchFalso.mock.calls[0]?.[1] as RequestInit;
     expect((opcoes.headers as Record<string, string>).Authorization).toBe(AUTORIZACAO);
   });
 
-  it('deveDevolverORetornoDaFuncao', async () => {
-    fetchFalso.mockResolvedValue(respostaFalsa(false));
+  it.each([[true], [false]])('deveDevolverOBooleanoDaFuncao (%s)', async (resposta) => {
+    fetchFalso.mockResolvedValue(respostaFalsa(resposta));
 
-    expect(
-      await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO),
-    ).toBe(false);
+    expect(await perguntar()).toBe(resposta);
   });
 
-  it('deveDevolverNuloQuandoAFuncaoAindaNaoExisteNoBancoAntigo', async () => {
-    // PGRST202: o servidor foi ao ar antes das migrations (contrato § 14).
-    // Tem que virar "sem acesso", nunca 5xx.
-    fetchFalso.mockResolvedValue(respostaFalsa({ code: 'PGRST202' }, 404));
+  it('deveResponder401QuandoOPostgrestRecusaOToken', async () => {
+    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'JWT expired' }, 401));
 
-    expect(
-      await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO),
-    ).toBeNull();
+    await expect(perguntar()).rejects.toMatchObject(TOKEN_RECUSADO);
   });
 
-  it('deveDevolverNuloQuandoOTokenNaoTemPermissao', async () => {
-    fetchFalso.mockResolvedValue(respostaFalsa({ code: '42501' }, 403));
+  it.each([
+    ['a função ainda não existe (PGRST202)', 404, SUPABASE_FORA_DO_FORMATO],
+    ['falta o grant (42501)', 403, SUPABASE_FORA_DO_FORMATO],
+    ['erro interno', 500, SUPABASE_FORA_DO_FORMATO],
+    ['gateway fora do ar', 502, SUPABASE_FORA_DO_AR],
+    ['banco fora do ar', 503, SUPABASE_FORA_DO_AR],
+    ['gateway sem resposta', 504, SUPABASE_LENTO],
+  ])('naoDeveTransformarEmNaoPodeQuando_%s', async (_rotulo, status, erro) => {
+    // Falha nunca se passa por "não pode": o 403 com alarme esconderia o
+    // defeito e acusaria o aluno (contrato § 13.6).
+    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'boom' }, status));
 
-    expect(
-      await cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO),
-    ).toBeNull();
+    await expect(perguntar()).rejects.toMatchObject(erro);
   });
 
-  it('deveLancar503QuandoOPostgrestRespondeErroDeServidor', async () => {
-    fetchFalso.mockResolvedValue(respostaFalsa({ msg: 'boom' }, 500));
+  it.each([[null], ['true'], [1], [[true]], [{ pode: true }]])(
+    'deveResponder502QuandoAFuncaoNaoDevolveUmBooleano (%j)',
+    async (resposta) => {
+      fetchFalso.mockResolvedValue(respostaFalsa(resposta));
 
-    await expect(
-      cliente.chamarRpcComoChamador('pode_anexar_ao_motivo', ARGUMENTOS, AUTORIZACAO),
-    ).rejects.toMatchObject({ status: 503, code: 'supabase_error' });
+      await expect(perguntar()).rejects.toMatchObject(SUPABASE_FORA_DO_FORMATO);
+    },
+  );
+
+  it('deveResponder502QuandoOCorpoDaFuncaoNaoEhJson', async () => {
+    fetchFalso.mockResolvedValue(respostaSemJson());
+
+    await expect(perguntar()).rejects.toMatchObject(SUPABASE_FORA_DO_FORMATO);
+  });
+
+  it('deveResponder503QuandoARedeFalha', async () => {
+    fetchFalso.mockRejectedValue(new TypeError('fetch failed'));
+
+    await expect(perguntar()).rejects.toMatchObject(SUPABASE_FORA_DO_AR);
+  });
+
+  it('deveResponder504QuandoOPrazoDaFuncaoVence', async () => {
+    fetchFalso.mockRejectedValue(erroDeTimeout());
+
+    await expect(perguntar()).rejects.toMatchObject(SUPABASE_LENTO);
   });
 
   it('deveCodificarONomeDaFuncaoParaNaoPermitirTravessiaDeCaminho', async () => {
     fetchFalso.mockResolvedValue(respostaFalsa(true));
 
-    await cliente.chamarRpcComoChamador('../../auth/v1/admin/users', {}, AUTORIZACAO);
+    await cliente.confirmarPermissaoComoChamador('../../auth/v1/admin/users', {}, AUTORIZACAO);
 
     expect(urlChamada().pathname).not.toContain('/auth/v1');
   });
@@ -410,15 +521,5 @@ describe('confirmarPermissaoComoChamador — segunda barreira (D20)', () => {
 
     expect(erro).toBeInstanceOf(HttpError);
     expect((erro as HttpError).message).not.toContain('ENOTFOUND');
-  });
-});
-
-describe('as outras rotas seguem no 503 até a v6 (C15)', () => {
-  it('deveManter503ParaOTimeoutNaConsultaComum', async () => {
-    fetchFalso.mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'));
-
-    await expect(
-      cliente.consultarComoChamador('payments', {}, '*', AUTORIZACAO),
-    ).rejects.toMatchObject({ status: 503, code: 'supabase_unreachable' });
   });
 });

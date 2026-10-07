@@ -223,34 +223,74 @@ describe('justifications.service — assinarUploadDaJustificativa ({ justificati
     ]);
   });
 
-  it.each<[string, JustificativaParaAssinar | null]>([
-    ['a RLS não libera a linha (ou o banco antigo recusa a leitura)', null],
+  const JA_DECIDIDA = {
+    status: 409,
+    code: 'justification_not_pending',
+    message: 'Esta justificativa já foi decidida e não aceita anexo',
+  };
+  const JA_TEM_ANEXO = {
+    status: 409,
+    code: 'justification_already_has_attachment',
+    message: 'Esta justificativa já tem anexo',
+  };
+  const FORA_DO_FORMATO = { status: 502, code: 'supabase_invalid_response' };
+
+  it.each<[string, JustificativaParaAssinar | null, Record<string, unknown>]>([
+    ['a RLS não libera a linha', null, { status: 403, code: 'forbidden' }],
     [
       'a justificativa é de outra pessoa (o professor lê, mas não anexa)',
       pendente({ user_id: OUTRO_ALUNO }),
+      { status: 403, code: 'forbidden' },
     ],
-    ['a justificativa já foi aprovada', pendente({ status: 'approved' })],
-    ['a justificativa já foi negada', pendente({ status: 'rejected' })],
+    [
+      'a justificativa de outra pessoa já foi decidida (o 409 não vaza)',
+      pendente({ user_id: OUTRO_ALUNO, status: 'approved' }),
+      { status: 403, code: 'forbidden' },
+    ],
+    ['a justificativa já foi aprovada', pendente({ status: 'approved' }), JA_DECIDIDA],
+    ['a justificativa já foi negada', pendente({ status: 'rejected' }), JA_DECIDIDA],
     [
       'a justificativa já tem anexo',
       pendente({ proof_public_id: `justificativas/${USUARIO_DO_TOKEN}/${JUSTIFICATIVA}` }),
+      JA_TEM_ANEXO,
     ],
-    ['a tentativa está fora de 1 e 2', pendente({ attempt: 3 })],
-  ])('deveNegarComForbiddenSemAssinarQuando %s', async (_caso, linha) => {
+    [
+      'a justificativa decidida também tem anexo (decidida pesa mais)',
+      pendente({ status: 'approved', proof_public_id: 'qualquer' }),
+      JA_DECIDIDA,
+    ],
+    ['a tentativa está fora de 1 e 2', pendente({ attempt: 3 }), FORA_DO_FORMATO],
+    ['a tentativa é zero', pendente({ attempt: 0 }), FORA_DO_FORMATO],
+  ])('deveRecusarSemAssinarQuando %s', async (_caso, linha, erro) => {
     const { service, registro } = criarCenario({ paraAssinar: linha });
 
     const promessa = service.assinarUploadDaJustificativa(CHAMADOR, JUSTIFICATIVA);
 
     await expect(promessa).rejects.toBeInstanceOf(HttpError);
-    await expect(promessa).rejects.toMatchObject({ status: 403 });
+    await expect(promessa).rejects.toMatchObject(erro);
     expect(registro.assinados).toEqual([]);
   });
 });
 
 describe('justifications.service — obterUrlDeVisualizacao', () => {
+  const SEM_ANEXO = {
+    status: 404,
+    code: 'justification_attachment_not_found',
+    message: 'Esta justificativa não tem anexo',
+  };
+  const ARMAZENAMENTO_ANTIGO = {
+    status: 409,
+    code: 'justification_attachment_not_on_cloudinary',
+    message: 'Este anexo está no armazenamento antigo e não abre por aqui',
+  };
+  const FORA_DO_LUGAR = {
+    status: 409,
+    code: 'justification_attachment_path_mismatch',
+    message: 'O anexo desta justificativa não está no lugar esperado',
+  };
+
   it('deveNegarComForbiddenQuandoARlsNaoDevolveuALinha', async () => {
-    // Inclui o banco antigo: sem a coluna `attempt`, a leitura é recusada e
-    // volta vazia — 403 até as migrations (decisão do dono, 25/09).
+    // "Não existe" e "não é seu" respondem igual: sem oráculo de enumeração.
     const { service } = criarCenario({ paraVisualizar: null });
 
     await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject({
@@ -258,25 +298,35 @@ describe('justifications.service — obterUrlDeVisualizacao', () => {
     });
   });
 
-  it('deveNegarQuandoAJustificativaNaoTemAnexo', async () => {
-    // Justificativa só com texto é válida — mas não há arquivo para entregar.
-    const { service } = criarCenario({
-      paraVisualizar: comAnexo({ proof_provider: null, proof_public_id: null }),
-    });
+  it.each([
+    ['sem provedor nem public_id', null, null],
+    ['na Cloudinary sem public_id', 'cloudinary', null],
+    ['sem provedor, com public_id', null, `justificativas/${USUARIO_DO_TOKEN}/${JUSTIFICATIVA}`],
+  ])(
+    'deveResponder404QuandoAJustificativaNaoTemAnexo (%s)',
+    async (_caso, proof_provider, proof_public_id) => {
+      // Justificativa só com texto é válida — mas não há arquivo para entregar.
+      const { service } = criarCenario({
+        paraVisualizar: comAnexo({ proof_provider, proof_public_id }),
+      });
 
-    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject({
-      status: 403,
-    });
-  });
+      await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject(
+        SEM_ANEXO,
+      );
+    },
+  );
 
-  it('deveRecusarProvedorQueNaoEhCloudinary', async () => {
+  it.each([
+    ['com public_id', `justificativas/${USUARIO_DO_TOKEN}/${JUSTIFICATIVA}`],
+    ['sem public_id, como o legado do Storage', null],
+  ])('deveResponder409AoProvedorQueNaoEhCloudinary (%s)', async (_caso, proof_public_id) => {
     const { service, registro } = criarCenario({
-      paraVisualizar: comAnexo({ proof_provider: 'supabase_storage' }),
+      paraVisualizar: comAnexo({ proof_provider: 'supabase_storage', proof_public_id }),
     });
 
-    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject({
-      status: 403,
-    });
+    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject(
+      ARMAZENAMENTO_ANTIGO,
+    );
     expect(registro.publicIdsVisualizados).toHaveLength(0);
   });
 
@@ -310,16 +360,16 @@ describe('justifications.service — obterUrlDeVisualizacao', () => {
     ['outra pasta do mesmo aluno', `comprovantes/${USUARIO_DO_TOKEN}/${JUSTIFICATIVA}`],
     ['uma tentativa que não existe', `justificativas/${USUARIO_DO_TOKEN}/${JUSTIFICATIVA}-3`],
     ['um nome qualquer', 'ignorado'],
-  ])('deveNegarQuandoOPonteiroGravadoApontaPara %s', async (_caso, gravado) => {
+  ])('deveResponder409SemAssinarQuandoOPonteiroGravadoApontaPara %s', async (_caso, gravado) => {
     // Regressão do padrão C-2: enquanto pendente, o aluno altera
     // proof_public_id. Nenhum valor fora dos derivados é assinado.
     const { service, registro } = criarCenario({
       paraVisualizar: comAnexo({ proof_public_id: gravado }),
     });
 
-    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject({
-      status: 403,
-    });
+    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject(
+      FORA_DO_LUGAR,
+    );
     expect(registro.publicIdsVisualizados).toEqual([]);
   });
 
@@ -333,9 +383,9 @@ describe('justifications.service — obterUrlDeVisualizacao', () => {
       }),
     });
 
-    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject({
-      status: 403,
-    });
+    await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject(
+      FORA_DO_LUGAR,
+    );
   });
 
   it('deveDerivarOCaminhoDoDonoQuandoOProfessorRevisa', async () => {
@@ -535,7 +585,8 @@ describe('justifications.service — segunda barreira (contrato § 13.5)', () =>
       });
 
       await expect(service.obterUrlDeVisualizacao(JUSTIFICATIVA, CHAMADOR)).rejects.toMatchObject({
-        status: 403,
+        status: 409,
+        code: 'justification_attachment_path_mismatch',
       });
       expect(registro.publicIdsVisualizados).toEqual([]);
     });

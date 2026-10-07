@@ -41,6 +41,14 @@ export const semAcesso = (mensagem = 'Sem acesso', code = 'forbidden'): HttpErro
 export const naoEncontrado = (mensagem = 'Recurso não encontrado', code = 'not_found'): HttpError =>
   new HttpError(404, code, mensagem);
 
+/**
+ * O recurso existe e é de quem pede, mas o estado dele não permite a ação
+ * (já decidido, já anexado, em outro armazenamento). Só depois de confirmar o
+ * dono ou o leitor legítimo, para não revelar o que existe (contrato § 13.6). [#55]
+ */
+export const conflito = (mensagem: string, code: string): HttpError =>
+  new HttpError(409, code, mensagem);
+
 /** Dependência externa (Supabase, Cloudinary) fora do ar ou lenta demais. */
 export const dependenciaIndisponivel = (
   mensagem = 'Serviço temporariamente indisponível',

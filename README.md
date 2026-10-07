@@ -264,8 +264,9 @@ decidido pelas regras de acesso do banco: o dono do pagamento ou um administrado
 
 **Resposta:** `{ "url": "https://res.cloudinary.com/..." }`
 
-Responde `403` também quando o comprovante ainda está no Supabase Storage — durante
-a migração existem arquivos nos dois provedores, e este endpoint só assina os da
+Se o pagamento não existe ou não é seu, `403`. Sendo seu, `404` quando ele não tem
+comprovante e `409` quando o comprovante ainda está no Supabase Storage — durante a
+migração existem arquivos nos dois provedores, e este endpoint só assina os da
 Cloudinary. O caminho é **derivado** do pagamento, nunca lido da coluna: quem é dono
 da linha pode editá-la, e confiar no valor gravado permitiria apontar para o
 comprovante de outra pessoa.
@@ -278,8 +279,8 @@ comprovantes, a pasta é decidida pelo servidor a partir do usuário do token.
 **Envio:** exatamente um dos dois (os dois juntos, ou nenhum, dão `400`):
 
 * `{ "justificationId": "<uuid>" }` — a forma nova. O servidor lê a justificativa com
-  o seu token e só assina se ela for sua, estiver pendente e ainda não tiver anexo
-  (senão, `403`). O arquivo fica em `justificativas/<usuário>/<justificativa>`, ou
+  o seu token e só assina se ela for sua (senão, `403`), estiver pendente e ainda
+  não tiver anexo (senão, `409`, com o motivo). O arquivo fica em `justificativas/<usuário>/<justificativa>`, ou
   `…/<justificativa>-2` no reenvio.
 * `{ "classId": "<uuid>" }` — a forma antiga, do app 1.8 e da web atual, que continua
   valendo até todos atualizarem. O arquivo fica em `justificativas/<usuário>/<aula>`.
@@ -298,9 +299,12 @@ administrador.
 
 **Resposta:** `{ "url": "https://res.cloudinary.com/...", "paginas": 1, "pagina": 1 }`
 
+Se você não pode ver a justificativa, `403`. Podendo, `404` quando ela não tem anexo
+e `409` quando o anexo está no armazenamento antigo.
+
 O endereço é assinado sobre um dos caminhos **derivados** da justificativa (a
 justificativa, o reenvio ou a aula) — o que for igual ao anexo gravado. Se nenhum
-for, `403`: o aluno pode editar a coluna enquanto a justificativa está pendente, e
+for, `409`, sem assinar nada: o aluno pode editar a coluna enquanto a justificativa está pendente, e
 apontá-la para o arquivo de outra pessoa não tem efeito.
 
 ### `POST /v1/motivos/sign-upload`
@@ -324,7 +328,8 @@ pelas regras de acesso do banco.
 
 **Resposta:** `{ "url": "https://res.cloudinary.com/...", "paginas": 1, "pagina": 1 }`
 
-O caminho é **derivado** de quem enviou e do anexo, nunca lido da coluna.
+Se você não pode ver o anexo, `403`; podendo, `409` quando ele está no armazenamento
+antigo. O caminho é **derivado** de quem enviou e do anexo, nunca lido da coluna.
 
 > As rotas de arquivo (comprovantes, justificativas e motivos) somam **20 requisições
 > por minuto** num contador só, por endereço de origem, além do limite geral de 60.
@@ -340,16 +345,22 @@ nos logs:
 
 | Código HTTP | Quando acontece |
 | --- | --- |
-| `400` | Dados inválidos ou JSON malformado |
+| `400` | Dados inválidos (a mensagem diz qual), JSON malformado ou requisição inválida |
 | `401` | Sem token, ou token expirado/inválido |
-| `403` | Autenticado, mas sem direito ao arquivo (ou a anexar) |
-| `404` | Rota inexistente |
+| `403` | Autenticado, mas sem direito ao arquivo (ou a anexar), ou o registro não existe |
+| `404` | Rota inexistente, ou o registro que você pode ver não tem arquivo |
+| `409` | O registro é seu, mas não aceita a ação agora (já decidido, já anexado, arquivo no armazenamento antigo) |
 | `413` | Corpo da requisição acima do limite |
 | `429` | Requisições demais em pouco tempo |
 | `500` | Erro inesperado no servidor |
-| `502` | O banco respondeu de forma inesperada ao confirmar quem pode ver o arquivo |
-| `503` | Supabase ou Cloudinary indisponíveis |
-| `504` | O banco demorou demais para confirmar quem pode ver o arquivo |
+| `502` | O banco respondeu de forma inesperada |
+| `503` | O banco está fora do ar ou inalcançável |
+| `504` | O banco demorou demais para responder |
+
+Cada caso tem o seu `code`, e é por ele que o app decide o que fazer; a lista
+completa está em `docs/openapi.yaml`. O `404` e o `409` só aparecem depois de
+confirmado que você pode ver o registro: para quem não pode, tudo é `403`, e assim
+ninguém descobre quais registros existem testando identificadores.
 
 ## ☁️ Publicando na Render
 
@@ -358,7 +369,10 @@ nos logs:
 3. Em **Environment**, cadastre as variáveis da tabela acima. Marque
    `CLOUDINARY_API_SECRET` como *secret*.
 4. Confirme o **Health Check Path** como `/health`.
-5. Publique e copie o endereço gerado (`https://….onrender.com`) para a variável
+5. Em **Settings → Build & Deploy**, deixe o **Auto-Deploy** em **On Commit**
+   (ver [Como publica](#como-publica)). Quando o Cron Job `snakethai-media-cleanup` for
+   criado, faça o mesmo nele.
+6. Publique e copie o endereço gerado (`https://….onrender.com`) para a variável
    `EXPO_PUBLIC_API_URL` do aplicativo.
 
 > **Sobre a primeira chamada demorar.** No plano gratuito o serviço hiberna depois
@@ -379,37 +393,21 @@ Toda alteração passa por uma esteira automática antes de chegar ao ar
 | **Segurança** | Vulnerabilidades conhecidas, licenças das dependências e arquivos de segredo versionados por engano |
 | **CodeQL** | Varredura estática em busca de padrões inseguros no código |
 | **Imagem** | Constrói a imagem, **sobe um contêiner de verdade** e exige resposta do `/health` |
-| **Publicação** | Só na branch `main`, e só depois que todas as anteriores passam |
 
-> **Por que a publicação automática da Render está desligada.** Com ela ligada, cada
-> envio ia direto para produção — inclusive código que não passou por nenhuma dessas
-> verificações. Existiriam dois caminhos até o ar, e o mais rápido seria justamente o
-> sem conferência. Agora existe um só, e ele passa pela esteira.
+### Como publica
+
+Quem publica é a **própria Render**, a cada commit na `main`, sem esperar a esteira
+(no painel, **Auto-Deploy: On Commit**). A proteção está antes: a `main` só muda por
+merge de PR, e um PR só é mesclado com **todas** as verificações acima verdes. Por
+isso, nunca envie commit direto para a `main`. No serviço web, a Render ainda só troca
+de versão quando o `/health` da nova responde; se não responder, a anterior continua
+no ar.
+
+Os serviços não foram criados pelo Blueprint, então o `render.yaml` não chega ao
+painel: ele documenta a configuração, e o que vale é a opção de cada serviço no painel.
 
 **Para reverter uma publicação:** painel da Render → o serviço → aba *Deploys* →
 botão *Rollback* na versão anterior.
-
-### 🔐 O que precisa ser cadastrado no GitHub
-
-Nada disso pode ir para dentro de um arquivo do repositório.
-
-**Settings → Secrets and variables → Actions → aba _Secrets_:**
-
-| Nome | O que é | Onde obter |
-| --- | --- | --- |
-| `RENDER_DEPLOY_HOOK_URL` | Endereço secreto que dispara a publicação | Render → serviço → *Settings* → *Deploy Hook* → copiar a URL |
-
-**Aba _Variables_** (não são segredos, ficam visíveis no log):
-
-| Nome | O que é | Exemplo |
-| --- | --- | --- |
-| `RENDER_SERVICE_URL` | Endereço público do serviço, usado para conferir a saúde após publicar | `https://snakethai-api.onrender.com` |
-
-**E no painel da Render** (*Environment*), as variáveis da tabela acima — marcando
-`CLOUDINARY_API_SECRET` como *secret*.
-
-> Recomendado: em **Settings → Environments**, criar o ambiente `producao` e exigir
-> aprovação manual. A esteira já aponta para ele, então basta ativar a exigência.
 
 ## 📚 Documentação
 

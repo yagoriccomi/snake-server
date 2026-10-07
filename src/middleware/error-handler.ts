@@ -31,6 +31,28 @@ export interface ErroClassificado {
   contexto?: Record<string, unknown>;
 }
 
+/** Faixa do erro do cliente: o que o Express marca nela é culpa da requisição. */
+const PRIMEIRO_STATUS_DO_CLIENTE = 400;
+const ULTIMO_STATUS_DO_CLIENTE = 499;
+
+/**
+ * Frase do `bad_input` quando o esquema não deu frase ao problema. Os
+ * esquemas das rotas dão frase a todos (`src/lib/esquemas.ts`); isto é rede
+ * de segurança, não caminho esperado.
+ */
+const MENSAGEM_PADRAO_DE_ENTRADA = 'Dados inválidos na requisição';
+
+/**
+ * O status que o Express e o body-parser penduram no erro (`status` ou
+ * `statusCode`, pelo `http-errors`). Só o que for número conta.
+ */
+function statusDoErroDoExpress(erro: unknown): number | undefined {
+  if (typeof erro !== 'object' || erro === null) return undefined;
+  const { status, statusCode } = erro as { status?: unknown; statusCode?: unknown };
+  if (typeof status === 'number') return status;
+  return typeof statusCode === 'number' ? statusCode : undefined;
+}
+
 /** Body-parser marca seus erros com `type`; é assim que os distinguimos. */
 function tipoDoErroDeParse(erro: unknown): string | undefined {
   if (erro instanceof Error && 'type' in erro) {
@@ -63,7 +85,8 @@ export function classificarErro(erro: unknown): ErroClassificado {
     return {
       status: 400,
       code: 'bad_input',
-      mensagem: 'Dados inválidos na requisição',
+      // Uma frase por problema (contrato § 13.6): o aluno lê o que corrigir.
+      mensagem: erro.issues[0]?.message ?? MENSAGEM_PADRAO_DE_ENTRADA,
       mensagemDeLog: 'Entrada inválida',
       nivel: 'warn',
       contexto: { problemas: erro.issues },
@@ -83,6 +106,23 @@ export function classificarErro(erro: unknown): ErroClassificado {
       code: 'payload_too_large',
       mensagem: 'Corpo da requisição grande demais',
       nivel: 'warn',
+    };
+  }
+
+  // Outro erro do cliente que o Express detectou (charset não suportado,
+  // requisição abortada): o genérico da categoria é 400, não 500 (§ 13.6).
+  const statusDoExpress = statusDoErroDoExpress(erro);
+  if (
+    statusDoExpress !== undefined &&
+    statusDoExpress >= PRIMEIRO_STATUS_DO_CLIENTE &&
+    statusDoExpress <= ULTIMO_STATUS_DO_CLIENTE
+  ) {
+    return {
+      status: 400,
+      code: 'bad_request',
+      mensagem: 'Requisição inválida',
+      nivel: 'warn',
+      contexto: { tipo: tipoDeParse, statusOriginal: statusDoExpress },
     };
   }
 

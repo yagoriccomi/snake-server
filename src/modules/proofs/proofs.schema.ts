@@ -1,4 +1,6 @@
-import { z } from 'zod';
+import type { z } from 'zod';
+
+import { corpoJson, paginaDoDocumento, uuidObrigatorio } from '../../lib/esquemas.js';
 
 /**
  * Validação de entrada do módulo. Nada vindo do cliente é usado antes
@@ -8,11 +10,8 @@ import { z } from 'zod';
  * visualização. Ele é interpolado num filtro do PostgREST; um valor
  * arbitrário ali seria uma porta aberta para manipular a query. [#51][#52]
  */
-export const corpoComPaymentId = z.object({
-  paymentId: z
-    .string({ required_error: 'paymentId é obrigatório' })
-    .trim()
-    .uuid('paymentId precisa ser um UUID válido'),
+export const corpoComPaymentId = corpoJson({
+  paymentId: uuidObrigatorio('paymentId'),
 });
 
 export type CorpoComPaymentId = z.infer<typeof corpoComPaymentId>;
@@ -25,7 +24,7 @@ export type CorpoComPaymentId = z.infer<typeof corpoComPaymentId>;
  * requisição. Entrada do cliente sempre com limite. [#51][#65]
  */
 export const corpoDeVisualizacao = corpoComPaymentId.extend({
-  pagina: z.coerce.number().int().min(1).max(999).optional(),
+  pagina: paginaDoDocumento,
 });
 
 export type CorpoDeVisualizacao = z.infer<typeof corpoDeVisualizacao>;

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { corpoJson, paginaDoDocumento, uuidObrigatorio } from '../../lib/esquemas.js';
+
 /**
  * Validação de entrada do módulo. Nada vindo do cliente é usado antes de
  * passar por aqui. [#51]
@@ -8,12 +10,6 @@ import { z } from 'zod';
  * filtro do PostgREST, e `classId` vira parte do caminho do arquivo na
  * Cloudinary. Um valor arbitrário, nos dois casos, é uma porta aberta. [#51][#52]
  */
-function uuidObrigatorio(campo: string) {
-  return z
-    .string({ required_error: `${campo} é obrigatório` })
-    .trim()
-    .uuid(`${campo} precisa ser um UUID válido`);
-}
 
 /**
  * Assinatura do upload: EXATAMENTE uma de duas formas (contrato § 13.2).
@@ -25,24 +21,22 @@ function uuidObrigatorio(campo: string) {
  * escolheria entre duas regras de autorização diferentes. O resultado já sai
  * separado nas duas formas, para o controller não reinterpretar o corpo.
  */
-export const corpoDeAssinaturaDeJustificativa = z
-  .object({
-    classId: uuidObrigatorio('classId').optional(),
-    justificationId: uuidObrigatorio('justificationId').optional(),
-  })
-  .transform((corpo, contexto) => {
-    if (corpo.classId !== undefined && corpo.justificationId === undefined) {
-      return { classId: corpo.classId };
-    }
-    if (corpo.justificationId !== undefined && corpo.classId === undefined) {
-      return { justificationId: corpo.justificationId };
-    }
-    contexto.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Envie exatamente um: classId ou justificationId',
-    });
-    return z.NEVER;
+export const corpoDeAssinaturaDeJustificativa = corpoJson({
+  classId: uuidObrigatorio('classId').optional(),
+  justificationId: uuidObrigatorio('justificationId').optional(),
+}).transform((corpo, contexto) => {
+  if (corpo.classId !== undefined && corpo.justificationId === undefined) {
+    return { classId: corpo.classId };
+  }
+  if (corpo.justificationId !== undefined && corpo.classId === undefined) {
+    return { justificationId: corpo.justificationId };
+  }
+  contexto.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: 'Envie exatamente um: classId ou justificationId',
   });
+  return z.NEVER;
+});
 
 export type CorpoDeAssinaturaDeJustificativa = z.infer<typeof corpoDeAssinaturaDeJustificativa>;
 
@@ -51,9 +45,9 @@ export type CorpoDeAssinaturaDeJustificativa = z.infer<typeof corpoDeAssinaturaD
  * comprovantes: sem ele, uma página inexistente seria renderizada (e cobrada)
  * pela Cloudinary a cada requisição. [#65]
  */
-export const corpoDeVisualizacaoDeJustificativa = z.object({
+export const corpoDeVisualizacaoDeJustificativa = corpoJson({
   justificationId: uuidObrigatorio('justificationId'),
-  pagina: z.coerce.number().int().min(1).max(999).optional(),
+  pagina: paginaDoDocumento,
 });
 
 export type CorpoDeVisualizacaoDeJustificativa = z.infer<typeof corpoDeVisualizacaoDeJustificativa>;

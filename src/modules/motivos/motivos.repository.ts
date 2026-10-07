@@ -14,16 +14,15 @@ import type { RegistroDeAnexoDeMotivo, RepositorioDeMotivos } from './motivos.se
  */
 export function criarRepositorioDeMotivos(supabase: ClienteSupabase): RepositorioDeMotivos {
   return {
-    async podeAnexar(motivoId, authorization) {
-      const resposta = await supabase.chamarRpcComoChamador<unknown>(
+    podeAnexar(motivoId, authorization) {
+      // Só o booleano do banco decide. Função ausente (banco antes do G3),
+      // resposta fora do formato e queda viram 502, 503 ou 504 no cliente:
+      // falha nunca se passa por "não pode" (contrato § 13.6). [#9]
+      return supabase.confirmarPermissaoComoChamador(
         RPC_PODE_ANEXAR,
         { p_motivo_id: motivoId },
         authorization,
       );
-
-      // Só o booleano `true` libera. `null` (recusa, banco antigo sem a
-      // função) e qualquer outro formato de resposta negam. [#9]
-      return resposta === true;
     },
 
     async buscarAnexo(anexoId, authorization) {

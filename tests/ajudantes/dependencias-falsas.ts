@@ -93,7 +93,6 @@ export function criarSupabaseFalso(espioes: Espioes): ClienteSupabase {
 
     // Os módulos recebem os seus leitores prontos (ver `criarDependenciasFalsas`);
     // nenhum chama RPC por este dublê.
-    chamarRpcComoChamador: () => Promise.resolve(null),
     confirmarPermissaoComoChamador: () => Promise.resolve(false),
 
     async consultarComoChamador<T>(

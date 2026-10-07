@@ -4,6 +4,7 @@ import {
   respostaInvalidaDaDependencia,
   sessaoInvalida,
   tempoEsgotadoDaDependencia,
+  type HttpError,
 } from './http-error.js';
 import { logger } from './logger.js';
 
@@ -20,6 +21,10 @@ import { logger } from './logger.js';
  * Exposto como factory, não como funções soltas que leem `env`: assim quem
  * depende dele depende da INTERFACE, e um teste injeta um cliente falso sem
  * precisar interceptar o módulo. [#20][#21]
+ *
+ * Falha do Supabase nunca é "sem acesso" nem "sessão inválida": vira 502, 503
+ * ou 504, e nada é liberado (contrato § 13.6, D20). A única recusa que chega
+ * ao cliente como 401 é a do próprio token.
  */
 
 export interface UsuarioAutenticado {
@@ -34,27 +39,23 @@ export interface ConfigSupabase {
 }
 
 export interface ClienteSupabase {
-  /** Resolve o token em um usuário. `null` = token ausente, expirado ou inválido. */
+  /**
+   * Resolve o token em um usuário. `null` só quando o Auth recusa o token
+   * (4xx); falha do Auth é erro 502, 503 ou 504, nunca `null`.
+   */
   buscarUsuarioPeloToken(authorization: string): Promise<UsuarioAutenticado | null>;
 
-  /** Consulta uma tabela COM o token do chamador, para a RLS filtrar. */
+  /**
+   * Consulta uma tabela COM o token do chamador, para a RLS filtrar. Lista
+   * vazia é "a RLS não liberou"; recusa do PostgREST ou resposta fora do
+   * formato é erro, nunca lista vazia.
+   */
   consultarComoChamador<T>(
     tabela: string,
     filtros: Record<string, string>,
     colunas: string,
     authorization: string,
   ): Promise<T[]>;
-
-  /**
-   * Chama uma RPC COM o token do chamador. `null` quando o PostgREST recusa
-   * (4xx) — inclusive a RPC que ainda não existe num banco antigo. Quem
-   * interpreta a recusa é a regra, não esta camada.
-   */
-  chamarRpcComoChamador<T>(
-    funcao: string,
-    argumentos: Record<string, unknown>,
-    authorization: string,
-  ): Promise<T | null>;
 
   /**
    * Pergunta a uma RPC de permissão se o chamador pode. `true` ou `false` só
@@ -74,6 +75,9 @@ export interface ClienteSupabase {
  * alarme acusaria de acesso indevido quem só precisa entrar de novo).
  */
 const STATUS_TOKEN_RECUSADO = 401;
+
+/** Do 500 para cima, a falha é do Supabase, não do token. */
+const PRIMEIRO_STATUS_DE_FALHA_DO_SERVIDOR = 500;
 
 /** O gateway do Supabase avisa que o banco está fora do ar. */
 const STATUS_FORA_DO_AR: readonly number[] = [502, 503];
@@ -96,7 +100,12 @@ function tempoEsgotado(options?: { cause?: unknown }) {
   return tempoEsgotadoDaDependencia(MENSAGEM_TEMPO_ESGOTADO, 'supabase_timeout', options);
 }
 
-function respostaInvalida(options?: { cause?: unknown }) {
+/**
+ * O Supabase respondeu fora do combinado. Exportado porque um valor fora do
+ * contrato numa linha válida (como `attempt` fora de 1–2) é a mesma falha,
+ * percebida pela regra e não pelo transporte (contrato § 13.6).
+ */
+export function respostaInvalidaDoSupabase(options?: { cause?: unknown }): HttpError {
   return respostaInvalidaDaDependencia(
     MENSAGEM_RESPOSTA_INVALIDA,
     'supabase_invalid_response',
@@ -111,6 +120,23 @@ function ehTimeout(causa: unknown): boolean {
     causa !== null &&
     (causa as { name?: unknown }).name === NOME_DO_ERRO_DE_TIMEOUT
   );
+}
+
+/** O status de falha do gateway ou do banco, quando o token não está em causa. */
+function falhaDoServidorDeDados(status: number): HttpError {
+  if (status === STATUS_TEMPO_ESGOTADO) return tempoEsgotado();
+  if (STATUS_FORA_DO_AR.includes(status)) return foraDoAr();
+  return respostaInvalidaDoSupabase();
+}
+
+/**
+ * A recusa do PostgREST. Só o 401 é do token; o resto do 4xx (função ou
+ * coluna ausente, falta de `grant`) é dependência quebrada, não falta de
+ * permissão: tratá-lo como "sem acesso" esconderia o defeito atrás de um 403.
+ */
+function recusaDoPostgrest(status: number): HttpError {
+  if (status === STATUS_TOKEN_RECUSADO) return sessaoInvalida();
+  return falhaDoServidorDeDados(status);
 }
 
 interface RespostaUsuarioSupabase {
@@ -130,10 +156,9 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
    * conexão do app até o cliente desistir — e nós nem ficamos sabendo.
    *
    * Sem `corpo`, é uma leitura (GET); com `corpo`, a chamada de uma RPC (POST
-   * com JSON). Falha de rede ou timeout sobe crua: quem chama decide o que
-   * ela vira.
+   * com JSON). Prazo vencido é 504; qualquer outra falha de transporte é 503.
    */
-  function enviar(url: string, authorization: string, corpo?: unknown): Promise<Response> {
+  async function chamar(url: string, authorization: string, corpo?: unknown): Promise<Response> {
     const cabecalhos: Record<string, string> = {
       apikey: config.anonKey,
       Authorization: authorization,
@@ -143,23 +168,29 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
       corpo === undefined ? { method: 'GET' } : { method: 'POST', body: JSON.stringify(corpo) };
     if (corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
 
-    return fetch(url, {
-      ...requisicao,
-      headers: cabecalhos,
-      signal: AbortSignal.timeout(TIMEOUT_REQUISICAO_EXTERNA_MS),
-    });
+    try {
+      return await fetch(url, {
+        ...requisicao,
+        headers: cabecalhos,
+        signal: AbortSignal.timeout(TIMEOUT_REQUISICAO_EXTERNA_MS),
+      });
+    } catch (causa) {
+      logger.error('Falha de rede ao chamar o Supabase', { erro: causa });
+      throw ehTimeout(causa) ? tempoEsgotado({ cause: causa }) : foraDoAr({ cause: causa });
+    }
   }
 
   /**
-   * As rotas fora da segunda barreira ainda tratam rede e timeout como um
-   * 503 só: a troca pelos códigos da D20 espera a v6 do contrato (C15).
+   * O corpo também é lido sob o prazo da chamada: se ele vence no meio da
+   * leitura, é 504, como na conexão. Corpo que não é JSON é 502, nunca 500.
    */
-  async function chamar(url: string, authorization: string, corpo?: unknown): Promise<Response> {
+  async function lerJson(resposta: Response): Promise<unknown> {
     try {
-      return await enviar(url, authorization, corpo);
+      return await resposta.json();
     } catch (causa) {
-      logger.error('Falha de rede ao chamar o Supabase', { erro: causa });
-      throw foraDoAr({ cause: causa });
+      throw ehTimeout(causa)
+        ? tempoEsgotado({ cause: causa })
+        : respostaInvalidaDoSupabase({ cause: causa });
     }
   }
 
@@ -167,15 +198,23 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
     async buscarUsuarioPeloToken(authorization) {
       const resposta = await chamar(montarUrl('/auth/v1/user'), authorization);
 
-      if (!resposta.ok) return null;
+      if (!resposta.ok) {
+        // 4xx é o Auth recusando o token: a sessão é que é inválida. Do 500
+        // para cima é o Auth que falhou, e o aluno não pode ler "Sessão
+        // inválida" com o Supabase fora do ar.
+        if (resposta.status < PRIMEIRO_STATUS_DE_FALHA_DO_SERVIDOR) return null;
 
-      const corpo = (await resposta.json()) as RespostaUsuarioSupabase;
+        logger.warn('Auth do Supabase falhou ao validar o token', { status: resposta.status });
+        throw falhaDoServidorDeDados(resposta.status);
+      }
+
+      const corpo = (await lerJson(resposta)) as RespostaUsuarioSupabase | null;
 
       // O `id` é a única coisa que este servidor realmente usa — e é ele que
-      // deriva o destino do upload. Sem id verificado, não há usuário.
-      if (typeof corpo.id !== 'string' || corpo.id.length === 0) {
+      // deriva o destino do upload. Um 200 sem id é o Auth fora do contrato.
+      if (typeof corpo?.id !== 'string' || corpo.id.length === 0) {
         logger.warn('Supabase respondeu 200 sem id de usuário');
-        return null;
+        throw respostaInvalidaDoSupabase();
       }
 
       const usuario: UsuarioAutenticado = { id: corpo.id };
@@ -206,28 +245,29 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
 
       if (!resposta.ok) {
         logger.warn('PostgREST recusou a consulta', { tabela, status: resposta.status });
-
-        // 401/403 aqui significam token que não passa na RLS — tratado como
-        // "sem acesso" por quem chamou. 5xx é problema do upstream.
-        if (resposta.status >= 500) {
-          throw dependenciaIndisponivel('Servidor de dados indisponível', 'supabase_error');
-        }
-        return [];
+        throw recusaDoPostgrest(resposta.status);
       }
 
-      const corpo: unknown = await resposta.json();
-      return Array.isArray(corpo) ? (corpo as T[]) : [];
+      const corpo = await lerJson(resposta);
+
+      if (!Array.isArray(corpo)) {
+        logger.warn('PostgREST respondeu a consulta fora do formato', {
+          tabela,
+          tipo: typeof corpo,
+        });
+        throw respostaInvalidaDoSupabase();
+      }
+      return corpo as T[];
     },
 
     /**
      * Os argumentos vão no corpo JSON, nunca na URL; o nome da função passa
      * por `encodeURIComponent`, como o nome da tabela acima. [#51][#52]
+     *
+     * Numa pergunta de permissão, função ausente ou formato estranho não podem
+     * se passar por "não pode": o 403 esconderia o defeito. [#9][#93]
      */
-    async chamarRpcComoChamador<T>(
-      funcao: string,
-      argumentos: Record<string, unknown>,
-      authorization: string,
-    ): Promise<T | null> {
+    async confirmarPermissaoComoChamador(funcao, argumentos, authorization) {
       const resposta = await chamar(
         montarUrl(`/rest/v1/rpc/${encodeURIComponent(funcao)}`),
         authorization,
@@ -235,57 +275,15 @@ export function criarClienteSupabase(config: ConfigSupabase): ClienteSupabase {
       );
 
       if (!resposta.ok) {
-        logger.warn('PostgREST recusou a RPC', { funcao, status: resposta.status });
-
-        // 4xx: token sem permissão ou a função ainda não existe (banco antigo,
-        // PGRST202). Os dois viram "sem acesso" em quem chamou — nunca 5xx,
-        // para o servidor poder ir ao ar antes das migrations (contrato § 14).
-        if (resposta.status >= 500) {
-          throw dependenciaIndisponivel('Servidor de dados indisponível', 'supabase_error');
-        }
-        return null;
-      }
-
-      return (await resposta.json()) as T;
-    },
-
-    /**
-     * Mesmo transporte da RPC acima, mas sem o atalho "4xx vira `null`": numa
-     * barreira de permissão, função ausente ou formato estranho não podem se
-     * passar por "não pode" e disparar o alarme de acesso indevido. [#9][#93]
-     */
-    async confirmarPermissaoComoChamador(funcao, argumentos, authorization) {
-      let resposta: Response;
-      try {
-        resposta = await enviar(
-          montarUrl(`/rest/v1/rpc/${encodeURIComponent(funcao)}`),
-          authorization,
-          argumentos,
-        );
-      } catch (causa) {
-        logger.error('Falha ao chamar a RPC de permissão', { funcao, erro: causa });
-        throw ehTimeout(causa) ? tempoEsgotado({ cause: causa }) : foraDoAr({ cause: causa });
-      }
-
-      if (!resposta.ok) {
         logger.warn('PostgREST recusou a RPC de permissão', { funcao, status: resposta.status });
-
-        if (resposta.status === STATUS_TOKEN_RECUSADO) throw sessaoInvalida();
-        if (resposta.status === STATUS_TEMPO_ESGOTADO) throw tempoEsgotado();
-        if (STATUS_FORA_DO_AR.includes(resposta.status)) throw foraDoAr();
-        throw respostaInvalida();
+        throw recusaDoPostgrest(resposta.status);
       }
 
-      let corpo: unknown;
-      try {
-        corpo = await resposta.json();
-      } catch (causa) {
-        throw respostaInvalida({ cause: causa });
-      }
+      const corpo = await lerJson(resposta);
 
       if (typeof corpo !== 'boolean') {
         logger.warn('RPC de permissão respondeu fora do formato', { funcao, tipo: typeof corpo });
-        throw respostaInvalida();
+        throw respostaInvalidaDoSupabase();
       }
       return corpo;
     },

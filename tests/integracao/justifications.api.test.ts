@@ -115,13 +115,18 @@ describe('POST /v1/justifications/sign-upload — as duas formas (contrato § 13
     expect(resposta.body.public_id).toBe(`${JUSTIFICATIVA_REENVIADA}-2`);
   });
 
-  it('deveNegarComForbiddenQuandoAJustificativaJaTemAnexo', async () => {
+  it('deveResponder409QuandoAJustificativaJaTemAnexo', async () => {
+    // O dono lê o motivo, com código próprio (contrato § 13.6).
     const resposta = await request(app)
       .post('/v1/justifications/sign-upload')
       .set('Authorization', TOKEN_VALIDO)
       .send({ justificationId: JUSTIFICATIVA_VISIVEL });
 
-    expect(resposta.status).toBe(403);
+    expect(resposta.status).toBe(409);
+    expect(resposta.body).toMatchObject({
+      code: 'justification_already_has_attachment',
+      error: 'Esta justificativa já tem anexo',
+    });
   });
 
   it('deveNegarComForbiddenQuandoARlsNaoLiberaALinha', async () => {

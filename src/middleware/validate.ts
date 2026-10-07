@@ -15,7 +15,9 @@ import type { ZodSchema } from 'zod';
  */
 export function validarCorpo<T>(schema: ZodSchema<T>): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction): void => {
-    const resultado = schema.safeParse(req.body);
+    // Sem corpo, o Express 5 deixa `req.body` indefinido. Tratá-lo como `{}`
+    // faz o aluno ler qual campo faltou, e não que o corpo inteiro faltou.
+    const resultado = schema.safeParse(req.body ?? {});
 
     if (!resultado.success) {
       // O ZodError é traduzido em 400 pelo handler global. [#93]
