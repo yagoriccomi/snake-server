@@ -36,7 +36,7 @@ function criarCliente(migrationsDoG4EmProducao: boolean) {
       consultas.push({ tabela, filtros, colunas, authorization });
       return Promise.resolve([]);
     },
-    chamarRpcComoChamador<T>(): Promise<T | null> {
+    confirmarPermissaoComoChamador(): Promise<boolean> {
       throw new Error('O repositório de justificativas não chama RPC.');
     },
   };

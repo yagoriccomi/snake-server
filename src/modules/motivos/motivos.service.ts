@@ -33,7 +33,7 @@ export interface RegistroDeAnexoDeMotivo {
 
 /** Contrato de acesso ao banco — a implementação real passa pelo token do chamador. */
 export interface RepositorioDeMotivos {
-  /** `true` só quando o banco responde `true`; recusa, erro 4xx ou banco antigo são `false`. */
+  /** O booleano do banco. Falha do Supabase sobe como 502, 503 ou 504, nunca como `false`. */
   podeAnexar(motivoId: string, authorization: string): Promise<boolean>;
   buscarAnexo(anexoId: string, authorization: string): Promise<RegistroDeAnexoDeMotivo | null>;
 }

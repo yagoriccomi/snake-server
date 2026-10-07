@@ -25,6 +25,12 @@ export const naoAutenticado = (mensagem = 'Não autenticado', code = 'no_token')
   new HttpError(401, code, mensagem);
 
 /**
+ * O Auth ou o PostgREST recusou o token (contrato § 13.6): a sessão venceu ou
+ * nunca valeu. Um lugar só para os dois, para o cliente ler o mesmo `code`.
+ */
+export const sessaoInvalida = (): HttpError => naoAutenticado('Sessão inválida', 'bad_token');
+
+/**
  * Autenticado, mas sem direito ao recurso.
  * A mensagem é deliberadamente vaga: distinguir "não existe" de "não é seu"
  * entrega ao atacante um oráculo de enumeração. [#55]
@@ -35,12 +41,38 @@ export const semAcesso = (mensagem = 'Sem acesso', code = 'forbidden'): HttpErro
 export const naoEncontrado = (mensagem = 'Recurso não encontrado', code = 'not_found'): HttpError =>
   new HttpError(404, code, mensagem);
 
+/**
+ * O recurso existe e é de quem pede, mas o estado dele não permite a ação
+ * (já decidido, já anexado, em outro armazenamento). Só depois de confirmar o
+ * dono ou o leitor legítimo, para não revelar o que existe (contrato § 13.6). [#55]
+ */
+export const conflito = (mensagem: string, code: string): HttpError =>
+  new HttpError(409, code, mensagem);
+
 /** Dependência externa (Supabase, Cloudinary) fora do ar ou lenta demais. */
 export const dependenciaIndisponivel = (
   mensagem = 'Serviço temporariamente indisponível',
   code = 'upstream_unavailable',
   options?: { cause?: unknown },
 ): HttpError => new HttpError(503, code, mensagem, options);
+
+/**
+ * A dependência respondeu, mas fora do combinado: erro interno dela, função
+ * ausente, formato que não é o esperado. É 502, não 503 — ela está no ar, e
+ * tentar de novo em seguida não deve resolver.
+ */
+export const respostaInvalidaDaDependencia = (
+  mensagem: string,
+  code: string,
+  options?: { cause?: unknown },
+): HttpError => new HttpError(502, code, mensagem, options);
+
+/** A dependência não respondeu dentro do tempo-limite. */
+export const tempoEsgotadoDaDependencia = (
+  mensagem: string,
+  code: string,
+  options?: { cause?: unknown },
+): HttpError => new HttpError(504, code, mensagem, options);
 
 export function ehHttpError(valor: unknown): valor is HttpError {
   return valor instanceof HttpError;

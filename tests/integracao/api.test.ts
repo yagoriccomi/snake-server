@@ -395,9 +395,13 @@ describe('contrato de erro', () => {
     const appIndisponivel = criarApp(
       criarDependenciasFalsas(espioesLocais, {
         buscarPagamento: () => {
-          throw dependenciaIndisponivel('Servidor de dados indisponível', 'supabase_error', {
-            cause: new Error('getaddrinfo ENOTFOUND interno.rede.local'),
-          });
+          throw dependenciaIndisponivel(
+            'Não foi possível falar com o servidor de dados',
+            'supabase_unreachable',
+            {
+              cause: new Error('getaddrinfo ENOTFOUND interno.rede.local'),
+            },
+          );
         },
       }),
     );
@@ -408,7 +412,7 @@ describe('contrato de erro', () => {
       .send({ paymentId: PAGAMENTO_DO_DONO });
 
     expect(resposta.status).toBe(503);
-    expect(resposta.body.code).toBe('supabase_error');
+    expect(resposta.body.code).toBe('supabase_unreachable');
     expect(JSON.stringify(resposta.body)).not.toContain('interno.rede.local');
   });
 });

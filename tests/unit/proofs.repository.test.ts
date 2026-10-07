@@ -34,7 +34,7 @@ function criarClienteEspiao(resposta: unknown[] | (() => never)) {
     buscarUsuarioPeloToken(): Promise<UsuarioAutenticado | null> {
       throw new Error('O repositório de pagamentos não deve resolver identidade.');
     },
-    chamarRpcComoChamador<T>(): Promise<T | null> {
+    confirmarPermissaoComoChamador(): Promise<boolean> {
       throw new Error('O repositório de pagamentos não chama RPC.');
     },
     consultarComoChamador<T>(
