@@ -49,6 +49,13 @@ export const naoEncontrado = (mensagem = 'Recurso não encontrado', code = 'not_
 export const conflito = (mensagem: string, code: string): HttpError =>
   new HttpError(409, code, mensagem);
 
+/**
+ * A forma de chamada existiu e foi retirada de propósito. É 410, não 400: o
+ * corpo está certo para o cliente antigo, e só atualizar o app resolve.
+ */
+export const formaRetirada = (mensagem: string, code: string): HttpError =>
+  new HttpError(410, code, mensagem);
+
 /** Dependência externa (Supabase, Cloudinary) fora do ar ou lenta demais. */
 export const dependenciaIndisponivel = (
   mensagem = 'Serviço temporariamente indisponível',

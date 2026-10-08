@@ -1,44 +1,23 @@
-import { z } from 'zod';
-
 import { corpoJson, paginaDoDocumento, uuidObrigatorio } from '../../lib/esquemas.js';
 
 /**
  * Validação de entrada do módulo. Nada vindo do cliente é usado antes de
  * passar por aqui. [#51]
  *
- * Os ids são validados como UUID sempre: `justificationId` é interpolado num
- * filtro do PostgREST, e `classId` vira parte do caminho do arquivo na
- * Cloudinary. Um valor arbitrário, nos dois casos, é uma porta aberta. [#51][#52]
+ * O `justificationId` é validado como UUID sempre: ele é interpolado num
+ * filtro do PostgREST, e um valor arbitrário é uma porta aberta. [#51][#52]
  */
 
 /**
- * Assinatura do upload: EXATAMENTE uma de duas formas (contrato § 13.2).
- *
- *  - `{ classId }`: o legado do APK 1.8 e da web atual, que vale até a Fase B;
- *  - `{ justificationId }`: a forma nova, que confere a linha no banco.
- *
- * Os dois juntos, ou nenhum, é 400: adivinhar qual o cliente quis dizer
- * escolheria entre duas regras de autorização diferentes. O resultado já sai
- * separado nas duas formas, para o controller não reinterpretar o corpo.
+ * Assinatura do upload (contrato § 13.2). A forma legada `{ classId }`, do APK
+ * 1.8/1.9 e da web antiga, saiu na 2.0.0 (D42 revista) e é recusada ANTES
+ * deste schema, com código próprio: ver `recusarAssinaturaLegada`.
  */
 export const corpoDeAssinaturaDeJustificativa = corpoJson({
-  classId: uuidObrigatorio('classId').optional(),
-  justificationId: uuidObrigatorio('justificationId').optional(),
-}).transform((corpo, contexto) => {
-  if (corpo.classId !== undefined && corpo.justificationId === undefined) {
-    return { classId: corpo.classId };
-  }
-  if (corpo.justificationId !== undefined && corpo.classId === undefined) {
-    return { justificationId: corpo.justificationId };
-  }
-  contexto.addIssue({
-    code: z.ZodIssueCode.custom,
-    message: 'Envie exatamente um: classId ou justificationId',
-  });
-  return z.NEVER;
+  justificationId: uuidObrigatorio('justificationId'),
 });
 
-export type CorpoDeAssinaturaDeJustificativa = z.infer<typeof corpoDeAssinaturaDeJustificativa>;
+export type CorpoDeAssinaturaDeJustificativa = typeof corpoDeAssinaturaDeJustificativa._output;
 
 /**
  * Visualização do anexo. O teto de 999 páginas pelo mesmo motivo dos
@@ -50,4 +29,4 @@ export const corpoDeVisualizacaoDeJustificativa = corpoJson({
   pagina: paginaDoDocumento,
 });
 
-export type CorpoDeVisualizacaoDeJustificativa = z.infer<typeof corpoDeVisualizacaoDeJustificativa>;
+export type CorpoDeVisualizacaoDeJustificativa = typeof corpoDeVisualizacaoDeJustificativa._output;

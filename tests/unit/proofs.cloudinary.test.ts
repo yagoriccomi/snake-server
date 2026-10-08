@@ -107,8 +107,8 @@ describe('assinarUpload — campos dos anexos novos (contrato § 13.1)', () => {
   });
 
   it('naoDeveAcrescentarOsCamposQuandoNaoForamPedidos', () => {
-    // O comprovante e o `{classId}` legado continuam assinando o que o APK
-    // instalado envia — nada a mais.
+    // O comprovante continua assinando o que o APK instalado envia — nada a
+    // mais.
     const resultado = assinador.assinarUpload(parametros);
 
     expect(resultado).not.toHaveProperty('overwrite');

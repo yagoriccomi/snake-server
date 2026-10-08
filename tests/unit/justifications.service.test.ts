@@ -16,7 +16,8 @@ import type {
  * A regra dos anexos de justificativa (contrato § 13.2). Os invariantes:
  *
  *  1. A pasta do upload vem do TOKEN, nunca do corpo.
- *  2. O legado `{ classId }` assina o mesmo que hoje, sem campo a mais.
+ *  2. O anexo legado por aula não é mais assinado (D42 revista), mas o já
+ *     gravado continua abrindo.
  *  3. A forma `{ justificationId }` só assina a justificativa do próprio
  *     chamador, pendente e sem anexo, com o nome da tentativa, `overwrite =
  *     false` e `allowed_formats`.
@@ -108,56 +109,6 @@ function comAnexo(overrides: Partial<RegistroDeJustificativa> = {}): RegistroDeJ
     ...overrides,
   };
 }
-
-describe('justifications.service — assinarUpload (legado { classId })', () => {
-  it('deveDerivarAPastaDoUsuarioDoTokenENaoDoCorpo', () => {
-    const { service } = criarCenario();
-    const resultado = service.assinarUpload(USUARIO_DO_TOKEN, AULA);
-
-    expect(resultado.folder).toBe(`justificativas/${USUARIO_DO_TOKEN}`);
-    expect(resultado.folder).not.toContain(OUTRO_ALUNO);
-  });
-
-  it('deveUsarOClassIdComoNomeParaReenvioSubstituirOAnexoDaMesmaAula', () => {
-    const { service } = criarCenario();
-    expect(service.assinarUpload(USUARIO_DO_TOKEN, AULA).public_id).toBe(AULA);
-  });
-
-  it('deveMarcarOAnexoComoPrivado', () => {
-    // Atestado médico é dado sensível: nunca entrega pública. [#63]
-    const { service } = criarCenario();
-    expect(service.assinarUpload(USUARIO_DO_TOKEN, AULA).type).toBe('authenticated');
-  });
-
-  it('naoDevePermitirQueOClassIdReposicioneAPasta', () => {
-    const { service } = criarCenario();
-    expect(service.assinarUpload(USUARIO_DO_TOKEN, '../../outro').folder).toBe(
-      `justificativas/${USUARIO_DO_TOKEN}`,
-    );
-  });
-
-  it('deveUsarORelogioInjetado', () => {
-    const { service } = criarCenario();
-    expect(service.assinarUpload(USUARIO_DO_TOKEN, AULA).timestamp).toBe(AGORA);
-  });
-
-  it('deveAssinarExatamenteOsCamposDeHojeSemOverwriteNemAllowedFormats', () => {
-    // O APK 1.8 não envia os campos novos: com eles na assinatura, o upload
-    // dele passaria a ser recusado pela Cloudinary (contrato § 13.2).
-    const { service, registro } = criarCenario();
-
-    service.assinarUpload(USUARIO_DO_TOKEN, AULA);
-
-    expect(registro.assinados).toEqual([
-      {
-        folder: `justificativas/${USUARIO_DO_TOKEN}`,
-        public_id: AULA,
-        timestamp: AGORA,
-        type: 'authenticated',
-      },
-    ]);
-  });
-});
 
 describe('justifications.service — assinarUploadDaJustificativa ({ justificationId })', () => {
   it('deveAssinarComOIdComoNomeNaPrimeiraTentativa', async () => {
