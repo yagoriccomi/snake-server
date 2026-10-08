@@ -45,8 +45,8 @@ servers:
     description: Produção (Render)
     variables:
       servico:
-        default: snakethai-api
-        description: Nome do serviço criado na Render.
+        default: snake-server-3j25
+        description: Subdomínio do serviço na Render (o nome `snakethai-api` não serve como endereço).
   - url: http://localhost:3000
     description: Ambiente local (Docker Compose)
 

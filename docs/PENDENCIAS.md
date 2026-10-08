@@ -108,7 +108,7 @@ algum momento você quiser fechar o código, saiba que isso só vale daí para f
 
 | Nome | O que é | Exemplo |
 | --- | --- | --- |
-| `RENDER_SERVICE_URL` | Endereço público, usado no health check pós-deploy | `https://snakethai-api.onrender.com` |
+| `RENDER_SERVICE_URL` | Endereço público, usado no health check pós-deploy | `https://snake-server-3j25.onrender.com` |
 
 Sem o secret, o job de deploy falha com uma mensagem explícita — de propósito, para
 não publicar silenciosamente sem gate.
