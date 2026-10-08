@@ -349,9 +349,11 @@ Autenticado. Body `{ "justificationId": "<uuid>", "pagina"?: number }`.
 > **Antes do G4:** `attempt` só existe depois da migration 4.1 da v3. Até ela estar
 > em produção (G4), o `view-url` não pede a coluna — os caminhos derivados não a
 > usam — e o anexo abre para quem a RLS libera (D27, contrato § 13.6). A chave é
-> `MIGRATIONS_DO_G4_EM_PRODUCAO`, em `justifications.constants.ts`, ligada num PR
-> próprio quando o G4 estiver confirmado. O `sign-upload` com `{ justificationId }`
-> pede `attempt` sempre: só o APK 2.0.0 o chama, e ele sai depois do G4.
+> `MIGRATIONS_DO_G4_EM_PRODUCAO`, em `justifications.constants.ts`. **Ela foi ligada
+> em 08/10, antes do `db-push-prod`, por decisão do dono:** até as migrations subirem,
+> o `view-url` das justificativas responde `502`, e isso foi aceito. O `sign-upload`
+> com `{ justificationId }` pede `attempt` sempre: só o APK 2.0.0 o chama, e ele sai
+> depois do G4.
 
 #### Por que não há `conferirDono` aqui
 

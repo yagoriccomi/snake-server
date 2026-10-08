@@ -20,8 +20,12 @@ export const TABELA_JUSTIFICATIVAS = 'absence_justifications';
  * dá 502 a quem hoje lê o anexo pela RLS (contrato § 13.6, D27). Uma constante,
  * e não uma variável de ambiente, porque ligar é um passo de código revisado,
  * no mesmo PR que confere o G4, e não um campo esquecido no painel. [#3][#84]
+ *
+ * Ligada ANTES do `db-push-prod` por decisão do dono (D48 da coordenação, 08/10:
+ * "ninguém usa o app ainda"). Até as migrations subirem, o `view-url` das
+ * justificativas responde 502; isso foi aceito. Nenhuma outra rota lê a chave.
  */
-export const MIGRATIONS_DO_G4_EM_PRODUCAO = false;
+export const MIGRATIONS_DO_G4_EM_PRODUCAO = true;
 
 /**
  * Leitura do `view-url` (contrato § 13.2). `id`, `user_id` e `class_id` entram

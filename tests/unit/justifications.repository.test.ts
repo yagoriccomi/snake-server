@@ -116,9 +116,10 @@ describe('criarRepositorioDeJustificativas — buscarParaAssinar (sign-upload no
 });
 
 describe('MIGRATIONS_DO_G4_EM_PRODUCAO', () => {
-  it('deveFicarDesligadaAteODonoConfirmarOG4', () => {
-    // Ligar é decisão registrada no ROADMAP (G4), no mesmo PR que troca este
-    // valor e este teste. Mudar só a constante não passa.
-    expect(MIGRATIONS_DO_G4_EM_PRODUCAO).toBe(false);
+  it('deveFicarLigadaDesdeAD48DaCoordenacao', () => {
+    // Ligada antes do db-push-prod por decisão do dono (D48, 08/10). Desligar de
+    // novo é decisão registrada no ROADMAP, no mesmo PR que troca este valor e
+    // este teste. Mudar só a constante não passa.
+    expect(MIGRATIONS_DO_G4_EM_PRODUCAO).toBe(true);
   });
 });
