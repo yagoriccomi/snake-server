@@ -83,7 +83,7 @@ jobs:
 
       - name: Publicar o relatório de cobertura
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cobertura
           path: coverage/
