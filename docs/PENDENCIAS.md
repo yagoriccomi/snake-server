@@ -461,6 +461,18 @@ Nenhuma ação sua é necessária para este item.
 
 ### P-20. Upgrades major de ferramentas de desenvolvimento adiados (2026-09-16)
 
+> **Atualização de 2026-10-08 (D59 da coordenação: integrar o que for compatível, com os testes verdes):**
+>
+> | O que | Resultado |
+> | --- | --- |
+> | `typescript` 5.9 → 6.0.3 | **Feito** (PR #25, `5bbc292`). O `tsconfig.json` já fixa o que o 6.0 mudou de padrão (`types`, `strict`, `module`, `esModuleInterop`, `rootDir` no build), e o `typescript-eslint` 8.71 aceita `<6.1.0`. Gate completo, imagem Docker e `/health` de produção verdes |
+> | Imagem `node` 22.14 → 22.23-alpine | **Feito** (PR #35, `e05c47e`). Continua com `USER node` e o `HEALTHCHECK` |
+> | `@types/node` | Em 22.20.5 (grupo do PR #48); o ignore de major continua: os tipos acompanham o Node 22 da imagem e do CI |
+> | `actions/upload-artifact` 4 → 7 | **Feito** (PR #23 até a v6; PR #49 completou a v7) |
+> | TypeScript 7 | **Continua adiado**: só quando o `typescript-eslint` suportar |
+>
+> A tabela de 25/09, abaixo, fica como histórico.
+>
 > **Atualização de 2026-09-25 (lote de dependências, PR #22, merge `9e95b39`):**
 >
 > | O que | Resultado |

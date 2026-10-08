@@ -1,7 +1,7 @@
 # snakethai-api
 
 ![Node](https://img.shields.io/badge/node-22-339933?logo=node.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/typescript-5.7-3178C6?logo=typescript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/typescript-6.0-3178C6?logo=typescript&logoColor=white)
 ![Express](https://img.shields.io/badge/express-5-000000?logo=express&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/license-GPL--3.0-green)
