@@ -2,7 +2,7 @@
 
 > **Atualizado em:** 2026-10-08, com as decisões do dono de 29/09 a 07/10 (D6, D7, D14, D16,
 > D19, D20, D24, D25, D27, D29, D31, D33, D34, C10, C12, C15 e C19 em `handoffs/COORDENACAO.md`),
-> as D37 a D52 da coordenação (08/10), com a D42 revista, a C22, a C23 e o contrato v6.
+> as D37 a D52 e a D59 da coordenação (08/10), com a D42 revista, a C22, a C23 e o contrato v6.
 > **Complementa** o [`docs/PENDENCIAS.md`](docs/PENDENCIAS.md): aquele registra **por que**
 > algo ficou pendente; este diz **em que ordem** resolver.
 > **Repositórios irmãos:** [`snake-thai/ROADMAP-thai.md`](../snake-thai/ROADMAP-thai.md) (app e banco,
@@ -22,11 +22,11 @@
 
 | | |
 | --- | --- |
-| **Em produção** | `snakethai-api` na Render (plano free), em `https://snake-server-3j25.onrender.com`: `/health`, `/v1/proofs/*`, `/v1/justifications/*` e `/v1/motivos/*`. Último merge de código na `main`: **PR #44** (`72667b4`, 08/10, 15:20 UTC), que liga a chave `MIGRATIONS_DO_G4_EM_PRODUCAO` (**D48 da coordenação**). **Até o `db-push-prod`, abrir anexo de justificativa (`view-url`) dá 502**, e o dono aceitou isso. Antes dele vieram o **#40** (`9be4c5b`, 07/10, 19:04 UTC, a D20 nas outras rotas) e o **#36** (`a6847de`, 19:01 UTC, o diagnóstico do proxy). As conferências sem token do § 14 responderam certo depois de cada um, mas não dizem qual commit está no ar; isso só o painel mostra. **Conferido pelo dono no painel em 07/10, antes desses merges:** o `8e654ec` (#41) estava no ar (deploy às 15:24, sucesso), e o Auto-Deploy está em **On Commit**, que fica (D33): a Render publica cada commit da `main` sem esperar os checks, e a barreira é só mesclar com o CI todo verde. O `render.yaml` não chega ao painel (sem Blueprint) |
+| **Em produção** | `snakethai-api` na Render (plano free), em `https://snake-server-3j25.onrender.com`: `/health`, `/v1/proofs/*`, `/v1/justifications/*` e `/v1/motivos/*`. Último merge de código na `main`: **PR #44** (`72667b4`, 08/10, 15:20 UTC), que liga a chave `MIGRATIONS_DO_G4_EM_PRODUCAO` (**D48 da coordenação**). Depois dele, entraram só dependências e CI (D59 da coordenação, 08/10): a imagem agora é a `node:22.23-alpine`, compilada com o TypeScript 6.0.3; último merge `5d895a1`. **Até o `db-push-prod`, abrir anexo de justificativa (`view-url`) dá 502**, e o dono aceitou isso. Antes dele vieram o **#40** (`9be4c5b`, 07/10, 19:04 UTC, a D20 nas outras rotas) e o **#36** (`a6847de`, 19:01 UTC, o diagnóstico do proxy). As conferências sem token do § 14 responderam certo depois de cada um, mas não dizem qual commit está no ar; isso só o painel mostra. **Conferido pelo dono no painel em 07/10, antes desses merges:** o `8e654ec` (#41) estava no ar (deploy às 15:24, sucesso), e o Auto-Deploy está em **On Commit**, que fica (D33): a Render publica cada commit da `main` sem esperar os checks, e a barreira é só mesclar com o CI todo verde. O `render.yaml` não chega ao painel (sem Blueprint) |
 | **Worker** | Cron Job `snakethai-media-cleanup` (LGPD), declarado no `render.yaml`. **Não existe no painel** (conferido pelo dono em 07/10): nenhum arquivo é apagado de fato até ele ser criado, antes de ter alunos de verdade, junto com o 5.1 (D34) |
 | **Clientes** | O app Android (sem `Origin`) e, desde 23/09, o **`snake-web`**, o **primeiro cliente de navegador**. `ALLOWED_ORIGIN` conferido pelo dono em 24/09 |
 | **Cópia local** | Na branch `chore/ambiente-dev-local`, já mesclada (PR #16). A `main` local está atrás da remota, que já tem o PR #22 |
-| **PRs abertos** | **Mesclados em 07/10, na ordem da D31:** o **#34** (Fase 1, *On Commit*, D33; `5ab7c77`), o **#39** (D27; `e14fb08`), o **#42** ("G2 aberto", D34; `90bfebc`), o **#36** (log do D7; `a6847de`) e o **#40** (D20 nas outras rotas; `9be4c5b`). **Mesclado em 08/10:** o **#44** (a chave do G4, D48; `72667b4`). Abertos, os dois **esperando o G4**: o **#37** (5.5, ajustado à D20, com a `main` trazida em `bc862ec`; D24), que pela **D39 da coordenação** sobe no G4 junto com o banco e o site; e o **#45** (rascunho), que retira a forma `{classId}` do `justifications/sign-upload` (**D42 revista**; passa a responder 410 `legacy_upload_removed`, mantido pela **D50 da coordenação**). **A ordem no G4 é #94 do `snake-thai` → `db-push-prod` → #45 → #37.** Os dois não conflitam, e o #37 só traz a `main` depois do #45. Do Dependabot: #23, #25, #35 e #38 (o #35, `node` 22.23-alpine, substituiu o #32; o #38 substituiu o #33 em 05/10), **abertos por decisão do dono (D1, C12): sem merge e sem fechar** |
+| **PRs abertos** | **Mesclados em 07/10, na ordem da D31:** o **#34** (Fase 1, *On Commit*, D33; `5ab7c77`), o **#39** (D27; `e14fb08`), o **#42** ("G2 aberto", D34; `90bfebc`), o **#36** (log do D7; `a6847de`) e o **#40** (D20 nas outras rotas; `9be4c5b`). **Mesclado em 08/10:** o **#44** (a chave do G4, D48; `72667b4`). Abertos, os dois **esperando o G4**: o **#37** (5.5, ajustado à D20, com a `main` trazida em `bc862ec`; D24), que pela **D39 da coordenação** sobe no G4 junto com o banco e o site; e o **#45** (rascunho), que retira a forma `{classId}` do `justifications/sign-upload` (**D42 revista**; passa a responder 410 `legacy_upload_removed`, mantido pela **D50 da coordenação**). **A ordem no G4 é #94 do `snake-thai` → `db-push-prod` → #45 → #37.** Os dois não conflitam, e o #37 só traz a `main` depois do #45. **Do Dependabot, mesclados em 08/10 pela D59 da coordenação, um por vez e com o `/health` 200 depois de cada um:** o **#23** (`upload-artifact`; `065b729`), o **#35** (`node` 22.23-alpine; `e05c47e`), o **#48** (o grupo de ferramentas, que substituiu o #38; `b8cf1a3`), o **#25** (`typescript` 6.0.3; `5bbc292`) e o **#49**, meu, que completa a v7 do `upload-artifact` (`5d895a1`). Nenhum PR do Dependabot ficou aberto |
 | **Contrato** | `snake-thai/docs/CONTRATO.md` **v6** na `origin/main` do `snake-thai` (#88, `48d8b20`, 06/10; ler sempre por `git show origin/main:docs/CONTRATO.md`, regra C2). A v4 trouxe a § 13.5 (5.5); a v5 deixou `pode_decidir_justificativa` mais restrita, com a mesma assinatura; a v6 traz a § 13.6 (política de erros e códigos de cada rota, D20), a errata da § 13.5 e a § 15 dos clientes. O **G0** abriu em 25/09; o **G2**, deste servidor (Fase 4), **abriu em 07/10, sem o Cron Job (D34)** |
 | **Fundação** | Git, GitHub, Husky, commitlint, lint, typecheck e testes no pre-commit. Jira **recusado** em 2026-08-21, e não se pergunta de novo |
 
@@ -209,7 +209,12 @@ de `express` e `zod`. Rótulos `dependencias`, `ci` e `docker` criados no reposi
   (`FROM node:22.14-alpine@sha256:… AS base`), e pôr no bloco `docker` um `ignore` de major de
   `node` (o major sobe à mão, junto com `ci.yml` e `@types/node`, Fase 7). Gate: job "Imagem
   Docker" verde.
-- [ ] **3.5** 🤖 **O `typescript` 5.9.3 → 6.0.3 chegou: PR #25** (aberto em 25/09, CI verde; o `typescript-eslint` 8.70 aceita
+- [x] **3.5** 🤖 **PR #25 mesclado em 08/10 (`5bbc292`), pela D59 da coordenação.** Conferido contra
+  as quebras do TypeScript 6.0: o `tsconfig.json` já declara `types`, `strict`, `module`
+  `NodeNext`, `esModuleInterop` e, no build, `rootDir`, então nenhum padrão novo nos afeta. O
+  `typescript-eslint` 8.71 aceita `<6.1.0`. Bateria local (Prettier, lint, `tsc`, 493 testes,
+  build) e CI todo verde, com o job "Imagem Docker"; `/health` 200 seis vezes depois do deploy.
+  Texto original: **O `typescript` 5.9.3 → 6.0.3 chegou: PR #25** (aberto em 25/09, CI verde; o `typescript-eslint` 8.70 aceita
   `<6.1.0`). Avaliar **sozinho**, num PR só dele: é o compilador da imagem de produção. `npm ci`,
   gate completo e job "Imagem Docker" verdes antes do merge. O TypeScript 7 continua ignorado
   (P-20).
@@ -223,7 +228,14 @@ de `express` e `zod`. Rótulos `dependencias`, `ci` e `docker` criados no reposi
   `[object Object]` em `ultimo_erro`.
 - [ ] **3.7** ⚠️👤 **Depois de confirmar que o lote está no ar (item 1.2)**, fazer o ponta a ponta
   do item 2.3: comprovante pela web, com imagem e com PDF. É o teste real do `cloudinary` 2.11.0.
-- [ ] **3.8** 🤖 **PRs do Dependabot abertos em 25/09, já com o `dependabot.yml` novo**, CI verde nos dois:
+- [x] **3.8** 🤖 **Resolvido em 08/10, pela D59 da coordenação** (o #24 já tinha saído antes). O
+  **#23** foi mesclado (`065b729`), mas o rebase do Dependabot reescreveu o commit para 4 → **6**;
+  o **#49** completou a v7 (`5d895a1`). A v7 só acrescenta o parâmetro opcional `archive`, e o
+  artefato `cobertura` continua com o mesmo nome e zipado. O **#35** (`node` 22.23-alpine,
+  `e05c47e`) passou no job "Imagem Docker", com `whoami` = `node` e o `/health` do container. O
+  **#38** foi substituído pelo **#48** (11 atualizações, só minor/patch, nenhuma dependência de
+  produção; `b8cf1a3`). Cada merge teve o `/health` 200 em produção.
+  Texto original: **PRs do Dependabot abertos em 25/09, já com o `dependabot.yml` novo**, CI verde nos dois:
   **#24** (grupo `ferramentas-de-desenvolvimento`, 6 atualizações de minor/patch) e **#23**
   (`actions/upload-artifact` 4 → 7, no `ci.yml`). Ler as notas de versão, conferir que o #24 não
   sobe nenhum major e, se o gate continuar verde, mesclar com merge commit (um de cada vez; o
@@ -505,9 +517,9 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 ## Fase 7 — Manutenção (sem data)
 
 - **Majors:** o `eslint` 10 e o `vitest` 5 entraram em 25/09 (PR #22), e os grupos de major em par
-  do `dependabot.yml` trazem os próximos num PR só. Resta o TypeScript 7, só quando o
-  `typescript-eslint` suportar (o 6 é o item 3.5).
-- **Node:** o 22 tem suporte até **30/04/2027**. Planejar a troca pelo próximo LTS com
+  do `dependabot.yml` trazem os próximos num PR só. O TypeScript 6 entrou em 08/10 (item 3.5,
+  D59 da coordenação). Resta o TypeScript 7, só quando o `typescript-eslint` suportar.
+- **Node:** a imagem está no **22.23** desde 08/10 (#35); o CI usa o último 22 (`NODE_VERSION: '22'`). O 22 tem suporte até **30/04/2027**. Planejar a troca pelo próximo LTS com
   antecedência: `Dockerfile`, `ci.yml` e `@types/node` juntos. O Dependabot ignora o major de
   `@types/node` de propósito (e, depois do item 3.4, o de `node` na imagem).
 - **Cobertura:** com o `vitest` 5, o método mudou (statements 79 → 83%, branches 95 → 75%). Não há
@@ -527,7 +539,7 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 
 | Decisão | Recomendação | Onde |
 | --- | --- | --- |
-| `typescript` 6 | Integrar sozinho, se o gate e a imagem passarem | 3.5 |
+| ~~`typescript` 6~~ | ✅ **D59 da coordenação (08/10):** integrar as atualizações compatíveis com os testes verdes. Mesclado (#25, `5bbc292`) | 3.5 |
 | ~~Custo do Cron Job de limpeza (plano `starter`)~~ | ✅ **D34 (07/10):** criar antes de ter alunos de verdade, junto com o 5.1; até lá, nada é apagado | 5.2 |
 | Plano Advanced da Cloudinary (URL que expira) | Só se o custo compensar | Fase 7 |
 
@@ -595,3 +607,4 @@ frequência, as solicitações e as trocas de aula. O worker só apaga o que a f
 | 2026-10-08 | **D42 revista no servidor: PR #45 em rascunho, sem merge.** O `POST /v1/justifications/sign-upload` passa a aceitar só `{ justificationId }`. O corpo com `classId` (sozinho, malformado ou junto com `justificationId`) responde **410 `legacy_upload_removed`** ("Atualize o aplicativo para enviar o anexo da justificativa"), antes de verificar o token e sem ler a justificativa. O `view-url` continua abrindo o anexo legado `justificativas/<user>/<class_id>` já gravado (C11). README, `BACKEND.md` e `openapi.yaml` alinhados; 484 testes. O corpo do PR traz a errata do contrato para o `snake-thai`: a § 13.2 só com `{ justificationId }` e o 410 desde a 2.0.0; a § 13.6 com o código novo. **Ordem no G4:** #94 do `snake-thai` → `db-push-prod` → **#45** → #37. O #45 vem logo depois do banco porque, a partir dali, o banco recusa a gravação legada, e a rota velha ainda assinando deixaria arquivo órfão na Cloudinary. |
 | 2026-10-08 | **C23 respondida, contra a migration do #94 do `snake-thai`.** (1) O `sign-upload {classId}` assina `folder = justificativas/<userId do token>` e `public_id = <classId>`. A Cloudinary grava `justificativas/<user>/<classId>`, que é exatamente o caminho legado do #94 (`'justificativas/' \|\| user_id \|\| '/' \|\| class_id`, com `proof_provider = 'cloudinary'` e `class_id` não nulo). O usuário do token é o mesmo do `user_id`, porque o trigger exige `auth.uid()`. Depois do #45, esse caminho deixa de ser assinado, e os anexos já gravados continuam válidos. (2) O `proofs/sign-upload` assina `folder = comprovantes/<userId do token>` e `public_id = <paymentId>`, o que dá `comprovantes/<user>/<paymentId>`. Isso passa no check `payments_caminho_do_comprovante` (na migration v3 `20260925200100`, não no #94) quando quem envia é o dono do pagamento. **Caso de borda:** o servidor não confere se o pagamento é de quem chama; se outra pessoa assinar (um admin, por exemplo), o caminho leva o id dela, e o check recusa a gravação. Hoje nenhum cliente faz isso. |
 | 2026-10-08 | **D49 a D52 da coordenação (08/10, décima primeira rodada), no que tocam o servidor, e a URL velha.** **D50 da coordenação:** o 410 `legacy_upload_removed` do #45, com a frase "Atualize o aplicativo para enviar o anexo da justificativa", fica como está. A premissa do handoff `009` vira decisão, e o #45 continua em rascunho, esperando o G4 na mesma ordem (#94 do `snake-thai` → `db-push-prod` → #45 → #37). **D49, D51 e D52 da coordenação** não mudam nada no servidor: o push de versão nova só para quem está desatualizado, uma vez por semana, é do `snake-thai` (D49, que substitui o "para todos, uma vez" da D45); a chave FCM de produção (3.4) é configurada pelo dono antes do G4, com o roteiro do `snake-thai` (D51); a 1.9 e a 2.0 se unificam, sem APK nem tag v1.9.0, e a D37 fica revogada (D52), o que tira a 1.9.0 da frente do G4 sem mexer na parte do servidor. **URL velha:** os documentos ainda citavam `snakethai-api.onrender.com`, que responde 404; a URL real é `https://snake-server-3j25.onrender.com`. Trocada no exemplo do `RENDER_SERVICE_URL` (`docs/PENDENCIAS.md`), no valor padrão do servidor de produção do `docs/openapi.yaml` e no `curl` do item 2.2. Os nomes `snakethai-api` do serviço, do pacote e da imagem não são endereço e ficam. O `snake-thai/.env.example` também tem a URL velha, mas é do `snake-thai`. |
+| 2026-10-08 | **D59 da coordenação (08/10, décima quinta rodada): o "Dependabot intocado" foi revogado.** O dono autoriza integrar as atualizações de dependências se os testes passarem, se tudo for compatível ou adaptável e se nada quebrar. Os PRs entraram um por vez, do menor risco para o maior, cada um com o Dependabot rebaseado, bateria local, CI todo verde e `gh pr merge --match-head-commit`; depois de cada merge, seis conferências do `/health` em produção, todas 200 `{"ok":true}`. **#23** (`065b729`, 19:05 UTC): o rebase reescreveu o commit para `upload-artifact` 4 → 6, e o **#49** completou a v7 (`5d895a1`, 19:58 UTC); o artefato `cobertura` continua publicado com o mesmo nome. **#35** (`e05c47e`, 19:14 UTC): `node:22.23-alpine`, digest conferido no registry; no job "Imagem Docker", `/health` com `"ok":true` e o processo como `node`. **#38**: o Dependabot o fechou e abriu o **#48** (11 atualizações de minor/patch, só de desenvolvimento; `b8cf1a3`, 19:36 UTC). **#25** (`5bbc292`, 19:47 UTC): `typescript` 6.0.3, conferido contra as quebras do 6.0 (o `tsconfig` já fixa `types`, `strict`, `module`, `esModuleInterop` e `rootDir`) e o `typescript-eslint` 8.71 (aceita `<6.1.0`); 493 testes. Itens 3.5 e 3.8 fechados; a P-20 do `docs/PENDENCIAS.md` foi atualizada; o selo do README passou a TypeScript 6.0. O TypeScript 7 continua adiado. Não toquei no #45 nem no #37 (esperam o G4). |
