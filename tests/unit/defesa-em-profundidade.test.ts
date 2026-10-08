@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { HttpError } from '../../src/lib/http-error.js';
 import {
   criarProofsService,
   type AssinadorDeMidia,
+  type ConferenciaDeAdmin,
   type LeitorDePagamentos,
   type PoliticaDeAcesso,
   type RegistroDePagamento,
@@ -17,7 +19,9 @@ import {
  * silencioso de dado financeiro.
  *
  * Estes testes simulam exatamente esse cenário: a RLS **falhou** e devolveu o
- * pagamento de outra pessoa. O que o servidor faz então? [#55]
+ * pagamento de outra pessoa. O que o servidor faz então? Desde o 5.5, ele
+ * pergunta ao banco, pela mesma `is_admin()` da RLS, se quem pede é admin
+ * (contrato § 13.5). [#55]
  */
 
 const DONO = '11111111-2222-4333-8444-555555555555';
@@ -41,12 +45,29 @@ function rlsQuebrada(pagamento: RegistroDePagamento): LeitorDePagamentos {
   return { buscarPorId: async () => pagamento };
 }
 
-function montar(politicaDeAcesso: PoliticaDeAcesso, pagamento: RegistroDePagamento) {
+/** Responde `is_admin` como mandado e anota cada pergunta. */
+function conferenciaDeAdmin(resposta: boolean) {
+  const perguntas: string[] = [];
+  const admin: ConferenciaDeAdmin = {
+    ehAdmin: (authorization) => {
+      perguntas.push(authorization);
+      return Promise.resolve(resposta);
+    },
+  };
+  return { admin, perguntas };
+}
+
+function montar(
+  politicaDeAcesso: PoliticaDeAcesso,
+  pagamento: RegistroDePagamento,
+  admin: ConferenciaDeAdmin = conferenciaDeAdmin(false).admin,
+) {
   return criarProofsService({
     midia,
     pagamentos: rlsQuebrada(pagamento),
     agoraEmSegundos: () => 1_700_000_000,
     politicaDeAcesso,
+    admin,
   });
 }
 
@@ -99,11 +120,24 @@ describe('política `somente-dono` — postura mais dura', () => {
       pagamentos: rlsQuebrada(pagamentoAlheio),
       agoraEmSegundos: () => 1,
       politicaDeAcesso: 'somente-dono',
+      admin: conferenciaDeAdmin(true).admin,
     });
 
     await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR))).rejects.toThrow();
 
     expect(urlsEmitidas).toHaveLength(0);
+  });
+
+  it('naoDevePerguntarAoBancoNemServirAoAdmin', async () => {
+    // A postura mais dura: nem o admin passa, e o banco nem é consultado.
+    capturarStderr();
+    const { admin, perguntas } = conferenciaDeAdmin(true);
+    const service = montar('somente-dono', pagamentoAlheio, admin);
+
+    await expect(
+      service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR)),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(perguntas).toEqual([]);
   });
 
   it('devePermitirNormalmenteQuandoOChamadorEhODono', async () => {
@@ -115,44 +149,67 @@ describe('política `somente-dono` — postura mais dura', () => {
   });
 });
 
-describe('política `rls` — padrão, preserva o administrador previsto na spec', () => {
+describe('política `rls` — padrão: o admin passa, confirmado pelo banco (§ 13.5)', () => {
   const pagamentoAlheio: RegistroDePagamento = {
     user_id: DONO,
     proof_provider: 'cloudinary',
     proof_public_id: 'comprovantes/a/b',
   };
 
-  it('devePermitirOAcessoQuandoARlsLiberouPorqueOChamadorPodeSerAdmin', async () => {
-    // A spec (docs/BACKEND.md §6) prevê o admin vendo comprovante alheio.
-    // Bloquear por padrão quebraria esse caso legítimo.
-    capturarStderr();
-    const service = montar('rls', pagamentoAlheio);
+  it('deveServirAoAdminConfirmadoPorIsAdminComOTokenDeQuemPede', async () => {
+    // A spec (política `payments_select_own_or_admin`) prevê o admin vendo
+    // comprovante alheio. Quem confirma é o banco, não o servidor.
+    const { admin, perguntas } = conferenciaDeAdmin(true);
+    const service = montar('rls', pagamentoAlheio, admin);
 
     await expect(
       service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR)).then((c) => c.url),
     ).resolves.toContain('url-assinada');
+    expect(perguntas).toEqual(['Bearer token']);
   });
 
-  it('deveEmitirAlarmeEmNivelErrorQuandoOChamadorNaoEhODono', async () => {
-    // Permitir em silêncio seria pior do que não ter a barreira: se a RLS
-    // cair, ninguém fica sabendo. O alarme é a entrega desta política.
+  it('naoDeveEmitirAlarmeQuandoOAdminAbreOComprovante', async () => {
+    // Alarme que dispara a cada conferência do Financeiro vira ruído.
+    const escritas = capturarStderr();
+    const service = montar('rls', pagamentoAlheio, conferenciaDeAdmin(true).admin);
+
+    await service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR));
+
+    expect(escritas.join('')).not.toContain('RLS liberou');
+  });
+
+  it('deveNegarComForbiddenQuandoARlsLiberaAQuemNaoEhAdmin', async () => {
+    // Antes do 5.5, aqui o servidor servia e só alarmava. Agora a RLS
+    // quebrada não entrega mais nada. [#55]
+    capturarStderr();
+    const service = montar('rls', pagamentoAlheio, conferenciaDeAdmin(false).admin);
+
+    await expect(
+      service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR)),
+    ).rejects.toMatchObject({ status: 403, code: 'forbidden' });
+  });
+
+  it('deveEmitirAlarmeEmNivelErrorQuandoBloqueia', async () => {
     const escritas = capturarStderr();
     const service = montar('rls', pagamentoAlheio);
 
-    await service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR));
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR))).rejects.toThrow();
 
     const saida = escritas.join('');
     expect(saida).toContain('RLS liberou comprovante de outro usuário');
     expect(saida).toContain('"nivel":"error"');
+    expect(saida).toContain('bloqueado');
   });
 
-  it('naoDeveEmitirAlarmeNoFluxoNormalDoProprioDono', async () => {
-    // Alarme que dispara todo dia vira ruído e para de ser lido.
+  it('naoDevePerguntarAoBancoNoFluxoNormalDoProprioDono', async () => {
+    // O dono não paga chamada a mais, nem dispara alarme.
     const escritas = capturarStderr();
-    const service = montar('rls', pagamentoAlheio);
+    const { admin, perguntas } = conferenciaDeAdmin(false);
+    const service = montar('rls', pagamentoAlheio, admin);
 
     await service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(DONO));
 
+    expect(perguntas).toEqual([]);
     expect(escritas.join('')).not.toContain('RLS liberou comprovante');
   });
 
@@ -161,7 +218,7 @@ describe('política `rls` — padrão, preserva o administrador previsto na spec
     const escritas = capturarStderr();
     const service = montar('rls', pagamentoAlheio);
 
-    await service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR));
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR))).rejects.toThrow();
 
     const saida = escritas.join('');
     expect(saida).not.toContain(DONO);
@@ -172,9 +229,51 @@ describe('política `rls` — padrão, preserva o administrador previsto na spec
     const escritas = capturarStderr();
     const service = montar('rls', pagamentoAlheio);
 
-    await service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR));
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR))).rejects.toThrow();
 
-    expect(escritas.join('')).toContain('permitido-por-politica');
+    expect(escritas.join('')).toContain('"politica":"rls"');
+  });
+});
+
+describe('política `rls` — o Supabase falhou ao responder `is_admin` (D20)', () => {
+  const pagamentoAlheio: RegistroDePagamento = {
+    user_id: DONO,
+    proof_provider: 'cloudinary',
+    proof_public_id: 'comprovantes/a/b',
+  };
+
+  const FALHAS = [
+    new HttpError(
+      502,
+      'supabase_invalid_response',
+      'O servidor de dados respondeu de forma inesperada',
+    ),
+    new HttpError(503, 'supabase_unreachable', 'Não foi possível falar com o servidor de dados'),
+    new HttpError(504, 'supabase_timeout', 'O servidor de dados demorou demais para responder'),
+  ];
+
+  function adminQueFalha(falha: HttpError): ConferenciaDeAdmin {
+    return { ehAdmin: () => Promise.reject(falha) };
+  }
+
+  it.each(FALHAS)('deveResponder_$status_EmVezDe403', async (falha) => {
+    capturarStderr();
+    const service = montar('rls', pagamentoAlheio, adminQueFalha(falha));
+
+    await expect(
+      service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR)),
+    ).rejects.toMatchObject({ status: falha.status, code: falha.code });
+  });
+
+  it.each(FALHAS)('naoDeveEmitirOAlarmeDeAcessoIndevido_$status', async (falha) => {
+    // Falha do Supabase não diz nada sobre a RLS: alarmar aqui seria acusar
+    // um acesso indevido que ninguém tentou.
+    const escritas = capturarStderr();
+    const service = montar('rls', pagamentoAlheio, adminQueFalha(falha));
+
+    await expect(service.obterUrlDeVisualizacao(PAYMENT_ID, chamador(INVASOR))).rejects.toThrow();
+
+    expect(escritas.join('')).not.toContain('RLS liberou');
   });
 });
 
@@ -188,6 +287,7 @@ describe('a barreira não substitui a RLS — apenas a complementa', () => {
         pagamentos: { buscarPorId: async () => null },
         agoraEmSegundos: () => 1,
         politicaDeAcesso: politica,
+        admin: conferenciaDeAdmin(true).admin,
       });
 
       await expect(

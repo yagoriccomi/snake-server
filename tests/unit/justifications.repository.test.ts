@@ -37,7 +37,7 @@ function criarCliente(migrationsDoG4EmProducao: boolean) {
       return Promise.resolve([]);
     },
     confirmarPermissaoComoChamador(): Promise<boolean> {
-      throw new Error('O repositório de justificativas não chama RPC.');
+      throw new Error('Estes testes não passam pela segunda barreira.');
     },
   };
 

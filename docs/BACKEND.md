@@ -175,8 +175,15 @@ Autenticado (dono ou admin). Body `{ "paymentId": "<uuid>" }`.
 
 1. Lê o pagamento com o **token do chamador**; a RLS libera só para dono ou
    admin. Vazio → `403`.
-2. `conferirDono` compara o `user_id` devolvido com o do token — segunda
-   barreira, que **alarma** se a RLS liberar dado alheio.
+2. `conferirLeitorLegitimo` compara o `user_id` devolvido com o do token — segunda
+   barreira (contrato § 13.5). Se a linha for de outra pessoa, pergunta ao banco
+   `rpc/is_admin` com o token do chamador; com `false`, responde `403` e **alarma**
+   em nível `error`. Se o banco recusar o token (401), responde `401 bad_token`. Se
+   falhar, responde `502` (resposta inválida, inclusive outro 4xx), `503` (fora do ar
+   ou rede) ou `504` (tempo esgotado), sem alarme e sem liberar (contrato § 13.5).
+   Com `POLITICA_ACESSO_COMPROVANTE=somente-dono`, nem
+   pergunta: `403` direto. Só depois dela vêm o `404` e o `409`, que contam algo
+   sobre a linha (contrato § 13.6, regra 4).
 3. Se `proof_provider` existir e **não for** `cloudinary`, responde `409
    proof_not_on_cloudinary`. O provedor vem antes do `public_id`: o legado do
    Storage não tem `public_id`, e não é "sem comprovante".
@@ -202,7 +209,7 @@ Parece redundante, já que a coluna guarda esse mesmo valor. Não é:
 > A coluna é **gravável pelo aluno** no próprio pagamento — a RLS libera, porque
 > a linha é dele. Se o servidor assinasse o valor gravado, bastaria apontá-lo
 > para `comprovantes/<outro_aluno>/<outro_pagamento>` e pedir a URL do **próprio**
-> pagamento. `conferirDono` passaria: o que está adulterado não é o dono, é o
+> pagamento. `conferirLeitorLegitimo` passaria: o que está adulterado não é o dono, é o
 > ponteiro. O aluno receberia o comprovante de outra pessoa com uma URL válida.
 
 Essa barreira existia de graça no Supabase Storage: a RLS de `storage.objects`
@@ -339,10 +346,14 @@ Autenticado. Body `{ "justificationId": "<uuid>", "pagina"?: number }`.
 1. Lê `id, user_id, class_id, proof_provider, proof_public_id` (mais `attempt`,
    depois do G4) com o **token do chamador**; a RLS libera para o dono, quem pode decidir a
    justificativa pendente e o admin. Vazio → `403`.
-2. Se `proof_provider` existir e **não for** `cloudinary`, responde `409
+2. `conferirLeitorLegitimo`: se a linha for de outra pessoa, confirma no banco
+   (`is_admin` e, se não for admin, `pode_decidir_justificativa`), com as mesmas
+   respostas da segunda barreira dos comprovantes. Até o G4, fica desligada e vale
+   só a RLS (D27).
+3. Se `proof_provider` existir e **não for** `cloudinary`, responde `409
    justification_attachment_not_on_cloudinary`.
-3. Sem provedor ou sem `proof_public_id` → `404 justification_attachment_not_found`.
-4. Calcula os caminhos derivados (`justificativas/<user_id>/<id>`, `…/<id>-2` e, com
+4. Sem provedor ou sem `proof_public_id` → `404 justification_attachment_not_found`.
+5. Calcula os caminhos derivados (`justificativas/<user_id>/<id>`, `…/<id>-2` e, com
    `class_id`, `…/<class_id>`) e assina o que for **igual** a `proof_public_id`. Se
    nenhum for, `409 justification_attachment_path_mismatch`, sem assinar nada.
 
@@ -353,15 +364,28 @@ Autenticado. Body `{ "justificationId": "<uuid>", "pagina"?: number }`.
 > próprio quando o G4 estiver confirmado. O `sign-upload` com `{ justificationId }`
 > pede `attempt` sempre: só o APK 2.0.0 o chama, e ele sai depois do G4.
 
-#### Por que não há `conferirDono` aqui
+#### A segunda barreira aqui (contrato § 13.5)
 
-Nos comprovantes, a RLS liberar a linha de outra pessoa é anomalia — só um admin
-legítimo explica. Aqui é o caminho **normal**: o professor revisa a justificativa
-do aluno. Um alarme de "não é o dono" dispararia a cada revisão e ensinaria todo
-mundo a ignorá-lo. A barreira que continua valendo é a **derivação do caminho**:
-enquanto a justificativa está pendente o aluno edita `proof_public_id`, e assinar
-o valor gravado repetiria o achado C-2. O valor gravado só **escolhe** entre os
-caminhos derivados; nunca é assinado sem ser um deles.
+Ler a justificativa de outra pessoa é o caminho **normal** do professor que revisa.
+Por isso a barreira não alarma por "não é o dono": para a linha de outra pessoa,
+ela pergunta ao banco, com o token do chamador e pelas **mesmas funções da RLS**,
+se ele é leitor legítimo. Primeiro `rpc/is_admin` (corpo `{}`); se der `false`,
+`rpc/pode_decidir_justificativa` (corpo `{"p_id": "<justificationId>"}`). Só um
+`true` libera. Com `false` nas duas, `403` e alarme em nível `error`, sem PII. Se o
+banco recusar o token, `401 bad_token`; se falhar, `502`, `503` ou `504`, como no
+comprovante, sem alarme. Depois da decisão, `pode_decidir_justificativa` devolve
+`false`, e só o dono e o admin leem, como na RLS.
+
+> **Antes do G4** (D27, contrato § 13.5): `pode_decidir_justificativa` ainda não existe
+> em produção, e chamá-la daria `502` ao professor que hoje lê o atestado. Por isso esta
+> barreira fica **desligada** pela mesma constante do `attempt`,
+> `MIGRATIONS_DO_G4_EM_PRODUCAO`: a rota segue só com a RLS, sem perguntar nada ao
+> banco. A derivação do caminho, abaixo, vale nos dois estados.
+
+A outra barreira continua valendo: a **derivação do caminho**. Enquanto a
+justificativa está pendente, o aluno edita `proof_public_id`, e assinar o valor
+gravado repetiria o achado C-2. O valor gravado só **escolhe** entre os caminhos
+derivados; nunca é assinado sem ser um deles.
 
 ### Eliminação (LGPD)
 

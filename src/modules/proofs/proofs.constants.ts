@@ -65,3 +65,10 @@ export const COLUNAS_DO_PAGAMENTO = 'user_id,proof_provider,proof_public_id';
 
 /** Valor de `proof_provider` que este servidor sabe entregar. */
 export const PROVEDOR_CLOUDINARY = 'cloudinary';
+
+/**
+ * Segunda barreira (contrato § 13.5): a MESMA função que a RLS de `payments`
+ * usa para liberar o admin. Mora aqui porque a justificativa também a chama,
+ * e a decisão "quem é admin" não pode ter duas cópias. [#6]
+ */
+export const RPC_IS_ADMIN = 'is_admin';

@@ -50,3 +50,10 @@ export const STATUS_PENDENTE = 'pending';
 
 /** A segunda tentativa (reenvio, D42) grava o anexo com este sufixo no nome. */
 export const SUFIXO_DA_SEGUNDA_TENTATIVA = '-2';
+
+/**
+ * Segunda barreira (contrato § 13.5): a mesma função que a RLS usa para
+ * liberar a justificativa pendente a quem pode decidi-la (§ 9.1). Devolve
+ * `false` para a linha já decidida — depois da decisão, só dono e admin leem.
+ */
+export const RPC_PODE_DECIDIR_JUSTIFICATIVA = 'pode_decidir_justificativa';
