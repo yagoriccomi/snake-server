@@ -318,12 +318,15 @@ adaptador, montada uma vez no `composition-root`: duas integrações com a mesma
 conta da Cloudinary só dariam a chance de divergirem.
 
 ### `POST /v1/justifications/sign-upload`
-Autenticado. Body com **exatamente um** de dois campos (contrato § 13.2); os dois
-juntos, ou nenhum, é `400`.
+Autenticado. Body `{ "justificationId": "<uuid>" }` (contrato § 13.2); sem ele, ou
+fora do formato, `400`.
 
-- **`{ "classId": "<uuid>" }` (legado, até a Fase B):** `folder =
-  justificativas/<userId>`, `public_id = <classId>`, sem consulta ao banco e sem
-  campo novo na assinatura — o APK 1.8 não envia `overwrite` nem `allowed_formats`.
+- **`{ "classId": "<uuid>" }` (retirado na 2.0.0, D42 revista):** qualquer corpo com
+  `classId` responde `410 legacy_upload_removed` antes da validação e da
+  autenticação, sem ir ao Supabase. É 410, e não 400, porque o corpo está certo
+  para o APK 1.8/1.9: só atualizar o app resolve. O caminho
+  `justificativas/<userId>/<classId>` dos anexos já gravados segue entre os
+  caminhos derivados do `view-url`.
 - **`{ "justificationId": "<uuid>" }`:** lê `id, user_id, status, attempt,
   proof_public_id` com o token do chamador. Sem linha, ou `user_id` diferente do
   token, `403`. Para o dono: `status` diferente de `pending` → `409

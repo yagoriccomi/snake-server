@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { criarApp } from '../../src/app.js';
 import {
-  AGORA_EM_SEGUNDOS,
   AULA_DA_JUSTIFICATIVA,
   JUSTIFICATIVA_INVISIVEL,
   JUSTIFICATIVA_PENDENTE,
@@ -37,57 +36,45 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('POST /v1/justifications/sign-upload', () => {
-  it('deveAssinarNaPastaDoUsuarioDoToken', async () => {
-    const resposta = await request(app)
-      .post('/v1/justifications/sign-upload')
-      .set('Authorization', TOKEN_VALIDO)
-      .send({ classId: AULA_DA_JUSTIFICATIVA });
+describe('POST /v1/justifications/sign-upload — a forma { classId } saiu (D42 revista)', () => {
+  it.each([
+    ['com token', TOKEN_VALIDO],
+    ['sem token', undefined],
+  ])('deveResponder410SemConsultarNada_%s', async (_caso, token) => {
+    // O APK 1.8/1.9 lê o motivo e o código, e não um 400 de corpo inválido.
+    const chamada = request(app).post('/v1/justifications/sign-upload');
+    if (token !== undefined) chamada.set('Authorization', token);
 
-    expect(resposta.status).toBe(200);
+    const resposta = await chamada.send({ classId: AULA_DA_JUSTIFICATIVA });
+
+    expect(resposta.status).toBe(410);
     expect(resposta.body).toMatchObject({
-      folder: `justificativas/${USUARIO_DONO.id}`,
-      public_id: AULA_DA_JUSTIFICATIVA,
-      type: 'authenticated',
-      timestamp: AGORA_EM_SEGUNDOS,
+      code: 'legacy_upload_removed',
+      error: 'Atualize o aplicativo para enviar o anexo da justificativa',
     });
+    expect(espioes.tokensVerificados).toHaveLength(0);
+    expect(espioes.buscasPorJustificativa).toHaveLength(0);
   });
 
-  it('deveRecusarSemTokenAntesDeAssinar', async () => {
-    const resposta = await request(app)
-      .post('/v1/justifications/sign-upload')
-      .send({ classId: AULA_DA_JUSTIFICATIVA });
-
-    expect(resposta.status).toBe(401);
-  });
-
-  it('deveRejeitarClassIdMalformadoSemConsultarOSupabase', async () => {
-    // Validação antes da autenticação: lixo no corpo não custa ida à rede.
+  it.each([
+    ['classId malformado', { classId: '../../outro-aluno' }],
+    [
+      'os dois campos juntos',
+      { classId: AULA_DA_JUSTIFICATIVA, justificationId: JUSTIFICATIVA_PENDENTE },
+    ],
+  ])('deveResponder410TambemCom_%s', async (_caso, corpo) => {
     const resposta = await request(app)
       .post('/v1/justifications/sign-upload')
       .set('Authorization', TOKEN_VALIDO)
-      .send({ classId: '../../outro-aluno' });
+      .send(corpo);
 
-    expect(resposta.status).toBe(400);
-    expect(espioes.tokensVerificados).toHaveLength(0);
+    expect(resposta.status).toBe(410);
   });
 });
 
-describe('POST /v1/justifications/sign-upload — as duas formas (contrato § 13.2)', () => {
+describe('POST /v1/justifications/sign-upload — { justificationId } (contrato § 13.2)', () => {
   /** O uuid das conferências do G2 (contrato § 14). */
   const UUID_DO_G2 = '00000000-0000-4000-8000-000000000000';
-
-  it('deveManterOLegadoSemOverwriteNemAllowedFormats', async () => {
-    const resposta = await request(app)
-      .post('/v1/justifications/sign-upload')
-      .set('Authorization', TOKEN_VALIDO)
-      .send({ classId: AULA_DA_JUSTIFICATIVA });
-
-    expect(resposta.status).toBe(200);
-    expect(resposta.body).not.toHaveProperty('overwrite');
-    expect(resposta.body).not.toHaveProperty('allowed_formats');
-    expect(espioes.buscasPorJustificativa).toHaveLength(0);
-  });
 
   it('deveAssinarAPrimeiraTentativaComOIdComoNome', async () => {
     const resposta = await request(app)
@@ -149,11 +136,7 @@ describe('POST /v1/justifications/sign-upload — as duas formas (contrato § 13
   });
 
   it.each([
-    [
-      'os dois campos juntos',
-      { classId: AULA_DA_JUSTIFICATIVA, justificationId: JUSTIFICATIVA_PENDENTE },
-    ],
-    ['nenhum dos dois', {}],
+    ['nenhum campo', {}],
     ['justificationId que não é UUID', { justificationId: '../x' }],
   ])('deveRecusar400SemConsultarOSupabaseQuandoOCorpoTem %s', async (_caso, corpo) => {
     const resposta = await request(app)
