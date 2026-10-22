@@ -1,4 +1,5 @@
 import { conflito, naoEncontrado, semAcesso } from '../../lib/http-error.js';
+import { logger } from '../../lib/logger.js';
 import { respostaInvalidaDoSupabase } from '../../lib/supabase.js';
 import {
   FORMATOS_DE_ANEXO,
@@ -10,6 +11,7 @@ import {
   type AssinadorDeMidia,
   type Chamador,
   type ComprovanteParaVisualizar,
+  type ConferenciaDeAdmin,
   type UploadAssinado,
 } from '../proofs/proofs.service.js';
 import {
@@ -79,11 +81,22 @@ export interface LeitorDeJustificativas {
     justificationId: string,
     authorization: string,
   ): Promise<JustificativaParaAssinar | null>;
+  /**
+   * `pode_decidir_justificativa` com o token de quem pede: só `true` libera.
+   * Falha do Supabase rejeita (502/503/504), como em `ehAdmin`.
+   */
+  podeDecidir(justificationId: string, authorization: string): Promise<boolean>;
 }
 
 export interface DependenciasDeJustificativas {
   midia: AssinadorDeMidia;
   justificativas: LeitorDeJustificativas;
+  admin: ConferenciaDeAdmin;
+  /**
+   * `MIGRATIONS_DO_G4_EM_PRODUCAO`, injetada para o teste cobrir os dois
+   * estados. Desligada, a segunda barreira não roda: ver `conferirLeitorLegitimo`.
+   */
+  migrationsDoG4EmProducao: boolean;
   /** Injetado para o teste congelar o tempo em vez de esperar por ele. */
   agoraEmSegundos: () => number;
 }
@@ -114,6 +127,36 @@ function caminhosDerivados(justificativa: RegistroDeJustificativa): string[] {
 }
 
 export function criarJustificationsService(deps: DependenciasDeJustificativas) {
+  /**
+   * Segunda barreira (contrato § 13.5, P-9). A RLS de `absence_justifications`
+   * libera três leitores: o dono, o admin e, com a justificativa pendente,
+   * quem pode decidi-la. Para a linha de outra pessoa, o servidor confere com
+   * as MESMAS funções da RLS, na ordem do contrato (o admin custa uma chamada
+   * só). Nenhuma confirmou: a RLS liberou o que não devia. [#55]
+   *
+   * Até o G4, `pode_decidir_justificativa` não existe em produção: chamá-la
+   * daria 502 ao professor que hoje lê o atestado pela RLS. Sem ela, o
+   * `is_admin` sozinho não separa o professor de um vazamento, então a rota
+   * segue só com a RLS, como antes da barreira (contrato § 13.5, D27).
+   */
+  async function conferirLeitorLegitimo(
+    justificativa: RegistroDeJustificativa,
+    chamador: Chamador,
+  ): Promise<void> {
+    if (!deps.migrationsDoG4EmProducao) return;
+    if (justificativa.user_id === chamador.userId) return;
+    if (await deps.admin.ehAdmin(chamador.authorization)) return;
+    if (await deps.justificativas.podeDecidir(justificativa.id, chamador.authorization)) return;
+
+    logger.error('RLS liberou justificativa de outro usuário', {
+      traceId: chamador.traceId,
+      user_id: chamador.userId,
+      dono_user_id: justificativa.user_id,
+      acao: 'bloqueado',
+    });
+    throw semAcesso();
+  }
+
   return {
     /**
      * Forma LEGADA `{ classId }`, do APK 1.8 e da web atual — sem mudança até a
@@ -176,10 +219,9 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
     /**
      * URL assinada do anexo de uma justificativa.
      *
-     * A autorização é inteiramente da RLS de `absence_justifications`: o dono,
-     * quem pode decidir a justificativa pendente e o admin são leitores
-     * LEGÍTIMOS. Por isso não existe aqui o alarme "a RLS liberou linha de
-     * outra pessoa" dos comprovantes — ele dispararia a cada revisão.
+     * Duas barreiras: a RLS, com o token do chamador, e, para a linha de
+     * outra pessoa, `conferirLeitorLegitimo`. O professor que revisa passa
+     * pelas duas; quem a RLS liberou por engano, só pela primeira.
      */
     async obterUrlDeVisualizacao(
       justificationId: string,
@@ -197,6 +239,10 @@ export function criarJustificationsService(deps: DependenciasDeJustificativas) {
       if (!justificativa) {
         throw semAcesso();
       }
+
+      // Primeiro o leitor legítimo; só então o 404 e os 409, que contam algo
+      // sobre a linha (§ 13.6, regra 4).
+      await conferirLeitorLegitimo(justificativa, chamador);
 
       // Provedor antes do public_id, pelo mesmo motivo dos comprovantes: o
       // legado do Storage não tem public_id e não é "sem anexo".

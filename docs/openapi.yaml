@@ -160,8 +160,11 @@ paths:
         Devolve um endereço assinado que abre o comprovante.
 
         Quem pode ver é decidido pelas regras de acesso do banco (RLS), com o **seu**
-        token: o dono do pagamento ou um administrador. Se você não tiver direito, a
-        resposta é `403` — a mesma resposta que você receberia se o pagamento não
+        token: o dono do pagamento ou um administrador. Se o pagamento não for seu, o
+        servidor ainda confirma no banco (`is_admin`) que você é administrador. Se o
+        banco falhar ao confirmar, a resposta é `502`, `503` ou `504`, conforme a falha,
+        e nada é liberado. Se você
+        não tiver direito, a resposta é `403` — a mesma resposta que você receberia se o pagamento não
         existisse. A indistinção é proposital: separar os dois casos entregaria a um
         curioso uma forma de descobrir quais pagamentos existem.
 
@@ -341,8 +344,13 @@ paths:
       description: |
         Quem pode ver é decidido pelas regras de acesso do banco (RLS), com o **seu**
         token: o dono, quem pode decidir a justificativa enquanto ela está pendente, e o
-        administrador. Sem direito, ou justificativa inexistente: `403`. Para quem pode
-        ler: `404` (`justification_attachment_not_found`) se não há anexo e `409`
+        administrador. Sem direito, ou justificativa inexistente: `403`. Se a
+        justificativa não for sua, o servidor ainda confirma no banco (`is_admin` e, se
+        não for admin, `pode_decidir_justificativa`) antes de qualquer outra resposta. Se
+        o banco recusar o token ao confirmar: `401` (`bad_token`). Se o banco falhar ao
+        confirmar: `502`, `503` ou `504`, conforme a falha, e nada é liberado. Até o G4,
+        essa confirmação fica desligada e vale só a RLS. Para quem pode ler: `404`
+        (`justification_attachment_not_found`) se não há anexo e `409`
         (`justification_attachment_not_on_cloudinary`) se ele está no armazenamento
         antigo.
 

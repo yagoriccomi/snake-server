@@ -3,6 +3,7 @@ import {
   COLUNAS_DA_JUSTIFICATIVA,
   COLUNAS_DA_JUSTIFICATIVA_ANTES_DO_G4,
   COLUNAS_PARA_ASSINAR_JUSTIFICATIVA,
+  RPC_PODE_DECIDIR_JUSTIFICATIVA,
   TABELA_JUSTIFICATIVAS,
 } from './justifications.constants.js';
 import type {
@@ -54,6 +55,16 @@ export function criarRepositorioDeJustificativas(
       return buscar<JustificativaParaAssinar>(
         justificationId,
         COLUNAS_PARA_ASSINAR_JUSTIFICATIVA,
+        authorization,
+      );
+    },
+
+    // Só o booleano `true` libera; falha do Supabase sobe como 502/503/504,
+    // nunca como "pode" (D20).
+    podeDecidir(justificationId, authorization) {
+      return supabase.confirmarPermissaoComoChamador(
+        RPC_PODE_DECIDIR_JUSTIFICATIVA,
+        { p_id: justificationId },
         authorization,
       );
     },

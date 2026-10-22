@@ -218,8 +218,12 @@ um comprovante que **não** pertence a quem pediu:
 
 | Valor | Comportamento |
 | --- | --- |
-| `rls` *(padrão)* | Permite, porque pode ser um administrador legítimo — mas registra um **alerta** no log. Se esse alerta aparecer sem que haja um administrador trabalhando, é sinal de que as regras de acesso do banco quebraram. |
-| `somente-dono` | Recusa, sempre, qualquer comprovante que não seja do próprio dono. Mais rígido; use se nenhum administrador precisar abrir comprovante de aluno. |
+| `rls` *(padrão)* | Pergunta ao banco se quem pediu é administrador. Se for, mostra. Se não for, recusa e registra um **alerta** no log: é sinal de que as regras de acesso do banco quebraram. |
+| `somente-dono` | Recusa, sempre, qualquer comprovante que não seja do próprio dono, inclusive para o administrador. Mais rígido; use se nenhum administrador precisar abrir comprovante de aluno. |
+
+No anexo de uma justificativa, a conferência é a mesma: se quem pediu não for o
+dono, o servidor pergunta ao banco se ele é administrador ou se pode decidir aquela
+justificativa. Se não for nenhum dos dois, recusa e registra o alerta.
 
 > **Duas variáveis ficaram de fora de propósito.** `SUPABASE_JWT_SECRET` permitiria
 > criar tokens de qualquer usuário, e o servidor se recusa a iniciar se ela estiver

@@ -42,6 +42,7 @@ const CHAMADOR = {
 function criarCenario(
   pagamento: RegistroDePagamento | null,
   politicaDeAcesso: PoliticaDeAcesso = 'rls',
+  ehAdmin = false,
 ) {
   const registro: Registro = {
     chamadasDeAssinatura: [],
@@ -79,6 +80,7 @@ function criarCenario(
     pagamentos,
     agoraEmSegundos: () => AGORA,
     politicaDeAcesso,
+    admin: { ehAdmin: () => Promise.resolve(ehAdmin) },
   });
 
   return { service, registro };
@@ -217,8 +219,8 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
      *
      * O ataque: o aluno grava, no PRÓPRIO pagamento, um `proof_public_id`
      * apontando para o comprovante de outra pessoa. A RLS libera a linha (ela
-     * é dele mesmo) e `conferirDono` passa — o que está adulterado não é o
-     * dono, é o ponteiro.
+     * é dele mesmo) e `conferirLeitorLegitimo` passa — o que está adulterado
+     * não é o dono, é o ponteiro.
      *
      * Se este teste falhar, o servidor voltou a assinar o valor gravado e
      * entrega PII financeira de outro titular com uma URL perfeitamente
@@ -242,11 +244,15 @@ describe('proofs.service — obterUrlDeVisualizacao', () => {
   it('deveDerivarOCaminhoDoDonoDaLinhaParaOAdminVerOComprovanteCerto', async () => {
     // Quando um admin abre o comprovante de um aluno, o caminho tem que ser o
     // do ALUNO (dono da linha), não o de quem está olhando.
-    const { service, registro } = criarCenario({
-      user_id: OUTRO_USUARIO,
-      proof_provider: 'cloudinary',
-      proof_public_id: 'ignorado',
-    });
+    const { service, registro } = criarCenario(
+      {
+        user_id: OUTRO_USUARIO,
+        proof_provider: 'cloudinary',
+        proof_public_id: 'ignorado',
+      },
+      'rls',
+      true,
+    );
 
     await service.obterUrlDeVisualizacao(PAYMENT_ID, CHAMADOR);
 

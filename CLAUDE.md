@@ -174,10 +174,14 @@ sem `vi.mock` e sem variável de ambiente de mentira. [#45]
   escrita fora da RLS — isolado nesse módulo, uso mínimo, nunca atalho geral. [#55]
 - **Destino derivado do id verificado:** o app não escolhe pasta nem nome do
   comprovante; ambos vêm do `userId` do token. [#55]
-- **Segunda barreira de autorização:** a RLS é a trava principal, mas mora em outro
-  sistema. `conferirDono` compara o `user_id` devolvido pela consulta com o do token e
-  **alarma em nível `error`** se divergirem — uma política de RLS que caia vira alerta,
-  não vazamento silencioso. Controlado por `POLITICA_ACESSO_COMPROVANTE`. [#55]
+- **Segunda barreira de autorização (contrato § 13.5):** a RLS é a trava principal,
+  mas mora em outro sistema. `conferirLeitorLegitimo` compara o `user_id` devolvido pela
+  consulta com o do token; se divergirem, pergunta ao banco, com o token de quem pede,
+  pelas mesmas funções da RLS (`rpc/is_admin` no comprovante; `is_admin` e
+  `pode_decidir_justificativa` na justificativa). Com `false`, `403` e **alarme em
+  nível `error`**; token recusado, `401 bad_token`; se o banco falhar, `502`/`503`/`504`
+  pela D20, sem alarme e sem liberar. `POLITICA_ACESSO_COMPROVANTE=somente-dono` nega
+  sem perguntar. Na justificativa, desligada até o G4 (`MIGRATIONS_DO_G4_EM_PRODUCAO`). [#55]
 - **Comprovante é PII financeira:** sempre `type=authenticated` (privado), visto
   só por URL assinada. Nunca em log. [#63]
 - Validação de todo input com Zod; filtros do PostgREST por `URLSearchParams`,
@@ -308,6 +312,7 @@ tests/
 │   ├── esquemas.test.ts               # a frase de cada bad_input, por rota
 │   ├── motivos.*.test.ts              # regra e repositório (falha da RPC = 5xx)
 │   ├── defesa-em-profundidade.test.ts # segunda barreira dos comprovantes
+│   ├── segunda-barreira.repository.test.ts # is_admin e pode_decidir_justificativa
 │   └── media-cleanup.*.test.ts        # fila, validação, três tipos, órfãos, ambiente
 └── integracao/                        # criarApp(depsFalsas) + supertest [#42]
     ├── api.test.ts                    # middlewares, limites, comprovantes

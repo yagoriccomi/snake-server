@@ -107,26 +107,29 @@ export interface LeitorDePagamentos {
 }
 
 /**
+ * Pergunta ao banco, com o token de quem pede, se ele é admin (contrato
+ * § 13.5). `true` só quando o banco confirma; `false` quando nega ou recusa
+ * o token. Falha do Supabase rejeita a promessa (502/503/504): não é "não",
+ * e por isso não dispara o alarme (D20). Compartilhada com a justificativa. [#20]
+ */
+export interface ConferenciaDeAdmin {
+  ehAdmin(authorization: string): Promise<boolean>;
+}
+
+/**
  * O que fazer quando a RLS libera um comprovante que NÃO é do chamador.
  *
- * Existem exatamente duas explicações para isso, e o servidor não consegue
- * distingui-las sozinho: ou o chamador é um administrador legítimo (a
- * `docs/BACKEND.md §6` prevê esse caso), ou uma política de RLS quebrou e
- * está vazando dado alheio.
+ * Existem duas explicações: ou o chamador é um admin legítimo (a política
+ * `payments_select_own_or_admin` libera), ou uma política de RLS quebrou e
+ * está vazando dado alheio. Desde o 5.5, o servidor distingue as duas
+ * perguntando ao banco pela mesma `is_admin()` da RLS (contrato § 13.5):
  *
- * Quem sabe diferenciar é o schema do Supabase — que vive fora deste
- * repositório. Em vez de adivinhar como o papel de admin é modelado (e
- * escrever uma checagem decorativa ou que quebra o admin), a decisão vira
- * política explícita de configuração:
- *
- *  - `rls`          → confia na RLS, mas ALERTA em nível `error` toda vez que
- *                     isso acontecer. Não quebra o administrador; entrega
- *                     visibilidade imediata caso a política caia. É o padrão,
- *                     porque preserva o comportamento previsto na spec.
- *  - `somente-dono` → nega qualquer acesso que não seja do próprio dono,
- *                     independentemente do que a RLS respondeu. Use quando não
- *                     houver administrador, ou quando o admin usar outro
- *                     caminho. É a postura mais dura. [#55]
+ *  - `rls`          → serve só se `is_admin` confirmar. Qualquer outra
+ *                     resposta é 403 e alarme em nível `error`. É o padrão,
+ *                     porque preserva o admin previsto na spec.
+ *  - `somente-dono` → nega qualquer acesso que não seja do próprio dono, sem
+ *                     perguntar nada ao banco. Use quando nenhum admin
+ *                     precisar abrir comprovante de aluno. [#55]
  */
 export type PoliticaDeAcesso = 'rls' | 'somente-dono';
 
@@ -136,6 +139,7 @@ export interface DependenciasDeProofs {
   /** Injetado para o teste poder congelar o tempo em vez de esperar por ele. */
   agoraEmSegundos: () => number;
   politicaDeAcesso: PoliticaDeAcesso;
+  admin: ConferenciaDeAdmin;
 }
 
 /** Contexto de quem está pedindo — sempre derivado do token JÁ verificado. */
@@ -154,24 +158,30 @@ export function criarProofsService(deps: DependenciasDeProofs) {
    * renomeada ou uma tabela recriada sem `ENABLE ROW LEVEL SECURITY` bastam
    * para transformar este endpoint num vazamento silencioso de dado
    * financeiro. Nunca confie numa trava só.
+   *
+   * O dono passa sem custo nenhum: o banco só é consultado para a linha de
+   * outra pessoa, que é o caso raro (o admin no Financeiro).
    */
-  function conferirDono(pagamento: RegistroDePagamento, chamador: Chamador): void {
+  async function conferirLeitorLegitimo(
+    pagamento: RegistroDePagamento,
+    chamador: Chamador,
+  ): Promise<void> {
     if (pagamento.user_id === chamador.userId) return;
 
-    // Chegou aqui: a RLS liberou um pagamento de OUTRA pessoa.
+    if (deps.politicaDeAcesso === 'rls' && (await deps.admin.ehAdmin(chamador.authorization))) {
+      return;
+    }
+
+    // Chegou aqui: a RLS liberou o pagamento de OUTRA pessoa a quem não é
+    // admin. É um alarme, não registro de rotina: a RLS está quebrada.
     logger.error('RLS liberou comprovante de outro usuário', {
       traceId: chamador.traceId,
       user_id: chamador.userId,
       dono_user_id: pagamento.user_id,
       politica: deps.politicaDeAcesso,
-      // Este log é um alarme, não um registro de rotina: se ele aparecer sem
-      // que exista um administrador legítimo agindo, a RLS está quebrada.
-      acao: deps.politicaDeAcesso === 'somente-dono' ? 'bloqueado' : 'permitido-por-politica',
+      acao: 'bloqueado',
     });
-
-    if (deps.politicaDeAcesso === 'somente-dono') {
-      throw semAcesso();
-    }
+    throw semAcesso();
   }
 
   return {
@@ -196,7 +206,8 @@ export function criarProofsService(deps: DependenciasDeProofs) {
      *
      * Duas barreiras, nesta ordem:
      *  1. A RLS do Supabase, com o token do chamador — trava principal.
-     *  2. `conferirDono`, com o `user_id` que a própria consulta devolveu —
+     *  2. `conferirLeitorLegitimo`, com o `user_id` que a própria consulta
+     *     devolveu e, se não for o do chamador, a `is_admin()` do banco —
      *     rede de segurança para o caso de a primeira falhar. [#55]
      */
     async obterUrlDeVisualizacao(
@@ -213,9 +224,10 @@ export function criarProofsService(deps: DependenciasDeProofs) {
         throw semAcesso();
       }
 
-      // Primeiro o dono; só então o 404 e o 409, que contam algo sobre a
-      // linha e por isso são de quem pode lê-la (contrato § 13.6, regra 4).
-      conferirDono(pagamento, chamador);
+      // Primeiro o leitor legítimo (dono ou admin); só então o 404 e o 409,
+      // que contam algo sobre a linha e por isso são de quem pode lê-la
+      // (contrato § 13.6, regra 4).
+      await conferirLeitorLegitimo(pagamento, chamador);
 
       // Comprovante de outro provedor não é assinável aqui: assinar assim
       // mesmo devolveria um link quebrado. O provedor vem antes do
