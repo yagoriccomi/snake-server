@@ -101,7 +101,9 @@ function nomeDoAnexoDaTentativa(justificationId: string, tentativa: number): str
 /**
  * Os únicos caminhos que um anexo de justificativa pode ter, todos DERIVADOS
  * de colunas que o aluno não altera: as duas tentativas da forma nova e, na
- * justificativa de aula, o caminho legado por `class_id`.
+ * justificativa de aula, o caminho legado por `class_id`. O servidor não assina
+ * mais esse caminho (D42 revista), mas os anexos já gravados nele continuam
+ * abrindo: são evidência do aluno, e o banco ainda os aceita (C11).
  */
 function caminhosDerivados(justificativa: RegistroDeJustificativa): string[] {
   const pasta = `${PASTA_JUSTIFICATIVAS}/${justificativa.user_id}`;
@@ -116,25 +118,8 @@ function caminhosDerivados(justificativa: RegistroDeJustificativa): string[] {
 export function criarJustificationsService(deps: DependenciasDeJustificativas) {
   return {
     /**
-     * Forma LEGADA `{ classId }`, do APK 1.8 e da web atual — sem mudança até a
-     * Fase B, inclusive na assinatura: sem `overwrite` e sem `allowed_formats`,
-     * que o cliente instalado não envia.
-     *
-     * A pasta vem do `userId` do token verificado, nunca do corpo — é o que
-     * impede um aluno de gravar na pasta de outro. O `classId` vira o nome do
-     * arquivo, então reenviar o anexo da mesma aula substitui o anterior. [#55]
-     */
-    assinarUpload(userId: string, classId: string): UploadAssinado {
-      return deps.midia.assinarUpload({
-        folder: `${PASTA_JUSTIFICATIVAS}/${userId}`,
-        public_id: classId,
-        timestamp: deps.agoraEmSegundos(),
-        type: TIPO_ENTREGA_PRIVADO,
-      });
-    },
-
-    /**
-     * Forma NOVA `{ justificationId }` (contrato § 13.2).
+     * Assinatura do anexo `{ justificationId }` (contrato § 13.2). A forma
+     * `{ classId }`, do APK 1.8/1.9, saiu na 2.0.0 (D42 revista).
      *
      * Só assina a justificativa do próprio chamador, pendente e ainda sem
      * anexo; o nome do arquivo vem da tentativa. A leitura vai com o token do

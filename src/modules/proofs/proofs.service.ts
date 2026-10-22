@@ -34,8 +34,8 @@ export interface ParametrosDeUpload {
   type: string;
   /**
    * Só nos anexos novos (motivos e `{justificationId}`, contrato § 13.1 e
-   * § 13.2). Ficam AUSENTES no comprovante e no `{classId}` legado: o APK
-   * instalado não envia estes campos, e a assinatura deixaria de bater.
+   * § 13.2). Ficam AUSENTES no comprovante: o APK instalado não envia estes
+   * campos, e a assinatura deixaria de bater.
    */
   overwrite?: boolean;
   allowed_formats?: string;

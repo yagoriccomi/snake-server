@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 
+import { formaRetirada } from '../../lib/http-error.js';
 import { logger } from '../../lib/logger.js';
 import { usuarioDaRequisicao } from '../../middleware/require-user.js';
 import type {
@@ -23,31 +24,42 @@ type HandlerDeVisualizacao = RequestHandler<
   CorpoDeVisualizacaoDeJustificativa
 >;
 
-export function criarJustificationsController(service: JustificationsService) {
-  /** POST /v1/justifications/sign-upload — `{ classId }` (legado) ou `{ justificationId }`. */
-  const assinarUpload: HandlerDeAssinatura = async (req, res) => {
-    const corpo = req.body;
-    const { id: userId, authorization } = usuarioDaRequisicao(req);
+/**
+ * A forma `{ classId }` do `sign-upload`, do APK 1.8/1.9, saiu na 2.0.0 (D42
+ * revista). Quem ainda a manda recebe 410 com código próprio, e não o 400 do
+ * schema: o corpo está certo para o app antigo, e só atualizar o app resolve.
+ *
+ * Vem antes do `validarCorpo` e do `requireUser`: a recusa não depende de quem
+ * pede, e não deve custar uma ida ao Supabase.
+ */
+export const recusarAssinaturaLegada: RequestHandler = (req, _res, next) => {
+  const corpo: unknown = req.body;
+  if (typeof corpo === 'object' && corpo !== null && 'classId' in corpo) {
+    next(
+      formaRetirada(
+        'Atualize o aplicativo para enviar o anexo da justificativa',
+        'legacy_upload_removed',
+      ),
+    );
+    return;
+  }
+  next();
+};
 
-    if ('classId' in corpo) {
-      const assinatura = service.assinarUpload(userId, corpo.classId);
-      logger.info('upload de anexo de justificativa assinado', {
-        traceId: req.traceId,
-        user_id: userId,
-        class_id: corpo.classId,
-      });
-      res.json(assinatura);
-      return;
-    }
+export function criarJustificationsController(service: JustificationsService) {
+  /** POST /v1/justifications/sign-upload — `{ justificationId }`. */
+  const assinarUpload: HandlerDeAssinatura = async (req, res) => {
+    const { justificationId } = req.body;
+    const { id: userId, authorization } = usuarioDaRequisicao(req);
 
     const assinatura = await service.assinarUploadDaJustificativa(
       { userId, authorization, traceId: req.traceId },
-      corpo.justificationId,
+      justificationId,
     );
     logger.info('upload de anexo de justificativa assinado', {
       traceId: req.traceId,
       user_id: userId,
-      justification_id: corpo.justificationId,
+      justification_id: justificationId,
     });
     res.json(assinatura);
   };

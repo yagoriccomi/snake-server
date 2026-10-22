@@ -55,20 +55,12 @@ describe('frases do bad_input — comprovantes', () => {
 });
 
 describe('frases do bad_input — justificativas', () => {
+  // A forma `{ classId }` não chega a este schema: o 410 vem antes (D42 revista).
   it.each([
-    ['nenhum dos dois', {}],
-    ['os dois', { classId: UUID, justificationId: UUID }],
-  ])('deveExigirExatamenteUmIdNaAssinatura_%s', (_rotulo, corpo) => {
-    expect(primeiraFrase(corpoDeAssinaturaDeJustificativa, corpo)).toBe(
-      'Envie exatamente um: classId ou justificationId',
-    );
-  });
-
-  it.each([
-    [{ classId: 'abc' }, 'classId precisa ser um UUID válido'],
-    [{ classId: null }, 'classId precisa ser um UUID válido'],
+    [{}, 'justificationId é obrigatório'],
     [{ justificationId: 'abc' }, 'justificationId precisa ser um UUID válido'],
-  ])('deveDizerQualIdEstaForaDoFormato_%j', (corpo, frase) => {
+    [{ justificationId: null }, 'justificationId precisa ser um UUID válido'],
+  ])('deveDizerOProblemaDaAssinatura_%j', (corpo, frase) => {
     expect(primeiraFrase(corpoDeAssinaturaDeJustificativa, corpo)).toBe(frase);
   });
 

@@ -3,7 +3,10 @@ import { Router } from 'express';
 import type { ClienteSupabase } from '../../lib/supabase.js';
 import { criarRequireUser } from '../../middleware/require-user.js';
 import { validarCorpo } from '../../middleware/validate.js';
-import { criarJustificationsController } from './justifications.controller.js';
+import {
+  criarJustificationsController,
+  recusarAssinaturaLegada,
+} from './justifications.controller.js';
 import {
   corpoDeAssinaturaDeJustificativa,
   corpoDeVisualizacaoDeJustificativa,
@@ -34,6 +37,7 @@ export function criarJustificationsRouter(deps: DependenciasDoRouterDeJustificat
 
   justifications.post(
     '/sign-upload',
+    recusarAssinaturaLegada,
     validarCorpo(corpoDeAssinaturaDeJustificativa),
     requireUser,
     controller.assinarUpload,

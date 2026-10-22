@@ -255,20 +255,19 @@ paths:
       summary: Autoriza o envio do anexo de uma justificativa de falta
       operationId: assinarUploadDeJustificativa
       description: |
-        Aceita **exatamente uma** de duas formas. As duas juntas, ou nenhuma, dão `400`.
-
-        - **`{ classId }` (legado)** — a forma do app 1.8 e da web atual, válida até
-          todos os aparelhos atualizarem. Assina `justificativas/<usuário do token>/<classId>`
-          sem consultar o banco, com os mesmos campos de sempre.
-        - **`{ justificationId }`** — lê a justificativa com o **seu** token e só assina se
-          ela for sua; se não for, ou não existir, `403`. Sendo sua, `409` se já foi
-          decidida (`justification_not_pending`) ou se já tem anexo
-          (`justification_already_has_attachment`). O nome do arquivo é o
-          `justificationId` na primeira tentativa e `<justificationId>-2` no reenvio;
-          tentativa fora de 1 e 2 é resposta fora do combinado do banco, `502`. A assinatura inclui `overwrite=false` e `allowed_formats`: envie os dois
-          à Cloudinary exatamente como vieram, ou o envio é recusado.
+        Lê a justificativa com o **seu** token e só assina se ela for sua; se não for, ou
+        não existir, `403`. Sendo sua, `409` se já foi decidida
+        (`justification_not_pending`) ou se já tem anexo
+        (`justification_already_has_attachment`). O nome do arquivo é o
+        `justificationId` na primeira tentativa e `<justificationId>-2` no reenvio;
+        tentativa fora de 1 e 2 é resposta fora do combinado do banco, `502`. A
+        assinatura inclui `overwrite=false` e `allowed_formats`: envie os dois à
+        Cloudinary exatamente como vieram, ou o envio é recusado.
 
         A pasta vem sempre do usuário do token, nunca do corpo.
+
+        A forma antiga `{ classId }`, do app 1.8 e 1.9, saiu na versão 2.0.0: qualquer
+        corpo com `classId` recebe `410`, com ou sem token.
       requestBody:
         required: true
         content:
@@ -276,12 +275,9 @@ paths:
             schema:
               $ref: '#/components/schemas/CorpoDeAssinaturaDeJustificativa'
             examples:
-              novo:
-                summary: Forma nova
+              justificativa:
+                summary: A justificativa que recebe o anexo
                 value: { justificationId: 7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d }
-              legado:
-                summary: Forma legada
-                value: { classId: 5b4c3d2e-1f0a-4b9c-8d7e-6f5a4b3c2d1e }
       responses:
         '200':
           description: Envio autorizado.
@@ -300,8 +296,7 @@ paths:
           $ref: '#/components/responses/SemAcesso'
         '409':
           description: |
-            Só na forma `{ justificationId }`, e só para o dono: a justificativa não aceita
-            anexo agora.
+            Só para o dono: a justificativa não aceita anexo agora.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -319,6 +314,24 @@ paths:
                   value:
                     error: Esta justificativa já tem anexo
                     code: justification_already_has_attachment
+                    traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
+        '410':
+          description: |
+            O corpo traz `classId`, a forma do app 1.8 e 1.9, que saiu na versão 2.0.0.
+            Só atualizar o aplicativo resolve. A recusa vem antes da validação e da
+            autenticação.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                formaRetirada:
+                  value:
+                    error: Atualize o aplicativo para enviar o anexo da justificativa
+                    code: legacy_upload_removed
                     traceId: a7d91dcb-24f3-4f10-9de8-3c5ae5da959c
         '413':
           $ref: '#/components/responses/CorpoGrandeDemais'
@@ -621,24 +634,13 @@ components:
       examples: [2]
 
     CorpoDeAssinaturaDeJustificativa:
-      description: Exatamente um dos dois campos.
-      oneOf:
-        - type: object
-          title: Forma nova
-          required: [justificationId]
-          properties:
-            justificationId:
-              type: string
-              format: uuid
-              examples: [7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d]
-        - type: object
-          title: Forma legada
-          required: [classId]
-          properties:
-            classId:
-              type: string
-              format: uuid
-              examples: [5b4c3d2e-1f0a-4b9c-8d7e-6f5a4b3c2d1e]
+      type: object
+      required: [justificationId]
+      properties:
+        justificationId:
+          type: string
+          format: uuid
+          examples: [7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d]
 
     CorpoDeVisualizacaoDeJustificativa:
       type: object
@@ -710,8 +712,8 @@ components:
         public_id:
           type: string
           description: |
-            Nome do arquivo: o `paymentId` no comprovante, o `classId` ou o
-            `justificationId` (com `-2` no reenvio) na justificativa, o `anexoId` no motivo.
+            Nome do arquivo: o `paymentId` no comprovante, o `justificationId` (com `-2`
+            no reenvio) na justificativa, o `anexoId` no motivo.
           examples: [3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d]
         type:
           type: string
@@ -790,6 +792,7 @@ components:
             - justification_attachment_not_found
             - justification_attachment_not_on_cloudinary
             - justification_attachment_path_mismatch
+            - legacy_upload_removed
             - motivo_attachment_not_on_cloudinary
             - payload_too_large
             - rate_limited
@@ -809,9 +812,8 @@ components:
         O corpo enviado não passou na validação.
 
         - `bad_input` — um identificador está ausente ou não é um UUID, a página
-          está fora de 1 a 999, o corpo não é um objeto, ou (na justificativa) vieram
-          `classId` e `justificationId` juntos ou nenhum dos dois. O `error` diz qual
-          foi o problema, numa frase.
+          está fora de 1 a 999, ou o corpo não é um objeto. O `error` diz qual foi o
+          problema, numa frase.
         - `malformed_json` — o corpo não é um JSON válido.
         - `bad_request` — outro defeito da requisição, percebido antes de ler o corpo
           (por exemplo, um `charset` que o servidor não conhece).

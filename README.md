@@ -272,14 +272,15 @@ comprovante de outra pessoa.
 Autoriza o envio do anexo (imagem ou PDF) de uma justificativa de falta. Como nos
 comprovantes, a pasta é decidida pelo servidor a partir do usuário do token.
 
-**Envio:** exatamente um dos dois (os dois juntos, ou nenhum, dão `400`):
+**Envio:** `{ "justificationId": "<uuid>" }`. O servidor lê a justificativa com o seu
+token e só assina se ela for sua (senão, `403`), estiver pendente e ainda não tiver
+anexo (senão, `409`, com o motivo). O arquivo fica em
+`justificativas/<usuário>/<justificativa>`, ou `…/<justificativa>-2` no reenvio.
 
-* `{ "justificationId": "<uuid>" }` — a forma nova. O servidor lê a justificativa com
-  o seu token e só assina se ela for sua (senão, `403`), estiver pendente e ainda
-  não tiver anexo (senão, `409`, com o motivo). O arquivo fica em `justificativas/<usuário>/<justificativa>`, ou
-  `…/<justificativa>-2` no reenvio.
-* `{ "classId": "<uuid>" }` — a forma antiga, do app 1.8 e da web atual, que continua
-  valendo até todos atualizarem. O arquivo fica em `justificativas/<usuário>/<aula>`.
+A forma antiga, `{ "classId": "<uuid>" }`, do app 1.8 e 1.9, saiu na versão 2.0.0:
+quem ainda a envia recebe `410` com o código `legacy_upload_removed` e o pedido para
+atualizar o aplicativo. Os anexos antigos, já gravados em
+`justificativas/<usuário>/<aula>`, continuam abrindo pelo `view-url`.
 
 **Resposta:** o mesmo formato de `/v1/proofs/sign-upload`. Na forma nova vêm também
 `overwrite: false` e `allowed_formats: "jpg,png,webp,heic,pdf"`, que fazem parte da
